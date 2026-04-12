@@ -1,0 +1,70 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Tauri Dev",
+      "type": "shell",
+      "command": "pnpm tauri dev",
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": "build",
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Tauri Build Release",
+      "type": "shell",
+      "command": "pnpm tauri build",
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      },
+      "problemMatcher": ["$rustc", "$tsc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "dedicated"
+      }
+    },
+    {
+      "label": "Lint: Svelte",
+      "type": "shell",
+      "command": "pnpm check",
+      "options": {
+        "cwd": "${workspaceFolder}/app"
+      },
+      "problemMatcher": ["$tsc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Lint: Rust",
+      "type": "shell",
+      "command": "cargo clippy --all-targets --all-features",
+      "options": {
+        "cwd": "${workspaceFolder}/app/src-tauri"
+      },
+      "problemMatcher": ["$rustc"],
+      "presentation": {
+        "reveal": "always",
+        "panel": "shared"
+      }
+    },
+    {
+      "label": "Lint All",
+      "dependsOn": ["Lint: Svelte", "Lint: Rust"],
+      "dependsOrder": "parallel",
+      "problemMatcher": [],
+      "group": "test"
+    }
+  ]
+}

@@ -1,0 +1,68 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+permissions:
+  contents: read
+
+jobs:
+  # ── App checks ───────────────────────────────────────────────────────────
+  app-lint:
+    name: App — Svelte Check & Cargo Check
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+
+      - name: Install JS dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Svelte check (type check)
+        run: pnpm check
+
+      - name: Install system deps for Tauri build
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            librsvg2-dev \
+            patchelf \
+            libssl-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy, rustfmt
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: app/src-tauri -> target
+
+      - name: Cargo fmt check
+        working-directory: app/src-tauri
+        run: cargo fmt -- --check
+
+      - name: Cargo clippy
+        working-directory: app/src-tauri
+        run: cargo clippy -- -D warnings
+
+      - name: Cargo audit
+        run: cargo install cargo-audit && cargo audit
+        working-directory: app/src-tauri

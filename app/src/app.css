@@ -1,0 +1,388 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+@import 'katex/dist/katex.min.css';
+
+:root {
+	--font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+	--bg-primary: #0a0a0a;
+	--bg-secondary: #111;
+	--bg-tertiary: #191919;
+	--bg-hover: #1e1e1e;
+	--text-primary: #dcddde;
+	--text-secondary: #999;
+	--text-muted: #666;
+	--accent: #dcddde;
+	--accent-hover: #fff;
+	--accent-link: rgb(255, 102, 51);
+	--accent-code: #e06c75;
+	--danger: #ef4444;
+	--danger-hover: #f87171;
+	--success: #22c55e;
+	--warning: #eab308;
+	--border: #262626;
+	--border-subtle: #1a1a1a;
+	--radius: 12px;
+	--radius-sm: 8px;
+	--radius-xs: 4px;
+	--radius-md: 16px;
+	--radius-lg: 20px;
+	--shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+	--shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.5);
+
+	/* Glass */
+	--glass-bg: rgba(20, 20, 20, 0.72);
+	--glass-border: rgba(255, 255, 255, 0.08);
+	--glass-blur: 24px;
+	--glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), inset 0 0.5px 0 rgba(255, 255, 255, 0.06);
+
+	/* Spacing */
+	--space-xs: 4px;
+	--space-sm: 8px;
+	--space-md: 12px;
+	--space-lg: 16px;
+	--space-xl: 24px;
+	--space-2xl: 32px;
+
+	color-scheme: dark;
+}
+
+[data-theme='light'] {
+	--bg-primary: #fafafa;
+	--bg-secondary: #f5f5f5;
+	--bg-tertiary: #e5e5e5;
+	--bg-hover: #d4d4d4;
+	--text-primary: #2e3338;
+	--text-secondary: #666;
+	--text-muted: #aaa;
+	--accent: #2e3338;
+	--accent-hover: #000;
+	--accent-link: rgb(220, 80, 30);
+	--accent-code: #c0392b;
+	--danger: #ef4444;
+	--danger-hover: #dc2626;
+	--success: #16a34a;
+	--warning: #ca8a04;
+	--border: #e5e5e5;
+	--border-subtle: #f0f0f0;
+	--shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+	--shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.08);
+
+	/* Glass – toned down for light backgrounds */
+	--glass-bg: rgba(255, 255, 255, 0.92);
+	--glass-border: rgba(0, 0, 0, 0.08);
+	--glass-blur: 8px;
+	--glass-shadow: 0 4px 24px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+
+	color-scheme: light;
+}
+
+* {
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
+}
+
+html, body {
+	height: 100%;
+	font-family: var(--font-sans);
+	font-size: 14px;
+	background: var(--bg-primary);
+	color: var(--text-primary);
+	overflow: hidden;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
+}
+
+button {
+	font-family: var(--font-sans);
+	font-size: inherit;
+	cursor: pointer;
+	border: none;
+	border-radius: var(--radius-sm);
+	padding: 8px 16px;
+	transition: all 0.15s ease;
+}
+
+button:disabled {
+	opacity: 0.4;
+	cursor: not-allowed;
+}
+
+input:not([type="checkbox"]), textarea {
+	font-family: var(--font-sans);
+	font-size: inherit;
+	background: var(--bg-secondary);
+	color: var(--text-primary);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	padding: 10px 14px;
+	outline: none;
+	transition: border-color 0.15s ease;
+}
+
+input:focus, textarea:focus {
+	border-color: var(--text-muted);
+}
+
+input::placeholder, textarea::placeholder {
+	color: var(--text-muted);
+}
+
+::-webkit-scrollbar {
+	width: 6px;
+}
+
+::-webkit-scrollbar-track {
+	background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+	background: var(--border);
+	border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+	background: var(--text-muted);
+}
+
+:focus-visible {
+	outline: 2px solid var(--accent);
+	outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════
+   Slash Command Menu (appended to body)
+   ═══════════════════════════════════════════════════ */
+.slash-menu {
+	position: absolute;
+	z-index: 999;
+	width: 280px;
+	max-height: 320px;
+	overflow-y: auto;
+	background: var(--bg-secondary);
+	border: 1px solid var(--border);
+	border-radius: var(--radius-sm);
+	padding: 4px;
+	box-shadow: var(--shadow-lg);
+}
+
+.slash-menu-empty {
+	padding: 12px 16px;
+	color: var(--text-muted);
+	font-size: 0.85rem;
+	text-align: center;
+}
+
+.slash-menu-item {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	width: 100%;
+	padding: 8px 10px;
+	background: transparent;
+	border: none;
+	border-radius: var(--radius-xs);
+	cursor: pointer;
+	text-align: left;
+	color: var(--text-primary);
+	font-family: var(--font-sans);
+	transition: background 0.08s;
+}
+
+.slash-menu-item:hover,
+.slash-menu-item.is-selected {
+	background: var(--bg-hover);
+}
+
+.slash-menu-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 32px;
+	height: 32px;
+	border-radius: var(--radius-xs);
+	background: var(--bg-tertiary);
+	border: 1px solid var(--border);
+	font-size: 0.88rem;
+	flex-shrink: 0;
+	color: var(--text-secondary);
+}
+
+.slash-menu-text {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	min-width: 0;
+}
+
+.slash-menu-title {
+	font-size: 0.85rem;
+	font-weight: 500;
+	color: var(--text-primary);
+}
+
+.slash-menu-desc {
+	font-size: 0.78rem;
+	color: var(--text-muted);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ═══════════════════════════════════════════════════
+   Callouts
+   ═══════════════════════════════════════════════════ */
+.callout {
+	display: flex;
+	gap: 12px;
+	margin: 12px 0;
+	padding: 14px 16px;
+	border-radius: var(--radius-sm, 8px);
+	border-left: 4px solid;
+}
+
+.callout-indicator {
+	flex-shrink: 0;
+	font-size: 16px;
+	line-height: 1.6;
+	user-select: none;
+}
+
+.callout-content {
+	flex: 1;
+	min-width: 0;
+}
+
+.callout-content > *:first-child { margin-top: 0; }
+.callout-content > *:last-child { margin-bottom: 0; }
+
+/* Callout types */
+.callout-info {
+	background: rgba(59, 130, 246, 0.08);
+	border-left-color: #3b82f6;
+}
+.callout-note {
+	background: rgba(139, 92, 246, 0.08);
+	border-left-color: #8b5cf6;
+}
+.callout-success {
+	background: rgba(34, 197, 94, 0.08);
+	border-left-color: #22c55e;
+}
+.callout-warning {
+	background: rgba(234, 179, 8, 0.08);
+	border-left-color: #eab308;
+}
+.callout-danger {
+	background: rgba(239, 68, 68, 0.08);
+	border-left-color: #ef4444;
+}
+
+[data-theme='light'] .callout-info { background: rgba(59, 130, 246, 0.06); }
+[data-theme='light'] .callout-note { background: rgba(139, 92, 246, 0.06); }
+[data-theme='light'] .callout-success { background: rgba(34, 197, 94, 0.06); }
+[data-theme='light'] .callout-warning { background: rgba(234, 179, 8, 0.06); }
+[data-theme='light'] .callout-danger { background: rgba(239, 68, 68, 0.06); }
+
+/* ═══════════════════════════════════════════════════
+   Math Blocks
+   ═══════════════════════════════════════════════════ */
+.math-block {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin: 16px 0;
+	padding: 16px;
+	background: var(--bg-secondary, #111);
+	border: 1px solid var(--border, #262626);
+	border-radius: var(--radius-sm, 8px);
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.math-block:hover {
+	border-color: var(--text-muted, #666);
+}
+
+.math-block .math-render {
+	min-height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+}
+
+.math-block .math-render.math-empty {
+	color: var(--text-muted, #666);
+	font-style: italic;
+	font-size: 13px;
+}
+
+.math-block .math-input {
+	width: 100%;
+	background: var(--bg-tertiary, #191919);
+	color: var(--text-primary, #dcddde);
+	border: 1px solid var(--border, #262626);
+	border-radius: var(--radius-xs, 4px);
+	padding: 10px 12px;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	resize: none;
+	outline: none;
+	overflow: hidden;
+}
+
+.math-block .math-input:focus {
+	border-color: var(--text-muted, #666);
+}
+
+/* Inline math */
+.math-inline {
+	display: inline-flex;
+	align-items: center;
+	cursor: pointer;
+	padding: 1px 4px;
+	border-radius: 3px;
+	transition: background 0.1s;
+	vertical-align: baseline;
+}
+
+.math-inline:hover {
+	background: var(--bg-hover, #1e1e1e);
+}
+
+.math-inline.math-empty {
+	background: var(--bg-tertiary, #191919);
+	border: 1px dashed var(--border, #262626);
+	padding: 2px 8px;
+}
+
+.math-placeholder {
+	color: var(--text-muted, #666);
+	font-style: italic;
+	font-size: 12px;
+	font-family: var(--font-sans);
+}
+
+.math-inline-input {
+	background: var(--bg-tertiary, #191919);
+	color: var(--text-primary, #dcddde);
+	border: 1px solid var(--text-muted, #666);
+	border-radius: 3px;
+	padding: 2px 6px;
+	font-family: var(--font-mono);
+	font-size: 12px;
+	outline: none;
+	min-width: 80px;
+	max-width: 300px;
+}
+
+.math-error {
+	color: var(--danger, #ef4444);
+	font-family: var(--font-mono);
+	font-size: 12px;
+}
+
+/* KaTeX color overrides */
+.katex { color: var(--text-primary); }
