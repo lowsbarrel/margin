@@ -50,10 +50,6 @@ A client-side encrypted, S3-synced Markdown editor. Your notes. Your keys.
 - Auto-sync every 5 minutes (optional) or manual via the status bar
 - Hidden `.margin/` folder excluded automatically
 
-### WebSocket relay (optional)
-- Self-hosted Python/FastAPI server with Redis for real-time collaboration
-- Zero-knowledge relay — ciphertext only, Redis runs without disk persistence
-
 ### Security
 - All crypto in Rust — JavaScript never touches keys or plaintext
 - AES-256-GCM-SIV authenticated encryption, 96-bit random nonces, nonce-misuse resistant
@@ -73,7 +69,6 @@ A client-side encrypted, S3-synced Markdown editor. Your notes. Your keys.
 | Encryption | Rust — AES-256-GCM-SIV (`aes-gcm-siv` crate) |
 | Key derivation | BIP-39 mnemonic → seed → SHA-256 split (vault ID + encryption key) |
 | S3 sync | Rust (`aws-sdk-s3` / `rust-s3`) — encrypted 3-way merge |
-| WebSocket relay | Python — FastAPI, Redis (RAM-only) |
 | i18n | Paraglide — English, Italian |
 
 ## Project structure
@@ -101,25 +96,13 @@ margin/
 │           ├── s3.rs           # S3 client & operations
 │           ├── session.rs      # Multi-vault profiles, device key
 │           └── settings.rs     # Encrypted settings load/save/export
-├── server/                     # Python FastAPI WebSocket relay (optional)
-│   ├── main.py
-│   └── src/
-│       ├── config.py           # MARGIN_* env vars
-│       ├── models.py           # Pydantic message models
-│       ├── routers/            # health, ws
-│       └── services/           # redis_store, ws fan-out & bootstrap
-└── docs/
-    └── PROJECT_IDEA.md
 ```
 
 ## Prerequisites
 
-- **Client**: Node.js 20+, [pnpm](https://pnpm.io/), Rust toolchain, [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
-- **Server** (optional): Python 3.13+, [uv](https://docs.astral.sh/uv/), Redis 7+
+- Node.js 20+, [pnpm](https://pnpm.io/), Rust toolchain, [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
 
 ## Getting started
-
-### Client
 
 ```bash
 cd app
@@ -131,31 +114,6 @@ To build a release binary:
 
 ```bash
 pnpm tauri build
-```
-
-### WebSocket relay server (optional)
-
-```bash
-cd server
-uv sync
-uv run python main.py
-```
-
-The server starts on `http://0.0.0.0:8000` by default. Configuration via `MARGIN_*` environment variables:
-
-| Variable | Default | Description |
-| -------- | ------- | ----------- |
-| `MARGIN_REDIS_URL` | `redis://localhost:6379/0` | Redis connection URL |
-| `MARGIN_HOST` | `0.0.0.0` | Bind address |
-| `MARGIN_PORT` | `8000` | Port |
-| `MARGIN_VAULT_EVICTION_DAYS` | `180` | Days before idle vault ciphertext expires |
-| `MARGIN_WS_MAX_MESSAGE_BYTES` | `4194304` | Max WebSocket message size (4 MB) |
-| `MARGIN_CORS_ORIGINS` | `["tauri://localhost"]` | Allowed CORS origins |
-
-```bash
-# Or with Docker
-cd server
-docker compose up --build
 ```
 
 ## How it works
