@@ -25,9 +25,10 @@
     oncontextmenuentry: (entry: TreeEntry, event: MouseEvent) => void;
     onrename: (entry: TreeEntry, newName: string) => void;
     onmoveentry: (fromPath: string, toDir: string, isDir: boolean) => Promise<void>;
+    ondeleteentry: (path: string, isDir: boolean) => Promise<void>;
   }
 
-  let { activeFile, onfileselect, oncontextmenuentry, onrename, onmoveentry }: Props =
+  let { activeFile, onfileselect, oncontextmenuentry, onrename, onmoveentry, ondeleteentry }: Props =
     $props();
 
   // ─── Drop target tracking ─────────────────────────────────────────────────
@@ -134,10 +135,26 @@
         ? files.getSelectedPaths()
         : [item.path];
 
-    startNativeDrag({
-      item: paths,
-      icon: dragIconPath,
-    })
+    // Determine which entries are directories (for deletion after drop)
+    const dragEntries =
+      files.selectedEntries.size > 1 && files.isSelected(item.path)
+        ? files.getSelectedAsList()
+        : [{ path: item.path, isDir: item.isDir }];
+
+    startNativeDrag(
+      {
+        item: paths,
+        icon: dragIconPath,
+      },
+      ({ result }) => {
+        if (result === "Dropped") {
+          // File was successfully dropped outside — remove from vault
+          for (const entry of dragEntries) {
+            ondeleteentry(entry.path, entry.isDir).catch(() => {});
+          }
+        }
+      },
+    )
       .catch(() => {
         // drag cancelled or failed — that's fine
       })
@@ -276,12 +293,19 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
   class="tree-viewport"
   bind:this={viewport}
   bind:clientHeight={viewportHeight}
   onscroll={() => {
     if (viewport) scrollTop = viewport.scrollTop;
+  }}
+  onclick={(e) => {
+    if (!(e.target as HTMLElement).closest('.tree-row') && vault.vaultPath) {
+      files.clearSelection();
+      files.setSelectedFolder(vault.vaultPath);
+    }
   }}
   onmouseup={(e) => handleRootDrop(e)}
 >

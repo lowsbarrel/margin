@@ -376,10 +376,14 @@
 
   function openRootContextMenu(event: MouseEvent) {
     if (!vault.vaultPath) return;
+    // Only treat as root context menu when clicking empty space (not a tree row)
+    if ((event.target as HTMLElement).closest('.tree-row')) return;
     event.preventDefault();
+    files.clearSelection();
+    files.setSelectedFolder(vault.vaultPath);
     menuX = event.clientX;
     menuY = event.clientY;
-    menuTarget = { kind: "root", path: getBasePath() };
+    menuTarget = { kind: "root", path: vault.vaultPath };
   }
 
   function openEntryContextMenu(entry: TreeEntry, event: MouseEvent) {
@@ -636,7 +640,7 @@
     const targetDir = getPasteTarget() || vault.vaultPath;
 
     for (const srcPath of paths) {
-      const name = srcPath.split("/").pop() ?? "";
+      const name = srcPath.replace(/\\/g, "/").split("/").pop() ?? "";
       let dest = `${targetDir}/${name}`;
 
       if (await fileExists(dest)) {
@@ -902,6 +906,7 @@
             oncontextmenuentry={openEntryContextMenu}
             onrename={handleInlineRename}
             onmoveentry={handleMoveEntry}
+            ondeleteentry={(path, isDir) => ondeleteentry(path, isDir)}
           />
         </div>
       {:else if activeView === "search"}

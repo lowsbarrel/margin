@@ -48,6 +48,11 @@
 
   let { onclose }: Props = $props();
 
+  async function handleClose() {
+    await handleSave();
+    onclose();
+  }
+
   let endpoint = $state("");
   let bucket = $state("");
   let region = $state("us-east-1");
@@ -321,7 +326,7 @@
   }
 </script>
 
-<GlassModal title={m.settings_title()} {onclose}>
+<GlassModal title={m.settings_title()} onclose={handleClose}>
   <Section
     title={m.settings_vault_title()}
     icon={KeyRound}
@@ -430,9 +435,6 @@
         loading={testing}
       >
         {testing ? m.settings_testing() : m.settings_test()}
-      </Button>
-      <Button variant="primary" onclick={handleSave} loading={saving}>
-        {saving ? m.settings_saving() : m.settings_save()}
       </Button>
       <Button
         variant="success"

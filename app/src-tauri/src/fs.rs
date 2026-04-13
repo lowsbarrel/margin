@@ -12,6 +12,17 @@ use tauri::{AppHandle, Emitter, Manager};
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 
+/// Convert a `PathBuf` / `OsString` into a `String` with forward slashes
+/// so the JS frontend gets consistent separators on every platform.
+#[inline]
+fn path_to_string(p: std::path::PathBuf) -> String {
+    let s = p.into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+    #[cfg(target_os = "windows")]
+    { s.replace('\\', "/") }
+    #[cfg(not(target_os = "windows"))]
+    { s }
+}
+
 /// Write `content` to `dest` atomically by writing to a sibling temp file
 /// and then renaming it into place. Prevents partial writes from corrupting
 /// the target file if the process or OS crashes mid-write.
@@ -123,7 +134,7 @@ fn walk_dir_impl(dir: &Path, include_hidden: bool, result: &mut Vec<FsEntry>) {
             .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
             .map(|d| d.as_secs())
             .unwrap_or(0);
-        let path_str = entry.path().into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+        let path_str = path_to_string(entry.path());
         if is_dir {
             let child_path = Path::new(&path_str).to_path_buf();
             result.push(FsEntry {
@@ -241,7 +252,7 @@ fn build_tree_impl(
     }
 
     for raw in entries {
-        let path_str = raw.path.to_string_lossy().into_owned();
+        let path_str = path_to_string(raw.path.clone());
         let is_dir = raw.is_dir;
         result.push(TreeEntry {
             name: raw.name,
@@ -345,7 +356,7 @@ pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
         entries.push(FsEntry {
             name,
             is_dir: entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false),
-            path: entry.path().into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned()),
+            path: path_to_string(entry.path()),
             modified,
         });
     }
@@ -657,7 +668,7 @@ fn collect_files_recursive(
             results.push(FsEntry {
                 name,
                 is_dir: false,
-                path: path.into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned()),
+                path: path_to_string(path),
                 modified,
             });
         }
@@ -710,7 +721,7 @@ pub fn search_file_contents(
                 Ok(c) => c,
                 Err(_) => return vec![],
             };
-            let path_str = path.into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+            let path_str = path_to_string(path);
             let mut matches = Vec::new();
 
             if case_sensitive {
@@ -921,7 +932,7 @@ pub fn list_all_tags(root: &str) -> Result<Vec<TagInfo>, String> {
         .filter_map(|path| {
             let content = fs::read_to_string(&path).ok()?;
             let tags = extract_tags_from_content(&content);
-            Some((path.into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned()), tags))
+            Some((path_to_string(path), tags))
         })
         .collect();
 
