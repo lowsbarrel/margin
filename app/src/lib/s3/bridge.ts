@@ -21,12 +21,14 @@ export async function s3TestConnection(): Promise<string> {
 }
 
 export async function s3Upload(key: string, data: Uint8Array): Promise<void> {
-  return invoke("s3_upload", { key, data: Array.from(data) });
+  return invoke("s3_upload", data, {
+    headers: { "x-key": key },
+  });
 }
 
 export async function s3Download(key: string): Promise<Uint8Array> {
-  const result = await invoke<number[]>("s3_download", { key });
-  return new Uint8Array(result);
+  const buffer = await invoke<ArrayBuffer>("s3_download", { key });
+  return new Uint8Array(buffer);
 }
 
 export async function s3List(prefix: string): Promise<string[]> {

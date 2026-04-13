@@ -3,60 +3,28 @@ import { computePosition, flip, offset, shift } from "@floating-ui/dom";
 import { mount, unmount } from "svelte";
 import MentionMenu from "$lib/components/MentionMenu.svelte";
 import { vault } from "$lib/stores/vault.svelte";
-import { searchFiles, walkDirectory, type FsEntry } from "$lib/fs/bridge";
+import { walkDirectory, type FsEntry } from "$lib/fs/bridge";
+import { fuzzyFilterFiles, type FuzzyEntry } from "./text-transform-bridge";
 
-/** Cache of all markdown files for fast filtering. Refreshed on each menu open. */
-let cachedFiles: FsEntry[] = [];
+/** Cache of all markdown files for fast filtering. Refreshed at most every 5 s. */
+let cachedFiles: FuzzyEntry[] = [];
+let cacheTimestamp = 0;
+const CACHE_TTL = 5000; // 5 seconds
 
 async function loadAllFiles(): Promise<void> {
   if (!vault.vaultPath) return;
-  cachedFiles = (await walkDirectory(vault.vaultPath)).filter(
-    (e) => !e.is_dir && e.name.endsWith(".md"),
-  );
+  const now = Date.now();
+  if (cachedFiles.length > 0 && now - cacheTimestamp < CACHE_TTL) return;
+  const entries = await walkDirectory(vault.vaultPath);
+  cachedFiles = entries
+    .filter((e) => !e.is_dir && e.name.endsWith(".md"))
+    .map((e) => ({ name: e.name, path: e.path }));
+  cacheTimestamp = now;
 }
 
-function filterFiles(query: string): MentionItem[] {
-  const q = query.toLowerCase();
-  const scored: { item: MentionItem; score: number }[] = [];
-
-  for (const entry of cachedFiles) {
-    const name = entry.name.replace(/\.md$/, "");
-    const nameLower = name.toLowerCase();
-
-    let score = -1;
-    if (!q) {
-      // No query — show all, sorted alphabetically
-      score = 0;
-    } else {
-      const idx = nameLower.indexOf(q);
-      if (idx !== -1) {
-        score = 1000 - idx + (q.length / nameLower.length) * 500;
-      } else {
-        // Fuzzy character match
-        let qi = 0;
-        let s = 0;
-        let lastMatch = -1;
-        for (let ti = 0; ti < nameLower.length && qi < q.length; ti++) {
-          if (nameLower[ti] === q[qi]) {
-            s += 10;
-            if (lastMatch === ti - 1) s += 15;
-            lastMatch = ti;
-            qi++;
-          }
-        }
-        if (qi === q.length) score = s;
-      }
-    }
-
-    if (score >= 0) {
-      scored.push({ item: { title: name, path: entry.path }, score });
-    }
-  }
-
-  scored.sort(
-    (a, b) => b.score - a.score || a.item.title.localeCompare(b.item.title),
-  );
-  return scored.slice(0, 20).map((s) => s.item);
+async function filterFiles(query: string): Promise<MentionItem[]> {
+  const results = await fuzzyFilterFiles(cachedFiles, query, 20);
+  return results.map((r) => ({ title: r.name, path: r.path }));
 }
 
 export default function renderMentionMenu() {
@@ -85,7 +53,7 @@ export default function renderMentionMenu() {
   return {
     onStart: async (props: any) => {
       await loadAllFiles();
-      items = filterFiles(props.query);
+      items = await filterFiles(props.query);
       selectedIndex = 0;
       command = (item: MentionItem) => {
         props.command(item);
@@ -117,8 +85,8 @@ export default function renderMentionMenu() {
       }
     },
 
-    onUpdate: (props: any) => {
-      items = filterFiles(props.query);
+    onUpdate: async (props: any) => {
+      items = await filterFiles(props.query);
       selectedIndex = 0;
       command = (item: MentionItem) => {
         props.command(item);

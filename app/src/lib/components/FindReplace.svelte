@@ -8,6 +8,7 @@
     ReplaceAll,
     CaseSensitive,
   } from "lucide-svelte";
+  import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
     editor: Editor | null;
@@ -47,10 +48,15 @@
     replaceVisible = showReplace;
   });
 
+  let searchDebounceTimer: ReturnType<typeof setTimeout>;
+
   function handleSearchInput() {
-    if (!editor) return;
-    (editor.commands as any).setSearchTerm(searchValue);
-    syncMatchState();
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => {
+      if (!editor) return;
+      (editor.commands as any).setSearchTerm(searchValue);
+      syncMatchState();
+    }, 100);
   }
 
   function handleReplaceInput() {
@@ -92,6 +98,7 @@
   }
 
   function close() {
+    clearTimeout(searchDebounceTimer);
     if (editor) {
       (editor.commands as any).clearSearch();
     }
@@ -121,14 +128,14 @@
         bind:value={searchValue}
         oninput={handleSearchInput}
         class="find-input"
-        placeholder="Find..."
+        placeholder={m.find_placeholder()}
         spellcheck="false"
       />
       <button
         class="toggle-btn"
         class:active={caseSensitive}
         onclick={toggleCaseSensitive}
-        title="Case sensitive"
+        title={m.find_case_sensitive()}
       >
         <CaseSensitive size={14} />
       </button>
@@ -137,14 +144,14 @@
       {#if searchValue && totalMatches > 0}
         {currentIndex + 1} / {totalMatches}
       {:else if searchValue}
-        No results
+        {m.find_no_results()}
       {/if}
     </span>
     <div class="find-actions">
       <button
         class="action-btn"
         onclick={findPrev}
-        title="Previous (Shift+Enter)"
+        title={m.find_previous()}
         disabled={totalMatches === 0}
       >
         <ChevronUp size={16} />
@@ -152,7 +159,7 @@
       <button
         class="action-btn"
         onclick={findNext}
-        title="Next (Enter)"
+        title={m.find_next()}
         disabled={totalMatches === 0}
       >
         <ChevronDown size={16} />
@@ -161,11 +168,11 @@
         class="action-btn"
         class:active={replaceVisible}
         onclick={() => (replaceVisible = !replaceVisible)}
-        title="Toggle replace"
+        title={m.find_toggle_replace()}
       >
         <Replace size={14} />
       </button>
-      <button class="action-btn" onclick={close} title="Close (Esc)">
+      <button class="action-btn" onclick={close} title={m.find_close()}>
         <X size={16} />
       </button>
     </div>
@@ -178,7 +185,7 @@
           bind:value={replaceValue}
           oninput={handleReplaceInput}
           class="find-input"
-          placeholder="Replace..."
+          placeholder={m.find_replace_placeholder()}
           spellcheck="false"
         />
       </div>
@@ -186,7 +193,7 @@
         <button
           class="action-btn"
           onclick={replaceCurrent}
-          title="Replace"
+          title={m.find_replace()}
           disabled={totalMatches === 0}
         >
           <Replace size={14} />
@@ -194,7 +201,7 @@
         <button
           class="action-btn"
           onclick={replaceAll}
-          title="Replace all"
+          title={m.find_replace_all()}
           disabled={totalMatches === 0}
         >
           <ReplaceAll size={14} />

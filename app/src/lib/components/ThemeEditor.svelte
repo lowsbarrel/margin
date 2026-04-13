@@ -10,6 +10,7 @@
   import { toast } from "$lib/stores/toast.svelte";
   import { exportTheme, importTheme, type Theme } from "$lib/themes/bridge";
   import { Section, Button, Input, Field } from "$lib/ui";
+  import * as m from "$lib/paraglide/messages.js";
   import {
     Palette,
     Plus,
@@ -59,7 +60,7 @@
   async function saveEdit() {
     const name = editingName.trim();
     if (!name) {
-      toast.error("Theme name cannot be empty");
+      toast.error(m.theme_name_empty());
       return;
     }
     const t: Theme = { name, colors: { ...editingColors } };
@@ -69,7 +70,7 @@
       editingTheme = null;
       editingName = "";
       editingColors = {};
-      toast.success(`Theme "${name}" saved`);
+      toast.success(m.theme_saved({ name }));
     } catch (err) {
       toast.error(String(err));
     }
@@ -83,7 +84,7 @@
         editingName = "";
         editingColors = {};
       }
-      toast.success(`Theme "${name}" deleted`);
+      toast.success(m.theme_deleted({ name }));
     } catch (err) {
       toast.error(String(err));
     }
@@ -91,14 +92,14 @@
 
   async function handleExport(t: Theme) {
     const dest = await saveDialog({
-      title: "Export Theme",
+      title: m.theme_export_dialog(),
       defaultPath: `${t.name.replace(/\s+/g, "-").toLowerCase()}.json`,
       filters: [{ name: "JSON", extensions: ["json"] }],
     });
     if (!dest) return;
     try {
       await exportTheme(t, dest);
-      toast.success(`Theme exported`);
+      toast.success(m.theme_exported());
     } catch (err) {
       toast.error(String(err));
     }
@@ -106,7 +107,7 @@
 
   async function handleImport() {
     const path = await openDialog({
-      title: "Import Theme",
+      title: m.theme_import_dialog(),
       filters: [{ name: "JSON", extensions: ["json"] }],
       multiple: false,
     });
@@ -114,7 +115,7 @@
     try {
       const t = await importTheme(path as string);
       await theme.addTheme(t);
-      toast.success(`Theme "${t.name}" imported`);
+      toast.success(m.theme_imported({ name: t.name }));
     } catch (err) {
       toast.error(String(err));
     }
@@ -127,10 +128,10 @@
   }
 </script>
 
-<Section title="Themes" icon={Palette} collapsible defaultOpen={false}>
+<Section title={m.theme_title()} icon={Palette} collapsible defaultOpen={false}>
   <!-- Active theme selector -->
   <div class="theme-active-row">
-    <label class="theme-label" for="activeTheme">Active theme</label>
+    <label class="theme-label" for="activeTheme">{m.theme_active()}</label>
     <select
       class="select-field"
       id="activeTheme"
@@ -140,7 +141,7 @@
         theme.activateTheme(val || null);
       }}
     >
-      <option value="">Default ({theme.current})</option>
+      <option value="">{m.theme_default({ mode: theme.current })}</option>
       {#each theme.customThemes as t}
         <option value={t.name}>{t.name}</option>
       {/each}
@@ -163,19 +164,19 @@
           </div>
           <span class="theme-name">{t.name}</span>
           <div class="theme-actions">
-            <button class="icon-btn" title="Edit" onclick={() => startEdit(t)}>
+            <button class="icon-btn" title={m.theme_edit()} onclick={() => startEdit(t)}>
               <Palette size={12} />
             </button>
             <button
               class="icon-btn"
-              title="Export"
+              title={m.theme_export()}
               onclick={() => handleExport(t)}
             >
               <Download size={12} />
             </button>
             <button
               class="icon-btn danger"
-              title="Delete"
+              title={m.theme_delete()}
               onclick={() => deleteTheme(t.name)}
             >
               <Trash2 size={12} />
@@ -189,18 +190,18 @@
   <!-- Action buttons -->
   <div class="theme-btns">
     <Button variant="secondary" icon={Plus} onclick={startNew} size="sm"
-      >New Theme</Button
+      >{m.theme_new()}</Button
     >
     <Button variant="secondary" icon={Upload} onclick={handleImport} size="sm"
-      >Import JSON</Button
+      >{m.theme_import_json()}</Button
     >
   </div>
 
   <!-- Editor -->
   {#if editingTheme}
     <div class="theme-editor">
-      <Field label="Theme name" forId="themeName">
-        <Input id="themeName" bind:value={editingName} placeholder="My Theme" />
+      <Field label={m.theme_name_label()} forId="themeName">
+        <Input id="themeName" bind:value={editingName} placeholder={m.theme_name_placeholder()} />
       </Field>
 
       <div class="color-grid">
@@ -231,10 +232,10 @@
 
       <div class="editor-actions">
         <Button variant="secondary" onclick={cancelEdit} size="sm"
-          >Cancel</Button
+          >{m.theme_cancel()}</Button
         >
         <Button variant="primary" icon={Check} onclick={saveEdit} size="sm">
-          {isNewTheme ? "Create" : "Save"}
+          {isNewTheme ? m.theme_create() : m.theme_save_btn()}
         </Button>
       </div>
     </div>

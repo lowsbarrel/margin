@@ -46,49 +46,26 @@
   import ContextMenu from "$lib/components/ContextMenu.svelte";
   import type { ContextMenuItem } from "$lib/components/ContextMenu.svelte";
   import QuickSwitcher from "$lib/components/QuickSwitcher.svelte";
-  import { IMAGE_EXTS, mimeForPath } from "$lib/utils/mime";
+  import { mimeForPath } from "$lib/utils/mime";
   import { checkForAppUpdate } from "$lib/utils/updater";
+  import {
+    type TabType,
+    type Tab,
+    type Pane,
+    nextTabId,
+    nextPaneId,
+    getTabType,
+    fileTitle,
+    toBreadcrumbs,
+    remapPath,
+    pathMatches,
+    removeFlexAt,
+    revokeBlobUrls,
+    broadcastContent,
+    createEmptyPane,
+  } from "$lib/stores/panes.svelte";
 
-  type TabType = "markdown" | "image" | "pdf" | "canvas" | "graph" | "unknown";
-
-  interface Tab {
-    id: number;
-    path: string;
-    content: string;
-    type: TabType;
-    blobUrl?: string;
-    pdfData?: Uint8Array;
-  }
-
-  interface Pane {
-    id: number;
-    tabs: Tab[];
-    activeTabIndex: number;
-    externalContentVersion: number;
-  }
-
-  let nextTabId = 0;
-  let nextPaneId = 0;
-
-  const PDF_EXTS = new Set([".pdf"]);
-
-  function getTabType(path: string): TabType {
-    const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
-    if (ext === ".md") return "markdown";
-    if (ext === ".canvas") return "canvas";
-    if (IMAGE_EXTS.has(ext)) return "image";
-    if (PDF_EXTS.has(ext)) return "pdf";
-    return "unknown";
-  }
-
-  let panes = $state<Pane[]>([
-    {
-      id: nextPaneId++,
-      tabs: [],
-      activeTabIndex: -1,
-      externalContentVersion: 0,
-    },
-  ]);
+  let panes = $state<Pane[]>([createEmptyPane()]);
   let paneFlexes = $state<number[]>([1]);
   let activePaneIndex = $state(0);
   let showSettings = $state(false);
@@ -125,71 +102,7 @@
       : null,
   );
 
-  function fileTitle(path: string): string {
-    if (path === "__graph__") return "Graph";
-    const name = path.split("/").pop() ?? "";
-    if (name.endsWith(".md")) return name.slice(0, -3);
-    if (name.endsWith(".canvas")) return name.slice(0, -7);
-    return name;
-  }
 
-  function toBreadcrumbs(path: string): string[] {
-    if (path === "__graph__") return ["Graph"];
-    if (!vault.vaultPath) return [];
-    const rel = path.slice(vault.vaultPath.length + 1);
-    const parts = rel.split("/");
-    return parts.map((p, i) => (i === parts.length - 1 ? fileTitle(path) : p));
-  }
-
-  function remapPath(
-    path: string,
-    from: string,
-    to: string,
-    isDir: boolean,
-  ): string {
-    if (path === from) return to;
-    if (isDir && path.startsWith(`${from}/`)) {
-      return `${to}${path.slice(from.length)}`;
-    }
-    return path;
-  }
-
-  function pathMatches(path: string, target: string, isDir: boolean): boolean {
-    return path === target || (isDir && path.startsWith(`${target}/`));
-  }
-
-  /** Propagate saved content to all OTHER tabs with the same path (cross-pane live sync) */
-  function broadcastContent(
-    sourcePaneIndex: number,
-    filePath: string,
-    content: string,
-  ) {
-    for (let pi = 0; pi < panes.length; pi++) {
-      if (pi === sourcePaneIndex) continue;
-      for (let ti = 0; ti < panes[pi].tabs.length; ti++) {
-        if (panes[pi].tabs[ti].path === filePath) {
-          panes[pi].tabs[ti] = { ...panes[pi].tabs[ti], content };
-          panes[pi].externalContentVersion++;
-        }
-      }
-    }
-  }
-
-  // Removes pane at index and gives its flex to its left neighbor (or right if first)
-  function removeFlexAt(flexes: number[], index: number): number[] {
-    const removed = flexes[index];
-    const next = flexes.filter((_, i) => i !== index);
-    const ni = Math.min(index > 0 ? index - 1 : 0, next.length - 1);
-    if (next.length > 0) next[ni] += removed;
-    return next;
-  }
-
-  /** Revoke blob URLs for the given tabs to prevent memory leaks. */
-  function revokeBlobUrls(tabs: Tab[]): void {
-    for (const t of tabs) {
-      if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
-    }
-  }
 
   async function restoreWatchingForPane(paneIndex: number) {
     const pane = panes[paneIndex];
@@ -343,7 +256,7 @@
     }
 
     const newTab: Tab = {
-      id: nextTabId++,
+      id: nextTabId(),
       path: "__graph__",
       content: "",
       type: "graph",
@@ -389,12 +302,12 @@
       }
     } catch (err) {
       console.warn("Failed to read file:", path, err);
-      toast.error(`Failed to read file: ${String(err)}`);
+      toast.error(m.toast_file_read_failed({ error: String(err) }));
       return;
     }
 
     const newTab: Tab = {
-      id: nextTabId++,
+      id: nextTabId(),
       path,
       content,
       type: tabType,
@@ -605,12 +518,7 @@
     const newFlexes = [...paneFlexes];
     newFlexes[refPaneIndex] = half;
     newFlexes.splice(insertAt, 0, half);
-    const newPane: Pane = {
-      id: nextPaneId++,
-      tabs: [],
-      activeTabIndex: -1,
-      externalContentVersion: 0,
-    };
+    const newPane: Pane = createEmptyPane();
     panes = [...panes.slice(0, insertAt), newPane, ...panes.slice(insertAt)];
     paneFlexes = newFlexes;
     activePaneIndex = insertAt;
@@ -769,7 +677,7 @@
     workFlexes[adjustedRef] = half;
     workFlexes.splice(insertAt, 0, half);
     const newPane: Pane = {
-      id: nextPaneId++,
+      id: nextPaneId(),
       tabs: [tab],
       activeTabIndex: 0,
       externalContentVersion: 0,
@@ -789,14 +697,7 @@
     stopAutoSync();
     clearSyncCredentials();
     panes.forEach((pane) => revokeBlobUrls(pane.tabs));
-    panes = [
-      {
-        id: nextPaneId++,
-        tabs: [],
-        activeTabIndex: -1,
-        externalContentVersion: 0,
-      },
-    ];
+    panes = [createEmptyPane()];
     paneFlexes = [1];
     activePaneIndex = 0;
     files.clear();
@@ -970,7 +871,7 @@
               ? pane.tabs[pane.activeTabIndex]
               : null}
           {@const paneCrumbs = paneActiveTab
-            ? toBreadcrumbs(paneActiveTab.path)
+            ? toBreadcrumbs(paneActiveTab.path, vault.vaultPath)
             : []}
           <!-- svelte-ignore a11y_no_static_element_interactions -->
           <div
@@ -1007,7 +908,7 @@
                         closeTab(paneIndex, i);
                       }}
                       tabindex={-1}
-                      aria-label="Close tab"
+                      aria-label={m.tab_close_label()}
                     >
                       <X size={12} />
                     </button>
@@ -1022,7 +923,7 @@
                       e.stopPropagation();
                       closePane(paneIndex);
                     }}
-                    title="Close pane"
+                    title={m.pane_close()}
                   >
                     <X size={14} />
                   </button>
@@ -1065,6 +966,7 @@
                       onsave={(content) => {
                         tab.content = content;
                         broadcastContent(
+                          panes,
                           paneIndex,
                           tab.path,
                           content,
@@ -1094,6 +996,7 @@
                       onsave={(content) => {
                         paneActiveTab.content = content;
                         broadcastContent(
+                          panes,
                           paneIndex,
                           paneActiveTab.path,
                           content,

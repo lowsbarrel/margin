@@ -1,4 +1,4 @@
-import { buildVisibleTree, type TreeEntry } from "$lib/fs/bridge";
+import { buildVisibleTree, buildSubtree, type TreeEntry } from "$lib/fs/bridge";
 
 export type SortOrder = "name" | "date";
 // Re-export for consumers that need the type
@@ -197,7 +197,23 @@ export const files = {
   async expandFolder(path: string) {
     state.expandedFolders.add(path);
     state.expandedFolders = new Set(state.expandedFolders);
-    await _rebuild();
+    // Incremental: only fetch the subtree for the expanded folder
+    const idx = state.flatTree.findIndex((r) => r.path === path);
+    if (idx !== -1 && state.vaultRoot) {
+      const parentDepth = state.flatTree[idx].depth;
+      const children = await buildSubtree(
+        path,
+        parentDepth + 1,
+        [...state.expandedFolders],
+        state.sortOrder,
+      );
+      const next = [...state.flatTree];
+      next.splice(idx + 1, 0, ...children);
+      state.flatTree = next;
+      _pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
+    } else {
+      await _rebuild();
+    }
   },
 
   collapseAll() {
@@ -208,17 +224,31 @@ export const files = {
   async collapseFolder(path: string) {
     state.expandedFolders.delete(path);
     state.expandedFolders = new Set(state.expandedFolders);
-    await _rebuild();
+    // Incremental: remove children from flat array (no IPC needed)
+    const idx = state.flatTree.findIndex((r) => r.path === path);
+    if (idx !== -1) {
+      const parentDepth = state.flatTree[idx].depth;
+      let end = idx + 1;
+      while (end < state.flatTree.length && state.flatTree[end].depth > parentDepth) {
+        end++;
+      }
+      if (end > idx + 1) {
+        const next = [...state.flatTree];
+        next.splice(idx + 1, end - idx - 1);
+        state.flatTree = next;
+        _pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
+      }
+    } else {
+      await _rebuild();
+    }
   },
 
   async toggleFolder(path: string) {
     if (state.expandedFolders.has(path)) {
-      state.expandedFolders.delete(path);
+      await this.collapseFolder(path);
     } else {
-      state.expandedFolders.add(path);
+      await this.expandFolder(path);
     }
-    state.expandedFolders = new Set(state.expandedFolders);
-    await _rebuild();
   },
 
   /** Rebuild the visible tree. Pass vaultPath on first call or vault change. */

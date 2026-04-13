@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Editor } from "@tiptap/core";
+  import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
     editor: Editor | null;
@@ -10,15 +11,20 @@
   let showLinkInput = $state(false);
   let linkUrl = $state("");
   let linkInputEl = $state<HTMLInputElement>();
+  let cachedButtons: HTMLButtonElement[] = [];
+
+  function cacheButtons() {
+    if (!toolbarEl) return;
+    cachedButtons = Array.from(toolbarEl.querySelectorAll<HTMLButtonElement>("[data-cmd]"));
+  }
 
   function updateActiveStates() {
     if (!editor || !toolbarEl) return;
-    toolbarEl
-      .querySelectorAll<HTMLButtonElement>("[data-cmd]")
-      .forEach((btn) => {
-        const cmd = btn.dataset.cmd!;
-        btn.classList.toggle("is-active", editor!.isActive(cmd));
-      });
+    if (cachedButtons.length === 0) cacheButtons();
+    for (const btn of cachedButtons) {
+      const cmd = btn.dataset.cmd!;
+      btn.classList.toggle("is-active", editor!.isActive(cmd));
+    }
   }
 
   function handleClick(e: MouseEvent) {
@@ -67,12 +73,14 @@
     }
     showLinkInput = false;
     linkUrl = "";
+    cachedButtons = [];
     updateActiveStates();
   }
 
   function cancelLink() {
     showLinkInput = false;
     linkUrl = "";
+    cachedButtons = [];
     editor?.commands.focus();
   }
 
@@ -130,7 +138,7 @@
       <button
         class="link-submit"
         onclick={submitLink}
-        aria-label="Confirm link"
+        aria-label={m.bubble_confirm_link()}
       >
         <svg
           width="14"
@@ -141,7 +149,7 @@
           stroke-width="2"><polyline points="20 6 9 17 4 12" /></svg
         >
       </button>
-      <button class="link-cancel" onclick={cancelLink} aria-label="Cancel link">
+      <button class="link-cancel" onclick={cancelLink} aria-label={m.bubble_cancel_link()}>
         <svg
           width="14"
           height="14"
@@ -159,12 +167,12 @@
       </button>
     </div>
   {:else}
-    <button data-cmd="bold" title="Bold (⌘B)"><b>B</b></button>
-    <button data-cmd="italic" title="Italic (⌘I)"><i>I</i></button>
-    <button data-cmd="strike" title="Strikethrough (⌘⇧S)"><s>S</s></button>
-    <button data-cmd="underline" title="Underline (⌘U)"><u>U</u></button>
-    <button data-cmd="code" title="Code (⌘E)"><code>&lt;/&gt;</code></button>
-    <button data-cmd="highlight" title="Highlight">
+    <button data-cmd="bold" title={m.bubble_bold()}><b>B</b></button>
+    <button data-cmd="italic" title={m.bubble_italic()}><i>I</i></button>
+    <button data-cmd="strike" title={m.bubble_strike()}><s>S</s></button>
+    <button data-cmd="underline" title={m.bubble_underline()}><u>U</u></button>
+    <button data-cmd="code" title={m.bubble_code()}><code>&lt;/&gt;</code></button>
+    <button data-cmd="highlight" title={m.bubble_highlight()}>
       <svg
         width="16"
         height="16"
@@ -182,9 +190,9 @@
       class="heading-select"
       value={headingValue}
       onchange={handleHeadingChange}
-      title="Block type"
+      title={m.bubble_block_type()}
     >
-      <option value="0">Text</option>
+      <option value="0">{m.bubble_text()}</option>
       <option value="1">H1</option>
       <option value="2">H2</option>
       <option value="3">H3</option>
@@ -193,7 +201,7 @@
       <option value="6">H6</option>
     </select>
     <span class="divider"></span>
-    <button data-cmd="link" title="Link">
+    <button data-cmd="link" title={m.bubble_link()}>
       <svg
         width="16"
         height="16"

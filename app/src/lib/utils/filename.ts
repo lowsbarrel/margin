@@ -1,3 +1,5 @@
+import * as m from "$lib/paraglide/messages.js";
+
 const INVALID_CHARS = /[/\\:*?"<>|]/;
 const NON_ASCII = /[^\x20-\x7E]/;
 const RESERVED_NAMES = new Set([
@@ -31,17 +33,17 @@ const RESERVED_NAMES = new Set([
  */
 export function validateName(name: string): string | null {
   const trimmed = name.trim();
-  if (!trimmed) return "Name cannot be empty";
+  if (!trimmed) return m.validate_name_empty();
   if (NON_ASCII.test(trimmed))
-    return "Name can only contain standard ASCII characters";
+    return m.validate_name_ascii();
   if (INVALID_CHARS.test(trimmed))
-    return 'Name contains invalid characters: / \\ : * ? " < > |';
-  if (trimmed.startsWith(".")) return "Name cannot start with a dot";
-  if (/[\s.]$/.test(trimmed)) return "Name cannot end with a space or dot";
+    return m.validate_name_invalid_chars();
+  if (trimmed.startsWith(".")) return m.validate_name_dot_start();
+  if (/[\s.]$/.test(trimmed)) return m.validate_name_trailing();
   const stem = trimmed.includes(".")
     ? trimmed.slice(0, trimmed.lastIndexOf("."))
     : trimmed;
   if (RESERVED_NAMES.has(stem.toUpperCase()))
-    return `"${trimmed}" is a reserved system name`;
+    return m.validate_name_reserved({ name: trimmed });
   return null;
 }

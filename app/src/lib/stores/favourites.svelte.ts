@@ -103,9 +103,11 @@ export const favourites = {
           // Migrate: if any entry looks like an absolute path, convert it
           const vp = vault.vaultPath;
           state.paths = new Set(
-            items.map((p) =>
-              vp && p.startsWith(vp + "/") ? p.slice(vp.length + 1) : p,
-            ),
+            items.map((p) => {
+              // Normalise legacy Windows backslash paths
+              const norm = p.replaceAll("\\", "/");
+              return vp && norm.startsWith(vp + "/") ? norm.slice(vp.length + 1) : norm;
+            }),
           );
           return;
         }

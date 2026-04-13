@@ -3,7 +3,7 @@
   import { vault } from "$lib/stores/vault.svelte";
   import { theme } from "$lib/stores/theme.svelte";
   import { toast } from "$lib/stores/toast.svelte";
-  import { exportPdf } from "$lib/utils/pdfExport";
+  import { exportPdf } from "$lib/utils/pdf-export";
   import { IconButton } from "$lib/ui";
   import {
     CloudOff,
@@ -49,7 +49,7 @@
       await exportPdf(tiptap, m.statusbar_export_pdf_success());
     } catch (err) {
       console.error("PDF export failed:", err);
-      toast.error(`PDF export failed: ${String(err)}`);
+      toast.error(m.toast_pdf_export_failed({ error: String(err) }));
     } finally {
       exporting = false;
     }

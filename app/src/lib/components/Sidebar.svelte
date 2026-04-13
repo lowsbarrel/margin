@@ -252,11 +252,11 @@
         caseSensitive,
       );
       if (count > 0) {
-        toast.success(`Replaced ${count} occurrence${count > 1 ? "s" : ""}`);
+        toast.success(m.toast_replaced({ count: String(count) }));
         handleSearchInput();
       }
     } catch (err) {
-      toast.error(`Replace failed: ${String(err)}`);
+      toast.error(m.toast_replace_failed({ error: String(err) }));
     }
   }
 
@@ -279,7 +279,7 @@
     }
     if (total > 0) {
       toast.success(
-        `Replaced ${total} occurrence${total > 1 ? "s" : ""} in ${paths.length} file${paths.length > 1 ? "s" : ""}`,
+        m.toast_replaced_in_files({ count: String(total), files: String(paths.length) }),
       );
       handleSearchInput();
     }
@@ -446,14 +446,14 @@
     const parent = entry.path.slice(0, entry.path.lastIndexOf("/"));
     const newPath = `${parent}/${sanitized}`;
     if (await fileExists(newPath)) {
-      toast.error(`Path already exists: ${sanitized}`);
+      toast.error(m.toast_path_exists({ name: sanitized }));
       return;
     }
 
     try {
       await onrenameentry(entry.path, newPath, entry.is_dir);
     } catch (err) {
-      toast.error(`Rename failed: ${String(err)}`);
+      toast.error(m.toast_rename_failed({ error: String(err) }));
     }
   }
 
@@ -463,7 +463,7 @@
     try {
       await ondeleteentry(entry.path, entry.is_dir);
     } catch (err) {
-      toast.error(`Delete failed: ${String(err)}`);
+      toast.error(m.toast_delete_failed({ error: String(err) }));
     }
   }
 
@@ -471,7 +471,7 @@
     try {
       await revealInFileManager(path);
     } catch (err) {
-      toast.error(`Open in Finder failed: ${String(err)}`);
+      toast.error(m.toast_open_finder_failed({ error: String(err) }));
     }
   }
 
@@ -498,7 +498,7 @@
       }
       await files.refresh(vault.vaultPath);
     } catch (err) {
-      toast.error(`Duplicate failed: ${String(err)}`);
+      toast.error(m.toast_duplicate_failed({ error: String(err) }));
     }
   }
 
@@ -512,13 +512,13 @@
     const name = fromPath.split("/").pop() ?? "";
     let dest = `${toDir}/${name}`;
     if (await fileExists(dest)) {
-      toast.error(`"${name}" already exists in the target folder`);
+      toast.error(m.toast_exists_in_folder({ name }));
       return;
     }
     try {
       await onrenameentry(fromPath, dest, isDir);
     } catch (err) {
-      toast.error(`Move failed: ${String(err)}`);
+      toast.error(m.toast_move_failed({ error: String(err) }));
     }
   }
 
@@ -531,7 +531,7 @@
       if (sel.length === 0) return;
       clipboard.copy(sel.map((s) => s.path), sel.map((s) => s.isDir));
     }
-    toast.success("Copied to clipboard");
+    toast.success(m.toast_copied());
   }
 
   function handleCut(entry?: { path: string; is_dir: boolean }) {
@@ -542,7 +542,7 @@
       if (sel.length === 0) return;
       clipboard.cut(sel.map((s) => s.path), sel.map((s) => s.isDir));
     }
-    toast.success("Cut to clipboard");
+    toast.success(m.toast_cut_clipboard());
   }
 
   async function handlePaste(targetDir: string) {
@@ -580,7 +580,7 @@
           await onrenameentry(srcPath, dest, isDir);
         }
       } catch (err) {
-        toast.error(`Paste failed: ${String(err)}`);
+        toast.error(m.toast_paste_failed({ error: String(err) }));
       }
     }
 
@@ -662,7 +662,7 @@
           await copyDirectory(srcPath, dest);
         });
       } catch (err) {
-        toast.error(`Import failed for ${name}: ${String(err)}`);
+        toast.error(m.toast_import_file_failed({ name, error: String(err) }));
       }
     }
 
@@ -671,7 +671,7 @@
     }
     await files.refresh(vault.vaultPath);
     editor.markLocalChange();
-    toast.success(`Imported ${paths.length} item${paths.length > 1 ? "s" : ""}`);
+    toast.success(m.toast_imported_items({ count: String(paths.length) }));
   }
 
   onMount(() => {
@@ -798,7 +798,7 @@
           if (!panelOpen) ontoggle();
         }
       }}
-      title="Explorer"
+      title={m.sidebar_explorer()}
     >
       <Files size={20} />
     </button>
@@ -813,7 +813,7 @@
           if (!panelOpen) ontoggle();
         }
       }}
-      title="Search"
+      title={m.sidebar_search_title()}
     >
       <Search size={20} />
     </button>
@@ -839,11 +839,11 @@
     <div class="rail-spacer"></div>
 
     {#if panelOpen}
-      <button class="rail-btn" onclick={ontoggle} title="Close panel">
+      <button class="rail-btn" onclick={ontoggle} title={m.sidebar_close_panel()}>
         <PanelLeftClose size={20} />
       </button>
     {:else}
-      <button class="rail-btn" onclick={ontoggle} title="Open panel">
+      <button class="rail-btn" onclick={ontoggle} title={m.sidebar_open_panel()}>
         <PanelLeft size={20} />
       </button>
     {/if}
@@ -911,14 +911,14 @@
         </div>
       {:else if activeView === "search"}
         <div class="panel-header">
-          <span class="panel-title">Search</span>
+          <span class="panel-title">{m.sidebar_search_title()}</span>
           {#if !isTagMode}
           <div class="panel-actions">
             <IconButton
               icon={Replace}
               size="sm"
               onclick={() => (showReplace = !showReplace)}
-              title="Toggle replace"
+              title={m.sidebar_toggle_replace()}
               active={showReplace}
             />
           </div>
@@ -932,14 +932,14 @@
             bind:this={searchInput}
             bind:value={searchQuery}
             oninput={handleSearchInput}
-            placeholder="Search in files... (# for tags)"
+            placeholder={m.sidebar_search_placeholder()}
           />
           {#if !isTagMode}
           <button
             class="search-toggle-btn"
             class:active={caseSensitive}
             onclick={toggleCaseSensitive}
-            title="Case sensitive"
+            title={m.sidebar_case_sensitive()}
           >
             <CaseSensitive size={14} />
           </button>
@@ -952,12 +952,12 @@
             <input
               class="search-input"
               bind:value={replaceQuery}
-              placeholder="Replace..."
+              placeholder={m.sidebar_replace_placeholder()}
             />
             <button
               class="search-toggle-btn"
               onclick={handleReplaceAll}
-              title="Replace all in all files"
+              title={m.sidebar_replace_all_files()}
               disabled={contentResults.length === 0}
             >
               <ReplaceAll size={14} />
@@ -1036,16 +1036,12 @@
             {/if}
           {:else}
           {#if searchQuery.trim() && contentResults.length === 0 && searchResults.length === 0 && !searching}
-            <div class="search-empty">No results found</div>
+            <div class="search-empty">{m.sidebar_no_results()}</div>
           {/if}
 
           {#if contentResults.length > 0}
             <div class="search-summary">
-              {contentResults.length} result{contentResults.length > 1
-                ? "s"
-                : ""} in {groupedResults.size} file{groupedResults.size > 1
-                ? "s"
-                : ""}
+              {m.sidebar_results_summary({ count: String(contentResults.length), files: String(groupedResults.size) })}
             </div>
           {/if}
 
@@ -1072,7 +1068,7 @@
                       e.stopPropagation();
                       handleReplaceInFile(filePath);
                     }}
-                    title="Replace all in this file"
+                    title={m.sidebar_replace_all_in_file()}
                   >
                     <Replace size={12} />
                   </span>

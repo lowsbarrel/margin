@@ -1,16 +1,14 @@
 import {
   s3Configure,
-  s3Upload,
   s3Download,
   s3Delete,
   type S3Config,
 } from "$lib/s3/bridge";
-import { encryptBlob, decryptBlob } from "$lib/crypto/bridge";
+import { decryptBlob } from "$lib/crypto/bridge";
 import {
   readFileBytes,
   writeFileBytes,
   walkDirectory,
-  fileExists,
   createDirectory,
   deleteEntry,
   setMtime,
@@ -18,63 +16,28 @@ import {
 import { editor } from "$lib/stores/editor.svelte";
 import { files } from "$lib/stores/files.svelte";
 import { toast } from "$lib/stores/toast.svelte";
+import type { ManifestEntry, Manifest } from "./s3sync-manifest";
+import { validateManifest } from "./s3sync-manifest";
+import { nowSeconds } from "./s3sync-diff";
+import {
+  hashFilesBatch,
+  loadManifest,
+  saveManifest,
+  computeSyncActionsNative,
+  collectTombstonesNative,
+  mergeTombstonesNative,
+  pruneTombstonesNative,
+  syncUploadFiles,
+  syncDownloadFiles,
+  syncUploadManifest,
+} from "./bridge";
 
 // ─── Types ───────────────────────────────────────────────────────────────
-
-interface ManifestEntry {
-  path: string;
-  hash: string;
-  /** Seconds since UNIX epoch — actual file modification time */
-  modified: number;
-  /** Seconds since UNIX epoch — set when the file is soft-deleted */
-  deleted_at?: number;
-}
-
-interface Manifest {
-  version: number;
-  files: ManifestEntry[];
-}
-
-/** Validate that a parsed object has the expected Manifest shape. */
-function validateManifest(obj: unknown): Manifest {
-  if (typeof obj !== "object" || obj === null)
-    throw new Error("Manifest is not an object");
-  const m = obj as Record<string, unknown>;
-  if (typeof m.version !== "number")
-    throw new Error("Manifest missing version");
-  if (!Array.isArray(m.files)) throw new Error("Manifest missing files array");
-  for (const entry of m.files) {
-    if (typeof entry !== "object" || entry === null)
-      throw new Error("Invalid manifest entry");
-    const e = entry as Record<string, unknown>;
-    if (typeof e.path !== "string")
-      throw new Error("Manifest entry missing path");
-    if (typeof e.hash !== "string")
-      throw new Error("Manifest entry missing hash");
-    if (typeof e.modified !== "number")
-      throw new Error("Manifest entry missing modified");
-  }
-  return obj as Manifest;
-}
 
 export type ConflictStrategy = "local_wins" | "keep_newer";
 
 export interface SyncOptions {
   conflictStrategy?: ConflictStrategy;
-}
-
-type ChangeKind =
-  | "upload"
-  | "download"
-  | "delete-remote"
-  | "delete-local"
-  | "conflict"
-  | "conflict-delete-local"
-  | "conflict-delete-remote";
-
-interface SyncAction {
-  kind: ChangeKind;
-  path: string;
 }
 
 // ─── Abort / state ───────────────────────────────────────────────────────
@@ -99,15 +62,7 @@ function checkAbort(signal: AbortSignal): void {
 
 // ─── Helpers ─────────────────────────────────────────────────────────────
 
-async function sha256hex(data: Uint8Array): Promise<string> {
-  const hash = await crypto.subtle.digest(
-    "SHA-256",
-    data.buffer as ArrayBuffer,
-  );
-  return Array.from(new Uint8Array(hash))
-    .map((b) => b.toString(16).padStart(2, "0"))
-    .join("");
-}
+// sha256hex replaced by native hash_files_batch — see bridge.ts
 
 interface LocalFile {
   path: string;
@@ -157,176 +112,11 @@ async function ensureParentDir(
   }
 }
 
-// ─── Base manifest (local) ──────────────────────────────────────────────
-
-const BASE_MANIFEST_FILE = "sync-base.enc";
-
-async function loadBaseManifest(
-  vaultPath: string,
-  encryptionKey: number[],
-): Promise<Manifest> {
-  const path = `${vaultPath}/.margin/${BASE_MANIFEST_FILE}`;
-  try {
-    if (!(await fileExists(path))) return { version: 2, files: [] };
-    const enc = await readFileBytes(path);
-    const dec = await decryptBlob(enc, encryptionKey);
-    return validateManifest(JSON.parse(new TextDecoder().decode(dec)));
-  } catch {
-    return { version: 2, files: [] };
-  }
-}
-
-async function saveBaseManifest(
-  vaultPath: string,
-  encryptionKey: number[],
-  manifest: Manifest,
-): Promise<void> {
-  const json = new TextEncoder().encode(JSON.stringify(manifest));
-  const enc = await encryptBlob(json, encryptionKey);
-  await createDirectory(`${vaultPath}/.margin`);
-  await writeFileBytes(`${vaultPath}/.margin/${BASE_MANIFEST_FILE}`, enc);
-}
-
-// ─── 3-way diff ──────────────────────────────────────────────────────────
-
-/** Soft-deleted entries are treated as "not present" for diff purposes */
-function effectiveHash(
-  map: Map<string, ManifestEntry>,
-  path: string,
-): string | null {
-  const entry = map.get(path);
-  if (!entry || entry.deleted_at) return null;
-  return entry.hash;
-}
-
-function computeSyncActions(
-  base: Map<string, ManifestEntry>,
-  local: Map<string, ManifestEntry>,
-  remote: Map<string, ManifestEntry>,
-): SyncAction[] {
-  const allPaths = new Set([...base.keys(), ...local.keys(), ...remote.keys()]);
-  const actions: SyncAction[] = [];
-
-  for (const path of allPaths) {
-    const baseHash = effectiveHash(base, path);
-    const localHash = effectiveHash(local, path);
-    const remoteHash = effectiveHash(remote, path);
-
-    // Both sides agree → nothing to do
-    if (localHash === remoteHash) continue;
-
-    if (baseHash === null) {
-      // File didn't exist at last sync
-      if (localHash !== null && remoteHash === null) {
-        actions.push({ kind: "upload", path });
-      } else if (localHash === null && remoteHash !== null) {
-        actions.push({ kind: "download", path });
-      } else {
-        // Both added with different content
-        actions.push({ kind: "conflict", path });
-      }
-    } else {
-      // File existed at last sync
-      const localChanged = localHash !== baseHash;
-      const remoteChanged = remoteHash !== baseHash;
-
-      if (localHash === null && remoteHash === null) {
-        continue; // both deleted
-      } else if (localHash === null) {
-        // Locally deleted
-        actions.push({
-          kind: remoteChanged ? "conflict-delete-local" : "delete-remote",
-          path,
-        });
-      } else if (remoteHash === null) {
-        // Remotely deleted
-        actions.push({
-          kind: localChanged ? "conflict-delete-remote" : "delete-local",
-          path,
-        });
-      } else if (localChanged && !remoteChanged) {
-        actions.push({ kind: "upload", path });
-      } else if (!localChanged && remoteChanged) {
-        actions.push({ kind: "download", path });
-      } else {
-        // Both changed differently
-        actions.push({ kind: "conflict", path });
-      }
-    }
-  }
-
-  return actions;
-}
-
-// ─── Tombstone helpers ───────────────────────────────────────────────────
-
-/** Entries older than 90 days are pruned from the manifest.
- *  90 days gives ample time for devices that go offline for extended periods
- *  to sync deletions without resurrecting deleted files. */
-const TOMBSTONE_TTL_SECONDS = 90 * 24 * 60 * 60;
-
-function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
-}
-
-function collectTombstones(manifest: Manifest): Map<string, ManifestEntry> {
-  const map = new Map<string, ManifestEntry>();
-  for (const e of manifest.files) {
-    if (e.deleted_at) map.set(e.path, e);
-  }
-  return map;
-}
-
-function mergeTombstones(
-  a: Map<string, ManifestEntry>,
-  b: Map<string, ManifestEntry>,
-): Map<string, ManifestEntry> {
-  const merged = new Map(a);
-  for (const [path, entry] of b) {
-    const existing = merged.get(path);
-    if (!existing || (entry.deleted_at ?? 0) > (existing.deleted_at ?? 0)) {
-      merged.set(path, entry);
-    }
-  }
-  return merged;
-}
-
-function pruneTombstones(
-  tombstones: Map<string, ManifestEntry>,
-): ManifestEntry[] {
-  const cutoff = nowSeconds() - TOMBSTONE_TTL_SECONDS;
-  return Array.from(tombstones.values()).filter(
-    (t) => (t.deleted_at ?? 0) > cutoff,
-  );
-}
-
 // ─── Main sync ───────────────────────────────────────────────────────────
 
-/** Read a local file (from cache or disk) and encrypt it for S3. */
-async function readAndEncrypt(
-  path: string,
-  vaultPath: string,
-  encryptionKey: number[],
-  cache: Map<string, Uint8Array>,
-): Promise<Uint8Array> {
-  const data = cache.get(path) ?? (await readFileBytes(`${vaultPath}/${path}`));
-  return encryptBlob(data, encryptionKey);
-}
+// readAndEncrypt replaced by native sync_upload_files — see bridge.ts
 
-/** Download a file from S3, decrypt it, and write it to disk. Returns the decrypted data. */
-async function downloadAndDecrypt(
-  s3Key: string,
-  destPath: string,
-  encryptionKey: number[],
-  vaultPath: string,
-  relativePath: string,
-): Promise<Uint8Array> {
-  const encrypted = await s3Download(s3Key);
-  const decrypted = await decryptBlob(encrypted, encryptionKey);
-  await ensureParentDir(vaultPath, relativePath);
-  await writeFileBytes(destPath, decrypted);
-  return decrypted;
-}
+// downloadAndDecrypt replaced by native sync_download_files — see bridge.ts
 
 /** Record a file as deleted in tombstones and remove it from mergedFiles. */
 function markTombstone(
@@ -384,39 +174,51 @@ async function doSyncToS3(
     await s3Configure(s3Config);
     const s3Prefix = `${vaultId}/`;
 
-    // 1. Load base manifest (last synced state)
+    // 1. Load base manifest (last synced state) — fully in Rust
     checkAbort(signal);
-    const baseManifest = await loadBaseManifest(vaultPath, encryptionKey);
+    const baseManifest = await loadManifest(vaultPath, encryptionKey);
     const baseMap = new Map(baseManifest.files.map((e) => [e.path, e]));
 
     // 2. Build current local manifest
-    //    Optimisation: skip hashing files whose mtime matches the base entry
+    //    Optimisation: skip hashing files whose mtime matches the base entry.
+    //    Files that need hashing are batched into a single native call.
     const localFiles = await walkVault(vaultPath);
     checkAbort(signal);
 
     const localManifest: Manifest = { version: 2, files: [] };
-    const fileDataCache = new Map<string, Uint8Array>();
+    const unchangedEntries: ManifestEntry[] = [];
+    const pathsToHash: string[] = [];
+    const pathsMeta: { path: string; modified: number }[] = [];
 
     for (const file of localFiles) {
-      checkAbort(signal);
       const baseEntry = baseMap.get(file.path);
       if (
         baseEntry &&
         !baseEntry.deleted_at &&
         baseEntry.modified === file.modified
       ) {
-        // mtime unchanged & not a tombstone — reuse previous hash without reading file
-        localManifest.files.push(baseEntry);
+        // mtime unchanged & not a tombstone — reuse previous hash
+        unchangedEntries.push(baseEntry);
       } else {
-        const data = await readFileBytes(file.fullPath);
-        const hash = await sha256hex(data);
-        fileDataCache.set(file.path, data);
-        localManifest.files.push({
-          path: file.path,
-          hash,
-          modified: file.modified,
-        });
+        pathsToHash.push(file.path);
+        pathsMeta.push({ path: file.path, modified: file.modified });
       }
+    }
+
+    // Batch hash all changed files in Rust (parallel SHA-256)
+    const hashes =
+      pathsToHash.length > 0
+        ? await hashFilesBatch(vaultPath, pathsToHash)
+        : [];
+    checkAbort(signal);
+
+    localManifest.files.push(...unchangedEntries);
+    for (let i = 0; i < pathsToHash.length; i++) {
+      localManifest.files.push({
+        path: pathsMeta[i].path,
+        hash: hashes[i],
+        modified: pathsMeta[i].modified,
+      });
     }
 
     // 3. Download remote manifest
@@ -433,10 +235,14 @@ async function doSyncToS3(
       // First sync — no remote manifest yet
     }
 
-    // 4. Build maps & compute 3-way diff
+    // 4. Build maps & compute 3-way diff — fully in Rust
     const localMap = new Map(localManifest.files.map((e) => [e.path, e]));
     const remoteMap = new Map(remoteManifest.files.map((e) => [e.path, e]));
-    const actions = computeSyncActions(baseMap, localMap, remoteMap);
+    const actions = await computeSyncActionsNative(
+      baseManifest.files,
+      localManifest.files,
+      remoteManifest.files,
+    );
     checkAbort(signal);
 
     // 5. Execute each action
@@ -448,11 +254,14 @@ async function doSyncToS3(
       actionsTotal > 0 ? { total: actionsTotal, done: 0 } : null,
     );
 
-    // Collect tombstones from both sides and merge them
-    const tombstones = mergeTombstones(
-      collectTombstones(baseManifest),
-      collectTombstones(remoteManifest),
+    // Collect tombstones from both sides and merge them — fully in Rust
+    const baseTombstones = await collectTombstonesNative(baseManifest.files);
+    const remoteTombstones = await collectTombstonesNative(remoteManifest.files);
+    const mergedTombstonesList = await mergeTombstonesNative(
+      baseTombstones,
+      remoteTombstones,
     );
+    const tombstones = new Map(mergedTombstonesList.map((e) => [e.path, e]));
 
     // Start with all local files in the merged result
     for (const entry of localManifest.files) mergedFiles.set(entry.path, entry);
@@ -461,27 +270,25 @@ async function doSyncToS3(
       checkAbort(signal);
 
       switch (action.kind) {
-        // ── Local add / modify → push to S3 ──────────────────────
+        // ── Local add / modify → push to S3 (native batch) ──────
         case "upload": {
-          const encrypted = await readAndEncrypt(
-            action.path,
+          await syncUploadFiles(
             vaultPath,
+            s3Prefix,
+            [action.path],
             encryptionKey,
-            fileDataCache,
           );
-          await s3Upload(`${s3Prefix}files/${action.path}.enc`, encrypted);
           tombstones.delete(action.path);
           break;
         }
 
-        // ── Remote add / modify → pull from S3 ───────────────────
+        // ── Remote add / modify → pull from S3 (native batch) ───
         case "download": {
-          await downloadAndDecrypt(
-            `${s3Prefix}files/${action.path}.enc`,
-            `${vaultPath}/${action.path}`,
-            encryptionKey,
+          await syncDownloadFiles(
             vaultPath,
-            action.path,
+            s3Prefix,
+            [action.path],
+            encryptionKey,
           );
           const remoteEntry = remoteMap.get(action.path)!;
           await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
@@ -527,19 +334,18 @@ async function doSyncToS3(
 
           if (remoteWins) {
             // Remote is newer → keep remote, save local as conflict copy
-            const localData =
-              fileDataCache.get(action.path) ??
-              (await readFileBytes(`${vaultPath}/${action.path}`));
+            const localData = await readFileBytes(
+              `${vaultPath}/${action.path}`,
+            );
             const conflictPath = conflictCopyName(action.path);
             await ensureParentDir(vaultPath, conflictPath);
             await writeFileBytes(`${vaultPath}/${conflictPath}`, localData);
 
-            await downloadAndDecrypt(
-              `${s3Prefix}files/${action.path}.enc`,
-              `${vaultPath}/${action.path}`,
-              encryptionKey,
+            await syncDownloadFiles(
               vaultPath,
-              action.path,
+              s3Prefix,
+              [action.path],
+              encryptionKey,
             );
             await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
 
@@ -549,7 +355,7 @@ async function doSyncToS3(
               modified: remoteEntry.modified,
             });
           } else {
-            // Local wins (default) → keep local, save remote as conflict copy
+            // Local wins (default) → save remote as conflict copy
             const encrypted = await s3Download(
               `${s3Prefix}files/${action.path}.enc`,
             );
@@ -559,13 +365,12 @@ async function doSyncToS3(
             await writeFileBytes(`${vaultPath}/${conflictPath}`, decrypted);
 
             // Push local to S3
-            const enc = await readAndEncrypt(
-              action.path,
+            await syncUploadFiles(
               vaultPath,
+              s3Prefix,
+              [action.path],
               encryptionKey,
-              fileDataCache,
             );
-            await s3Upload(`${s3Prefix}files/${action.path}.enc`, enc);
           }
 
           tombstones.delete(action.path);
@@ -575,12 +380,11 @@ async function doSyncToS3(
 
         // ── Deleted locally, modified remotely → re-download ─────
         case "conflict-delete-local": {
-          await downloadAndDecrypt(
-            `${s3Prefix}files/${action.path}.enc`,
-            `${vaultPath}/${action.path}`,
-            encryptionKey,
+          await syncDownloadFiles(
             vaultPath,
-            action.path,
+            s3Prefix,
+            [action.path],
+            encryptionKey,
           );
           const remoteEntry = remoteMap.get(action.path)!;
           await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
@@ -596,13 +400,12 @@ async function doSyncToS3(
 
         // ── Modified locally, deleted remotely → re-upload ───────
         case "conflict-delete-remote": {
-          const encrypted = await readAndEncrypt(
-            action.path,
+          await syncUploadFiles(
             vaultPath,
+            s3Prefix,
+            [action.path],
             encryptionKey,
-            fileDataCache,
           );
-          await s3Upload(`${s3Prefix}files/${action.path}.enc`, encrypted);
           tombstones.delete(action.path);
           conflicts.push(action.path);
           break;
@@ -616,21 +419,18 @@ async function doSyncToS3(
     checkAbort(signal);
 
     // 6. Upload merged manifest to S3 (live files + pruned tombstones)
+    const prunedTombstones = await pruneTombstonesNative(
+      Array.from(tombstones.values()),
+      nowSeconds(),
+    );
     const mergedManifest: Manifest = {
       version: 2,
-      files: [
-        ...Array.from(mergedFiles.values()),
-        ...pruneTombstones(tombstones),
-      ],
+      files: [...Array.from(mergedFiles.values()), ...prunedTombstones],
     };
-    const manifestJson = new TextEncoder().encode(
-      JSON.stringify(mergedManifest),
-    );
-    const encManifest = await encryptBlob(manifestJson, encryptionKey);
-    await s3Upload(`${s3Prefix}manifest.enc`, encManifest);
+    await syncUploadManifest(s3Prefix, encryptionKey, mergedManifest);
 
-    // 7. Persist merged manifest as local base for next sync
-    await saveBaseManifest(vaultPath, encryptionKey, mergedManifest);
+    // 7. Persist merged manifest as local base for next sync — fully in Rust
+    await saveManifest(vaultPath, encryptionKey, mergedManifest);
 
     // 8. Refresh file tree if anything changed on disk
     const hadFsChanges = actions.some(

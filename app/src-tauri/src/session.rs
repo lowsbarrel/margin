@@ -110,6 +110,13 @@ fn legacy_session_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir.join("session.enc"))
 }
 
+/// Normalise a vault path to always use forward slashes so that profiles
+/// saved on Windows with `\` are matched correctly against paths sent by
+/// the frontend (which always normalises to `/`).
+fn normalise_vault_path(p: &str) -> String {
+    p.replace('\\', "/")
+}
+
 /// Load profiles, migrating from legacy format if needed
 fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, String> {
     let key = get_device_key(app)?;
@@ -118,8 +125,20 @@ fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, Strin
     if path.exists() {
         let encrypted = fs::read(&path).map_err(|e| format!("Read failed: {e}"))?;
         let decrypted = crypto::decrypt_blob(encrypted, key)?;
-        let profiles: VaultProfiles =
+        let mut profiles: VaultProfiles =
             serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
+
+        // Normalise all stored paths and deduplicate profiles that differ
+        // only by separator style (e.g. `C:\foo` vs `C:/foo`).
+        let mut seen = std::collections::HashSet::new();
+        for p in &mut profiles.profiles {
+            p.vault_path = normalise_vault_path(&p.vault_path);
+        }
+        profiles.profiles.retain(|p| seen.insert(p.vault_path.clone()));
+        if let Some(ref mut lu) = profiles.last_used {
+            *lu = normalise_vault_path(lu);
+        }
+
         return Ok(profiles);
     }
 
@@ -137,7 +156,7 @@ fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, Strin
                 let profile = VaultProfile {
                     name: folder_name,
                     mnemonic: legacy.mnemonic,
-                    vault_path: legacy.vault_path,
+                    vault_path: normalise_vault_path(&legacy.vault_path),
                 };
                 let profiles = VaultProfiles {
                     last_used: Some(profile.vault_path.clone()),
@@ -184,17 +203,21 @@ pub fn load_vault_profiles(app: tauri::AppHandle) -> Result<VaultProfiles, Strin
 #[tauri::command]
 pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
+    let norm = normalise_vault_path(&profile.vault_path);
+    let mut profile = profile;
+    profile.vault_path = norm.clone();
     if let Some(existing) = data
         .profiles
         .iter_mut()
-        .find(|p| p.vault_path == profile.vault_path)
+        .find(|p| normalise_vault_path(&p.vault_path) == norm)
     {
         existing.name = profile.name;
         existing.mnemonic = profile.mnemonic;
+        existing.vault_path = norm.clone();
     } else {
-        data.profiles.push(profile.clone());
+        data.profiles.push(profile);
     }
-    data.last_used = Some(profile.vault_path);
+    data.last_used = Some(norm);
     save_profiles_internal(&app, &data)
 }
 
@@ -202,8 +225,9 @@ pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Resul
 #[tauri::command]
 pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
-    data.profiles.retain(|p| p.vault_path != vault_path);
-    if data.last_used.as_deref() == Some(&vault_path) {
+    let norm = normalise_vault_path(&vault_path);
+    data.profiles.retain(|p| normalise_vault_path(&p.vault_path) != norm);
+    if data.last_used.as_deref().map(|s| normalise_vault_path(s)) == Some(norm) {
         data.last_used = data.profiles.first().map(|p| p.vault_path.clone());
     }
     save_profiles_internal(&app, &data)
@@ -222,12 +246,14 @@ pub fn save_session(
         .unwrap_or("Vault")
         .to_string();
 
+    let vault_path = normalise_vault_path(&vault_path);
+
     // Check if profile already exists to preserve its name
     let data = load_profiles_internal(&app)?;
     let name = data
         .profiles
         .iter()
-        .find(|p| p.vault_path == vault_path)
+        .find(|p| normalise_vault_path(&p.vault_path) == vault_path)
         .map(|p| p.name.clone())
         .unwrap_or(folder_name);
 
@@ -244,7 +270,8 @@ pub fn save_session(
 pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, String> {
     let data = load_profiles_internal(&app)?;
     if let Some(last) = &data.last_used {
-        if let Some(profile) = data.profiles.iter().find(|p| &p.vault_path == last) {
+        let norm_last = normalise_vault_path(last);
+        if let Some(profile) = data.profiles.iter().find(|p| normalise_vault_path(&p.vault_path) == norm_last) {
             return Ok(Some(profile.clone()));
         }
     }

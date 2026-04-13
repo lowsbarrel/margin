@@ -2,6 +2,7 @@ use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use serde::{Deserialize, Serialize};
 use std::sync::Mutex;
+use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::State;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
@@ -83,10 +84,20 @@ const MULTIPART_MAX_RETRIES: u32 = 3;
 
 #[tauri::command]
 pub async fn s3_upload(
-    key: String,
-    data: Vec<u8>,
+    request: Request<'_>,
     state: State<'_, S3State>,
 ) -> Result<(), String> {
+    let key: String = request
+        .headers()
+        .get("x-key")
+        .and_then(|v: &tauri::http::HeaderValue| v.to_str().ok())
+        .ok_or("Missing x-key header")?
+        .to_string();
+    let data = match request.body() {
+        InvokeBody::Raw(bytes) => bytes.clone(),
+        InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
+            .map_err(|e| format!("Invalid body: {e}"))?,
+    };
     let bucket = get_bucket(&state)?;
 
     if data.len() >= MULTIPART_THRESHOLD {
@@ -96,60 +107,74 @@ pub async fn s3_upload(
             .await
             .map_err(|e| format!("Multipart init failed: {e}"))?;
 
-        let upload_id = &init.upload_id;
-        let mut parts = Vec::new();
+        let upload_id = init.upload_id;
+
+        let mut tasks = tokio::task::JoinSet::new();
 
         for (i, chunk) in data.chunks(PART_SIZE).enumerate() {
             let part_number = (i as u32) + 1;
             let chunk_data = chunk.to_vec();
-            let mut last_err = String::new();
-            let mut succeeded = false;
+            let bucket = bucket.clone();
+            let key = key.clone();
+            let upload_id = upload_id.clone();
 
-            for attempt in 0..=MULTIPART_MAX_RETRIES {
-                match bucket
-                    .put_multipart_chunk(
-                        chunk_data.clone(),
-                        &key,
-                        part_number,
-                        upload_id,
-                        "application/octet-stream",
-                    )
-                    .await
-                {
-                    Ok(part) => {
-                        parts.push(part);
-                        succeeded = true;
-                        break;
-                    }
-                    Err(e) => {
-                        last_err = format!("{e}");
-                        if attempt < MULTIPART_MAX_RETRIES {
-                            // Exponential backoff: 100ms, 200ms, 400ms
-                            let delay = std::time::Duration::from_millis(100 << attempt);
-                            tokio::time::sleep(delay).await;
+            tasks.spawn(async move {
+                let mut last_err = String::new();
+                for attempt in 0..=MULTIPART_MAX_RETRIES {
+                    match bucket
+                        .put_multipart_chunk(
+                            chunk_data.clone(),
+                            &key,
+                            part_number,
+                            &upload_id,
+                            "application/octet-stream",
+                        )
+                        .await
+                    {
+                        Ok(part) => return Ok((part_number, part)),
+                        Err(e) => {
+                            last_err = format!("{e}");
+                            if attempt < MULTIPART_MAX_RETRIES {
+                                let delay = std::time::Duration::from_millis(100 << attempt);
+                                tokio::time::sleep(delay).await;
+                            }
                         }
                     }
                 }
-            }
-
-            if !succeeded {
-                // Abort the multipart upload so orphaned parts don't linger
-                let _ = bucket.abort_upload(&key, upload_id).await;
-                return Err(format!(
+                Err(format!(
                     "Multipart chunk {part_number} failed after {} retries: {last_err}",
                     MULTIPART_MAX_RETRIES
-                ));
+                ))
+            });
+        }
+
+        let mut indexed_parts: Vec<(u32, _)> = Vec::new();
+        while let Some(result) = tasks.join_next().await {
+            match result {
+                Ok(Ok(part)) => indexed_parts.push(part),
+                Ok(Err(e)) => {
+                    let _ = bucket.abort_upload(&key, &upload_id).await;
+                    return Err(e);
+                }
+                Err(e) => {
+                    let _ = bucket.abort_upload(&key, &upload_id).await;
+                    return Err(format!("Task panicked: {e}"));
+                }
             }
         }
 
+        // Sort by part number for correct multipart completion
+        indexed_parts.sort_by_key(|(num, _)| *num);
+        let parts: Vec<_> = indexed_parts.into_iter().map(|(_, part)| part).collect();
+
         bucket
-            .complete_multipart_upload(&key, upload_id, parts)
+            .complete_multipart_upload(&key, &upload_id, parts)
             .await
             .map_err(|e| format!("Multipart complete failed: {e}"))?;
     } else {
         // ── Simple upload for small files ────────────────────────────
-        bucket
-            .put_object(&key, &data)
+        let _ = bucket
+            .put_object(key.as_str(), &data)
             .await
             .map_err(|e| format!("Upload failed: {e}"))?;
     }
@@ -158,14 +183,14 @@ pub async fn s3_upload(
 }
 
 #[tauri::command]
-pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Vec<u8>, String> {
+pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Response, String> {
     let bucket = get_bucket(&state)?;
     let response = bucket
         .get_object(&key)
         .await
         .map_err(|e| format!("Download failed: {e}"))?;
 
-    Ok(response.to_vec())
+    Ok(Response::new(response.to_vec()))
 }
 
 #[tauri::command]

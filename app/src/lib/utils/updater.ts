@@ -36,6 +36,6 @@ async function installUpdate() {
     }
   } catch {
     updateShown = false;
-    toast.error("Update failed. Please try again later.");
+    toast.error(m.toast_update_failed());
   }
 }

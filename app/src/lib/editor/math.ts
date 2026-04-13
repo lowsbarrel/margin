@@ -10,7 +10,12 @@ const KATEX_CACHE_MAX = 512;
 function cachedKatex(text: string, displayMode: boolean): string {
   const key = `${displayMode ? "D" : "I"}:${text}`;
   const cached = katexCache.get(key);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) {
+    // Move to end (most recently used) for LRU behavior
+    katexCache.delete(key);
+    katexCache.set(key, cached);
+    return cached;
+  }
   const html = katex.renderToString(text, { displayMode, throwOnError: false });
   if (katexCache.size >= KATEX_CACHE_MAX) {
     // Evict oldest entry

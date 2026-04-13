@@ -152,10 +152,11 @@
   async function pickDirectory() {
     const selected = await open({ directory: true, multiple: false });
     if (selected) {
-      vaultPath = selected as string;
+      // Normalise to forward slashes so path handling is consistent on Windows
+      vaultPath = (selected as string).replaceAll("\\", "/");
       // Auto-fill vault name from folder name if empty
       if (!vaultName.trim()) {
-        const parts = (selected as string).split("/");
+        const parts = vaultPath.split("/");
         vaultName = parts[parts.length - 1] || "";
       }
     }
@@ -205,7 +206,7 @@
           <img src="/logo.svg" alt="Margin logo" class="brand-logo" />
           <h1>{m.app_name()}</h1>
         </div>
-        <span class="auto-login-text">Opening vault...</span>
+        <span class="auto-login-text">{m.login_auto_opening()}</span>
       </div>
     {:else}
       <div class="top-bar">

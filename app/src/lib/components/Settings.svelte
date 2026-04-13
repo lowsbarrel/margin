@@ -453,7 +453,7 @@
     <div class="auto-sync-row">
       <label class="toggle-label" for="autoSync">
         <RefreshCw size={14} />
-        Auto-sync
+        {m.settings_auto_sync()}
       </label>
       <label class="toggle-switch">
         <input type="checkbox" id="autoSync" bind:checked={autoSync} />
@@ -462,29 +462,27 @@
     </div>
     {#if autoSync}
       <p class="hint">
-        Vault will sync automatically every 5 minutes and after each save.
+        {m.settings_auto_sync_hint()}
       </p>
     {/if}
 
-    <Field label="Conflict resolution" forId="conflictStrategy">
+    <Field label={m.settings_conflict_resolution()} forId="conflictStrategy">
       <select
         class="select-field"
         id="conflictStrategy"
         bind:value={conflictStrategy}
       >
-        <option value="local_wins">Local wins</option>
-        <option value="keep_newer">Keep newer</option>
+        <option value="local_wins">{m.settings_conflict_local_wins()}</option>
+        <option value="keep_newer">{m.settings_conflict_keep_newer()}</option>
       </select>
     </Field>
     {#if conflictStrategy === "keep_newer"}
       <p class="hint">
-        On conflict, the file with the most recent modification time wins. The
-        other copy is saved as a .sync-conflict file.
+        {m.settings_conflict_hint_newer()}
       </p>
     {:else}
       <p class="hint">
-        On conflict, the local version always wins. The remote version is saved
-        as a .sync-conflict file.
+        {m.settings_conflict_hint_local()}
       </p>
     {/if}
   </Section>
@@ -512,7 +510,7 @@
         <Input
           id="attachmentFolder"
           bind:value={attachmentFolder}
-          placeholder="e.g. attachments"
+          placeholder={m.settings_attachments_folder_placeholder()}
         />
       {/if}
     </Field>

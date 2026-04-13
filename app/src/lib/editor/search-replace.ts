@@ -129,26 +129,32 @@ function findMatchesSync(
 // ─── Plugin state helpers ────────────────────────────────────────────────────
 
 interface PluginState {
-  decos: DecorationSet;
+  baseDecos: DecorationSet;
+  currentDeco: DecorationSet;
   matches: SearchMatch[];
   /** Doc reference the matches were computed for — used to verify freshness. */
   matchDoc: any;
 }
 
-function buildDecos(
+function buildBaseDecos(doc: any, matches: SearchMatch[]): DecorationSet {
+  if (matches.length === 0) return DecorationSet.empty;
+  const decorations = matches.map((match) =>
+    Decoration.inline(match.from, match.to, { class: "search-match" }),
+  );
+  return DecorationSet.create(doc, decorations);
+}
+
+function buildCurrentDeco(
   doc: any,
   matches: SearchMatch[],
   currentIndex: number,
 ): DecorationSet {
-  if (matches.length === 0) return DecorationSet.empty;
-  const decorations = matches.map((match, i) => {
-    const className =
-      i === currentIndex
-        ? "search-match search-match-current"
-        : "search-match";
-    return Decoration.inline(match.from, match.to, { class: className });
-  });
-  return DecorationSet.create(doc, decorations);
+  if (matches.length === 0 || currentIndex >= matches.length)
+    return DecorationSet.empty;
+  const match = matches[currentIndex];
+  return DecorationSet.create(doc, [
+    Decoration.inline(match.from, match.to, { class: "search-match-current" }),
+  ]);
 }
 
 // ─── Extension ───────────────────────────────────────────────────────────────
@@ -302,7 +308,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         key: searchPluginKey,
         state: {
           init(): PluginState {
-            return { decos: DecorationSet.empty, matches: [], matchDoc: null };
+            return { baseDecos: DecorationSet.empty, currentDeco: DecorationSet.empty, matches: [], matchDoc: null };
           },
           apply(tr, prev, _oldState, newState): PluginState {
             const meta = tr.getMeta(searchPluginKey);
@@ -316,25 +322,26 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
               if (storage.currentIndex >= matches.length) {
                 storage.currentIndex = 0;
               }
-              const decos = buildDecos(newState.doc, matches, storage.currentIndex);
+              const baseDecos = buildBaseDecos(newState.doc, matches);
+              const currentDeco = buildCurrentDeco(newState.doc, matches, storage.currentIndex);
 
               // Scroll to current match
               if (meta.action === "navigate" || meta.action === "update") {
                 scrollToMatch(matches, storage.currentIndex);
               }
 
-              return { decos, matches, matchDoc: newState.doc };
+              return { baseDecos, currentDeco, matches, matchDoc: newState.doc };
             }
 
             if (!meta && !docChanged) return prev;
 
             const storage = extensionThis.storage;
 
-            // ── Navigation: rebuild decorations from cached matches ──
+            // ── Navigation: only rebuild the single current-match decoration ──
             if (meta?.action === "navigate" && prev.matchDoc === newState.doc) {
-              const decos = buildDecos(newState.doc, prev.matches, storage.currentIndex);
+              const currentDeco = buildCurrentDeco(newState.doc, prev.matches, storage.currentIndex);
               scrollToMatch(prev.matches, storage.currentIndex);
-              return { ...prev, decos };
+              return { ...prev, currentDeco };
             }
 
             // ── Search term changed or doc changed: kick off async Rust search ──
@@ -348,13 +355,17 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
               );
             } else {
               storage.totalMatches = 0;
-              return { decos: DecorationSet.empty, matches: [], matchDoc: newState.doc };
+              return { baseDecos: DecorationSet.empty, currentDeco: DecorationSet.empty, matches: [], matchDoc: newState.doc };
             }
 
             // Return stale decorations while async search is in flight.
             // If doc changed, try to map old decorations to new positions.
-            if (docChanged && prev.decos !== DecorationSet.empty) {
-              return { ...prev, decos: prev.decos.map(tr.mapping, newState.doc) };
+            if (docChanged && prev.baseDecos !== DecorationSet.empty) {
+              return {
+                ...prev,
+                baseDecos: prev.baseDecos.map(tr.mapping, newState.doc),
+                currentDeco: prev.currentDeco.map(tr.mapping, newState.doc),
+              };
             }
             return prev;
           },
@@ -362,7 +373,11 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         props: {
           decorations(state) {
             const ps = this.getState(state) as PluginState | undefined;
-            return ps?.decos ?? DecorationSet.empty;
+            if (!ps || (ps.baseDecos === DecorationSet.empty && ps.currentDeco === DecorationSet.empty)) {
+              return DecorationSet.empty;
+            }
+            if (ps.currentDeco === DecorationSet.empty) return ps.baseDecos;
+            return ps.baseDecos.add(state.doc, ps.currentDeco.find());
           },
         },
       }),

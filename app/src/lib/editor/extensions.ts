@@ -46,6 +46,8 @@ export function createEditorExtensions({
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       codeBlock: false,
+      link: false,
+      underline: false,
       dropcursor: {
         width: 3,
         color: "#70CFF8",

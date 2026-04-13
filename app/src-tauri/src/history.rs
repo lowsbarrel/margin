@@ -15,12 +15,20 @@ pub struct Snapshot {
 /// Build the history directory path for a given file.
 /// e.g. vault/.margin/history/notes/foo.md/
 fn history_dir(vault_path: &str, file_path: &str) -> Result<String, String> {
-    let vault = vault_path.trim_end_matches('/');
-    let file = file_path.trim_end_matches('/');
+    // Normalize separators so Windows back-slashes don't break the prefix check
+    let vault = vault_path.replace('\\', "/");
+    let file = file_path.replace('\\', "/");
+    let vault = vault.trim_end_matches('/');
+    let file = file.trim_end_matches('/');
 
     // file_path must be inside vault_path (check with trailing slash to prevent prefix confusion)
+    // Use case-insensitive comparison on Windows where drive letters may differ in case.
     let vault_prefix = format!("{vault}/");
-    if !file.starts_with(&vault_prefix) {
+    #[cfg(target_os = "windows")]
+    let inside = file.to_lowercase().starts_with(&vault_prefix.to_lowercase());
+    #[cfg(not(target_os = "windows"))]
+    let inside = file.starts_with(&vault_prefix);
+    if !inside {
         return Err("File is not inside the vault".into());
     }
 
@@ -226,8 +234,10 @@ pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u64, String>
 /// When a directory is deleted, all history for every file beneath it is removed.
 #[tauri::command]
 pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), String> {
-    let vault = vault_path.trim_end_matches('/');
-    let entry = entry_path.trim_end_matches('/');
+    let vault = vault_path.replace('\\', "/");
+    let entry = entry_path.replace('\\', "/");
+    let vault = vault.trim_end_matches('/');
+    let entry = entry.trim_end_matches('/');
 
     let vault_prefix = format!("{vault}/");
     if !entry.starts_with(&vault_prefix) {
@@ -252,9 +262,12 @@ pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), Stri
 /// Move/rename the history directory when a file or directory is renamed.
 #[tauri::command]
 pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Result<(), String> {
-    let vault = vault_path.trim_end_matches('/');
-    let old = old_path.trim_end_matches('/');
-    let new_ = new_path.trim_end_matches('/');
+    let vault = vault_path.replace('\\', "/");
+    let old = old_path.replace('\\', "/");
+    let new_ = new_path.replace('\\', "/");
+    let vault = vault.trim_end_matches('/');
+    let old = old.trim_end_matches('/');
+    let new_ = new_.trim_end_matches('/');
 
     let vault_prefix = format!("{vault}/");
     if !old.starts_with(&vault_prefix) || !new_.starts_with(&vault_prefix) {

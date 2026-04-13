@@ -8,6 +8,7 @@
     unresolveImagePaths,
     resolveWikiEmbeds,
   } from "$lib/editor/image-paths";
+  import { transformImagePaths } from "$lib/editor/text-transform-bridge";
   import { insertPastedFile, insertDroppedFile } from "$lib/editor/attachments";
   import { editor as editorStore } from "$lib/stores/editor.svelte";
   import { toast } from "$lib/stores/toast.svelte";
@@ -27,7 +28,9 @@
   import { computePosition, flip, offset, shift } from "@floating-ui/dom";
   import BubbleToolbar from "./BubbleToolbar.svelte";
   import FindReplace from "./FindReplace.svelte";
+  import ImageLightbox from "./ImageLightbox.svelte";
   import { validateName } from "$lib/utils/filename";
+  import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
     filePath: string;
@@ -73,6 +76,7 @@
   let alive = true;
   let currentPath = $state(untrack(() => filePath));
   let unlistenDragDrop: (() => void) | null = null;
+  let handleFindHotkeyRef: EventListener | null = null;
   let lightboxSrc = $state<string | null>(null);
   let lightboxAlt = $state("");
   let ctxMenu = $state<{
@@ -97,9 +101,14 @@
     if (v !== lastSeenVersion) {
       lastSeenVersion = v;
       if (tiptap && initialContent != null) {
-        const wikied = resolveWikiEmbeds(initialContent, attachmentFolder);
-        const resolved = resolveImagePaths(wikied, vault.vaultPath);
-        tiptap.commands.setContent(resolved, { emitUpdate: false });
+        transformImagePaths(
+          initialContent,
+          vault.vaultPath,
+          attachmentFolder,
+          "resolve",
+        ).then((resolved) => {
+          tiptap!.commands.setContent(resolved, { emitUpdate: false });
+        });
       }
     }
   });
@@ -119,13 +128,13 @@
           lastSnapshotMd = text;
           saveSnapshot(vault.vaultPath, currentPath, encoded).catch((err) => {
             console.warn("Snapshot save failed:", err);
-            toast.error("Failed to save history snapshot");
+            toast.error(m.toast_save_snapshot_failed());
           });
         }
       })
       .catch((err) => {
         console.error("Save failed:", err);
-        toast.error("Failed to save file");
+        toast.error(m.toast_save_file_failed());
       });
   }
 
@@ -312,7 +321,7 @@
 
     if (!attachmentFolder) {
       toast.error(
-        "Set an attachment folder in Settings to insert file attachments",
+        m.toast_set_attachment_folder(),
       );
       return;
     }
@@ -324,7 +333,7 @@
         attachmentFolder,
       });
     } catch (err) {
-      toast.error(`Failed to insert file: ${String(err)}`);
+      toast.error(m.toast_insert_file_failed({ error: String(err) }));
     }
   }
 
@@ -418,7 +427,7 @@
         event.stopImmediatePropagation();
         const absPath = `${vault.vaultPath}/${src}`;
         openPath(absPath).catch((err) =>
-          toast.error(`Cannot open file: ${String(err)}`),
+          toast.error(m.toast_cannot_open_file({ error: String(err) })),
         );
       }
       return;
@@ -438,19 +447,19 @@
 
     if (href.startsWith("http://") || href.startsWith("https://")) {
       openUrl(href).catch((err) =>
-        toast.error(`Cannot open URL: ${String(err)}`),
+        toast.error(m.toast_cannot_open_url({ error: String(err) })),
       );
     } else if (href.startsWith("localfile://")) {
       const absPath = decodeURIComponent(
         href.replace("localfile://localhost", ""),
       );
       openPath(absPath).catch((err) =>
-        toast.error(`Cannot open file: ${String(err)}`),
+        toast.error(m.toast_cannot_open_file({ error: String(err) })),
       );
     } else if (vault.vaultPath) {
       const absPath = `${vault.vaultPath}/${href}`;
       openPath(absPath).catch((err) =>
-        toast.error(`Cannot open file: ${String(err)}`),
+        toast.error(m.toast_cannot_open_file({ error: String(err) })),
       );
     }
   }
@@ -479,13 +488,13 @@
 
     if (!attachmentFolder) {
       toast.error(
-        "Set an attachment folder in Settings to insert file attachments",
+        m.toast_set_attachment_folder(),
       );
       return;
     }
 
     for (const srcPath of paths) {
-      const name = srcPath.split("/").pop() ?? srcPath;
+      const name = srcPath.replace(/\\/g, "/").split("/").pop() ?? srcPath;
       const ext = name.split(".").pop()?.toLowerCase() ?? "";
 
       if (ext === "md") {
@@ -501,7 +510,7 @@
           attachmentFolder,
         });
       } catch (err) {
-        toast.error(`Failed to insert file: ${String(err)}`);
+        toast.error(m.toast_insert_file_failed({ error: String(err) }));
       }
     }
   }
@@ -567,7 +576,7 @@
       const absPath = resolveAbsPath(img.src);
       const items: ContextMenuItem[] = [
         {
-          label: "View Image",
+          label: m.editor_view_image(),
           onclick: () => {
             lightboxSrc = img.src;
             lightboxAlt = img.alt || "Image";
@@ -577,17 +586,17 @@
       if (absPath) {
         items.push(
           {
-            label: "Open with Default App",
+            label: m.editor_open_default_app(),
             onclick: () =>
               openPath(absPath).catch((err) =>
-                toast.error(`Cannot open file: ${String(err)}`),
+                toast.error(m.toast_cannot_open_file({ error: String(err) })),
               ),
           },
           {
-            label: "Reveal in Finder",
+            label: m.editor_reveal_in_finder(),
             onclick: () =>
               revealItemInDir(absPath).catch((err) =>
-                toast.error(`Cannot reveal file: ${String(err)}`),
+                toast.error(m.toast_cannot_reveal_file({ error: String(err) })),
               ),
           },
         );
@@ -608,17 +617,17 @@
           y: event.clientY,
           items: [
             {
-              label: `Open "${fileName}"`,
+              label: m.editor_open_file({ name: fileName }),
               onclick: () =>
                 openPath(absPath).catch((err) =>
-                  toast.error(`Cannot open file: ${String(err)}`),
+                  toast.error(m.toast_cannot_open_file({ error: String(err) })),
                 ),
             },
             {
-              label: "Reveal in Finder",
+              label: m.editor_reveal_in_finder(),
               onclick: () =>
                 revealItemInDir(absPath).catch((err) =>
-                  toast.error(`Cannot reveal file: ${String(err)}`),
+                  toast.error(m.toast_cannot_reveal_file({ error: String(err) })),
                 ),
             },
           ],
@@ -766,8 +775,14 @@
 
   onMount(() => {
     titleEl.textContent = initialTitle;
-    const wikied = resolveWikiEmbeds(initialContent, attachmentFolder);
-    createEditor(resolveImagePaths(wikied, vault.vaultPath));
+    transformImagePaths(
+      initialContent,
+      vault.vaultPath,
+      attachmentFolder,
+      "resolve",
+    ).then((resolved) => {
+      createEditor(resolved);
+    });
     // Paste: capture-phase on container
     container.addEventListener("paste", handlePaste as EventListener, true);
     // Link clicks: capture-phase on document
@@ -790,7 +805,8 @@
         showFindReplace = true;
       }
     }
-    container.addEventListener("keydown", handleFindHotkey as EventListener);
+    handleFindHotkeyRef = handleFindHotkey as EventListener;
+    container.addEventListener("keydown", handleFindHotkeyRef);
     // Tauri OS-level drag & drop (bypasses webview entirely)
     getCurrentWebview()
       .onDragDropEvent((event) => {
@@ -820,6 +836,9 @@
       handleEditorContextMenu as EventListener,
       true,
     );
+    if (handleFindHotkeyRef) {
+      container?.removeEventListener("keydown", handleFindHotkeyRef);
+    }
     unlistenDragDrop?.();
     if (showFindReplace && tiptap) {
       (tiptap.commands as any).clearSearch();
@@ -858,7 +877,7 @@
     oninput={handleTitleInput}
     onkeydown={handleTitleKeydown}
     onblur={handleTitleBlur}
-    data-placeholder="Untitled"
+    data-placeholder={m.editor_untitled()}
     role="textbox"
     tabindex={0}
   ></div>
@@ -866,28 +885,11 @@
 </div>
 
 {#if lightboxSrc}
-  <!-- svelte-ignore a11y_no_static_element_interactions -->
-  <div
-    class="lightbox-overlay"
-    onclick={() => (lightboxSrc = null)}
-    onkeydown={(e) => {
-      if (e.key === "Escape") lightboxSrc = null;
-    }}
-  >
-    <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <img
-      src={lightboxSrc}
-      alt={lightboxAlt}
-      class="lightbox-img"
-      onclick={(e) => e.stopPropagation()}
-    />
-    <button
-      class="lightbox-close"
-      onclick={() => (lightboxSrc = null)}
-      aria-label="Close">&times;</button
-    >
-  </div>
+  <ImageLightbox
+    src={lightboxSrc}
+    alt={lightboxAlt}
+    onclose={() => (lightboxSrc = null)}
+  />
 {/if}
 
 {#if ctxMenu}
@@ -1063,6 +1065,34 @@
   /* ── Selected Node ─────────────────────────────── */
   .editor-wrap :global(.ProseMirror-selectednode) {
     outline: 2px solid #70cff8;
+  }
+
+  /* ── Block Drag Handle ─────────────────────────── */
+  .editor-wrap :global(.block-drag-handle) {
+    position: absolute;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 24px;
+    border-radius: 4px;
+    cursor: grab;
+    color: var(--text-muted);
+    opacity: 0.35;
+    transition: opacity 0.15s ease, background 0.15s ease;
+    user-select: none;
+    -webkit-user-select: none;
+    z-index: 10;
+  }
+
+  .editor-wrap :global(.block-drag-handle:hover) {
+    opacity: 0.8;
+    background: var(--bg-secondary);
+  }
+
+  .editor-wrap :global(.block-drag-handle:active) {
+    cursor: grabbing;
+    opacity: 1;
   }
 
   /* ── Selection ─────────────────────────────────── */
@@ -1540,54 +1570,6 @@
   .bubble-wrapper.visible {
     opacity: 1;
     pointer-events: auto;
-  }
-
-  /* ═══════════════════════════════════════════════════
-	   Lightbox Overlay
-	   ═══════════════════════════════════════════════════ */
-  .lightbox-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    cursor: zoom-out;
-  }
-
-  .lightbox-img {
-    max-width: 90vw;
-    max-height: 90vh;
-    object-fit: contain;
-    border-radius: 6px;
-    cursor: default;
-    user-select: none;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  }
-
-  .lightbox-close {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 2rem;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 6px;
-    transition:
-      color 0.12s,
-      background 0.12s;
-  }
-
-  .lightbox-close:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
   }
 
   /* ═══════════════════════════════════════════════════

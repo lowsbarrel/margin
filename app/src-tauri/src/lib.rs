@@ -4,7 +4,9 @@ mod history;
 mod s3;
 mod session;
 mod settings;
+mod sync;
 mod text;
+mod text_transform;
 mod themes;
 
 use fs::{VaultPathState, VaultWatcherState, WatcherState};
@@ -135,8 +137,8 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             crypto::generate_mnemonic,
             crypto::derive_vault_keys,
-            crypto::encrypt_blob,
-            crypto::decrypt_blob,
+            crypto::encrypt_blob_cmd,
+            crypto::decrypt_blob_cmd,
             fs::set_vault_directory,
             fs::read_file_bytes,
             fs::write_file_bytes,
@@ -144,6 +146,7 @@ pub fn run() {
             fs::walk_directory,
             fs::read_link_batch,
             fs::build_visible_tree,
+            fs::build_subtree,
             fs::delete_entry,
             fs::rename_entry,
             fs::create_directory,
@@ -188,6 +191,18 @@ pub fn run() {
             history::rename_history,
             text::search_in_text,
             text::extract_wiki_links,
+            text_transform::fuzzy_filter_files,
+            text_transform::transform_image_paths,
+            sync::hash_files_batch,
+            sync::load_manifest,
+            sync::save_manifest,
+            sync::compute_sync_actions,
+            sync::collect_tombstones,
+            sync::merge_tombstones,
+            sync::prune_tombstones,
+            sync::sync_upload_files,
+            sync::sync_download_files,
+            sync::sync_upload_manifest,
             themes::load_themes,
             themes::save_themes,
             themes::export_theme,

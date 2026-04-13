@@ -5,16 +5,7 @@ import {
   createDirectory,
   copyFile,
 } from "$lib/fs/bridge";
-import { IMAGE_EXTS_ARRAY } from "$lib/utils/mime";
-
-function getExt(name: string): string {
-  return name.split(".").pop()?.toLowerCase() ?? "";
-}
-
-function isImageFile(name: string, mimeType?: string): boolean {
-  if (mimeType) return mimeType.startsWith("image/");
-  return IMAGE_EXTS_ARRAY.includes(getExt(name));
-}
+import { isImageFile } from "$lib/utils/mime";
 
 function makeSafeFileName(name: string): string {
   const ts = Date.now();
@@ -65,7 +56,7 @@ export async function insertDroppedFile(
   const attDir = `${vaultPath}/${attachmentFolder}`;
   await ensureAttachmentDir(attDir);
 
-  const name = srcPath.split("/").pop() ?? "file";
+  const name = srcPath.replace(/\\/g, "/").split("/").pop() ?? "file";
   const fileName = makeSafeFileName(name);
   const destPath = `${attDir}/${fileName}`;
 

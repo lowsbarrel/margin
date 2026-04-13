@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount } from "svelte";
   import type { TreeEntry } from "$lib/fs/bridge";
   import { createDirectory } from "$lib/fs/bridge";
   import { editor } from "$lib/stores/editor.svelte";
@@ -8,7 +8,9 @@
   import { favourites } from "$lib/stores/favourites.svelte";
   import { drag } from "$lib/stores/drag.svelte";
   import { toast } from "$lib/stores/toast.svelte";
+  import * as m from "$lib/paraglide/messages.js";
   import { validateName } from "$lib/utils/filename";
+  import { startPointerDrag } from "$lib/utils/drag-handler";
   import { startDrag as startNativeDrag } from "@crabnebula/tauri-plugin-drag";
   import { resolveResource } from "@tauri-apps/api/path";
   import {
@@ -177,41 +179,24 @@
     } catch {
       dragIconPath = "";
     }
-    window.addEventListener("mousemove", handleGlobalMouseMove);
   });
 
-  onDestroy(() => {
-    window.removeEventListener("mousemove", handleGlobalMouseMove);
+  $effect(() => {
+    if (drag.active) {
+      window.addEventListener("mousemove", handleGlobalMouseMove);
+      return () => {
+        window.removeEventListener("mousemove", handleGlobalMouseMove);
+      };
+    }
   });
 
   function startDrag(e: MouseEvent, entry: TreeEntry) {
-    if (e.button !== 0) return;
-    const startX = e.clientX,
-      startY = e.clientY;
-    let didDrag = false;
     const label = entry.name.replace(/\.(md|canvas)$/, "");
-
-    function onMove(ev: MouseEvent) {
-      if (
-        !didDrag &&
-        (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4)
-      ) {
-        didDrag = true;
-        drag.start(
-          { kind: "file", path: entry.path, label, isDir: entry.is_dir },
-          ev.clientX,
-          ev.clientY,
-        );
-        window.removeEventListener("mousemove", onMove);
-      }
-    }
-    function onUp() {
-      window.removeEventListener("mousemove", onMove);
-      window.removeEventListener("mouseup", onUp);
-      if (didDrag) suppressNextClick = true;
-    }
-    window.addEventListener("mousemove", onMove);
-    window.addEventListener("mouseup", onUp);
+    startPointerDrag(
+      e,
+      { kind: "file", path: entry.path, label, isDir: entry.is_dir },
+      () => { suppressNextClick = true; },
+    );
   }
 
   /** Check if `target` is the same as or a descendant of `source` */
@@ -324,7 +309,7 @@
             <input
               class="inline-input"
               autofocus
-              placeholder="Folder name"
+              placeholder={m.folder_name_placeholder()}
               onblur={(e) => confirmNewFolder(e.currentTarget.value)}
               onkeydown={(e) => {
                 if (e.key === "Enter") {

@@ -9,6 +9,7 @@
   import { tags as tagsStore } from "$lib/stores/tags.svelte";
   import { FileText, Image, FileType, Hash, Search } from "lucide-svelte";
   import { IMAGE_EXTS } from "$lib/utils/mime";
+  import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
     onselect: (path: string) => void;
@@ -267,7 +268,7 @@
         bind:this={inputEl}
         bind:value={query}
         oninput={handleInput}
-        placeholder="Search files… or #tag"
+        placeholder={m.quickswitcher_placeholder()}
         type="text"
         spellcheck="false"
         autocomplete="off"

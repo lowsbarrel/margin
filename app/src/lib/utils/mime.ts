@@ -43,3 +43,14 @@ export function mimeForPath(path: string): string {
   };
   return map[ext] ?? "application/octet-stream";
 }
+
+/** Extract file extension (without dot), lowercased. */
+export function getExt(nameOrPath: string): string {
+  return nameOrPath.split(".").pop()?.toLowerCase() ?? "";
+}
+
+/** Return true if the file is an image (by extension or MIME type). */
+export function isImageFile(name: string, mimeType?: string): boolean {
+  if (mimeType) return mimeType.startsWith("image/");
+  return IMAGE_EXTS_ARRAY.includes(getExt(name));
+}

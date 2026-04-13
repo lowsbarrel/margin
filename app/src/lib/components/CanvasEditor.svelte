@@ -159,7 +159,7 @@
     const encoder = new TextEncoder();
     writeFileBytes(filePath, encoder.encode(data)).catch((err) => {
       console.error("Canvas save failed:", err);
-      toast.error("Failed to save canvas");
+      toast.error(m.toast_canvas_save_failed());
     });
   }
 
@@ -887,7 +887,7 @@
           zoom = Math.min(5, zoom * 1.2);
           render();
         }}
-        title="Zoom in"
+        title={m.canvas_zoom_in()}
       >
         <ZoomIn size={14} />
       </button>
@@ -898,7 +898,7 @@
           zoom = Math.max(0.1, zoom / 1.2);
           render();
         }}
-        title="Zoom out"
+        title={m.canvas_zoom_out()}
       >
         <ZoomOut size={14} />
       </button>
@@ -910,7 +910,7 @@
           camY = 0;
           render();
         }}
-        title="Reset view"
+        title={m.canvas_reset_view()}
       >
         <RotateCcw size={14} />
       </button>

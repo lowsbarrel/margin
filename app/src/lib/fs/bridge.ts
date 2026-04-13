@@ -104,6 +104,19 @@ export async function buildVisibleTree(
   return invoke<TreeEntry[]>("build_visible_tree", { root, expanded, sortBy });
 }
 
+/**
+ * Build the subtree for a single folder at a given depth offset.
+ * Used for incremental expand — avoids rebuilding the entire tree.
+ */
+export async function buildSubtree(
+  folder: string,
+  depthOffset: number,
+  expanded: string[],
+  sortBy: string,
+): Promise<TreeEntry[]> {
+  return invoke<TreeEntry[]>("build_subtree", { folder, depthOffset, expanded, sortBy });
+}
+
 export async function deleteEntry(path: string): Promise<void> {
   return invoke("delete_entry", { path });
 }

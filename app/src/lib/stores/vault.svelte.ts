@@ -47,10 +47,13 @@ export const vault = {
     mnemonic?: string,
     profileName?: string,
   ) {
+    // Normalise to forward slashes so every comparison with paths returned
+    // by Rust (which always use '/') works on Windows too.
+    const normalised = vaultPath.replaceAll("\\", "/");
     state.isUnlocked = true;
     state.vaultId = keys.vault_id;
     state.encryptionKey = keys.encryption_key;
-    state.vaultPath = vaultPath;
+    state.vaultPath = normalised;
     state.profileName = profileName ?? null;
     if (mnemonic) {
       state.mnemonic = mnemonic;
@@ -58,10 +61,10 @@ export const vault = {
         saveVaultProfile({
           name: profileName,
           mnemonic,
-          vault_path: vaultPath,
+          vault_path: normalised,
         }).catch((err) => console.warn("Failed to save vault profile:", err));
       } else {
-        saveSession(mnemonic, vaultPath).catch((err) =>
+        saveSession(mnemonic, normalised).catch((err) =>
           console.warn("Failed to save session:", err),
         );
       }

@@ -139,6 +139,81 @@
     wakeSimulation();
   }
 
+  function updateSimulation(data: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+    totalNodeCount = data.nodes.length;
+
+    // Build a map of existing positions
+    const existingPositions = new Map<string, { x: number; y: number }>();
+    for (const n of simNodes) {
+      existingPositions.set(n.id, { x: n.x, y: n.y });
+    }
+
+    // Apply same capping logic as initSimulation
+    let cappedNodes = data.nodes;
+    let cappedEdges = data.edges;
+    if (data.nodes.length > MAX_SIM_NODES) {
+      const edgeCount = new Map<string, number>();
+      for (const e of data.edges) {
+        edgeCount.set(e.source, (edgeCount.get(e.source) ?? 0) + 1);
+        edgeCount.set(e.target, (edgeCount.get(e.target) ?? 0) + 1);
+      }
+      cappedNodes = [...data.nodes]
+        .sort((a, b) => (edgeCount.get(b.id) ?? 0) - (edgeCount.get(a.id) ?? 0))
+        .slice(0, MAX_SIM_NODES);
+      const cappedIds = new Set(cappedNodes.map((n) => n.id));
+      cappedEdges = data.edges.filter(
+        (e) => cappedIds.has(e.source) && cappedIds.has(e.target),
+      );
+    }
+
+    const nodeIndex = new Map<string, number>();
+    const edgeCounts = new Map<string, number>();
+    for (const e of cappedEdges) {
+      edgeCounts.set(e.source, (edgeCounts.get(e.source) ?? 0) + 1);
+      edgeCounts.set(e.target, (edgeCounts.get(e.target) ?? 0) + 1);
+    }
+
+    simNodes = cappedNodes.map((n, i) => {
+      nodeIndex.set(n.id, i);
+      const existing = existingPositions.get(n.id);
+      if (existing) {
+        return {
+          id: n.id,
+          label: n.label,
+          x: existing.x,
+          y: existing.y,
+          vx: 0,
+          vy: 0,
+          edges: edgeCounts.get(n.id) ?? 0,
+        };
+      }
+      // New node — place near center with slight randomness
+      const angle = Math.random() * Math.PI * 2;
+      const radius = 50 + Math.random() * 50;
+      return {
+        id: n.id,
+        label: n.label,
+        x: Math.cos(angle) * radius,
+        y: Math.sin(angle) * radius,
+        vx: 0,
+        vy: 0,
+        edges: edgeCounts.get(n.id) ?? 0,
+      };
+    });
+
+    simEdges = [];
+    for (const e of cappedEdges) {
+      const si = nodeIndex.get(e.source);
+      const ti = nodeIndex.get(e.target);
+      if (si !== undefined && ti !== undefined && si !== ti) {
+        simEdges.push({ source: si, target: ti });
+      }
+    }
+
+    // Don't reset camera — keep user's pan/zoom
+    wakeSimulation();
+  }
+
   /** Returns the maximum velocity² across all non-dragged nodes this tick. */
   function simulate(): number {
     const alpha = 0.3;
@@ -545,10 +620,24 @@
     initSimulation(graph.data);
   }
 
+  let prevNodeCount = 0;
+
   $effect(() => {
     // Re-init when graph data changes
-    if (graph.data.nodes.length > 0 && mounted) {
-      initSimulation(graph.data);
+    const nodeCount = graph.data.nodes.length;
+    if (nodeCount > 0 && mounted) {
+      const changeRatio = prevNodeCount > 0
+        ? Math.abs(nodeCount - prevNodeCount) / prevNodeCount
+        : 1;
+
+      if (changeRatio > 0.2 || prevNodeCount === 0) {
+        // Large change or first load — full re-init
+        initSimulation(graph.data);
+      } else {
+        // Small change — update data but preserve positions
+        updateSimulation(graph.data);
+      }
+      prevNodeCount = nodeCount;
     }
   });
 
