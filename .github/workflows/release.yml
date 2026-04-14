@@ -92,22 +92,19 @@ jobs:
             done
           fi
 
-          # Linux
+          # Linux (v2: updater reuses .AppImage directly, sig is .AppImage.sig)
           if [[ "$TARGET" == *linux* ]]; then
             for f in "$BUNDLE"/appimage/*.AppImage; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/appimage/*.AppImage.tar.gz; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/appimage/*.AppImage.tar.gz.sig; do [ -f "$f" ] && cp "$f" staging/; done
+            for f in "$BUNDLE"/appimage/*.AppImage.sig; do [ -f "$f" ] && cp "$f" staging/; done
             for f in "$BUNDLE"/deb/*.deb; do [ -f "$f" ] && cp "$f" staging/; done
           fi
 
-          # Windows
+          # Windows (v2: updater reuses .exe directly, sig is .exe.sig)
           if [[ "$TARGET" == *windows* ]]; then
             for f in "$BUNDLE"/nsis/*.exe; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/nsis/*.nsis.zip; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/nsis/*.nsis.zip.sig; do [ -f "$f" ] && cp "$f" staging/; done
+            for f in "$BUNDLE"/nsis/*.exe.sig; do [ -f "$f" ] && cp "$f" staging/; done
             for f in "$BUNDLE"/msi/*.msi; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/msi/*.msi.zip; do [ -f "$f" ] && cp "$f" staging/; done
-            for f in "$BUNDLE"/msi/*.msi.zip.sig; do [ -f "$f" ] && cp "$f" staging/; done
+            for f in "$BUNDLE"/msi/*.msi.sig; do [ -f "$f" ] && cp "$f" staging/; done
           fi
 
           echo "=== Staged artifacts ==="
@@ -154,8 +151,8 @@ jobs:
 
           DARWIN_AARCH64_SIG=$(read_sig "Margin_aarch64.app.tar.gz.sig")
           DARWIN_X86_SIG=$(read_sig "Margin_x64.app.tar.gz.sig")
-          LINUX_SIG=$(read_sig "*AppImage.tar.gz.sig")
-          WINDOWS_NSIS_SIG=$(read_sig "*nsis.zip.sig")
+          LINUX_SIG=$(read_sig "*.AppImage.sig")
+          WINDOWS_SIG=$(read_sig "*.exe.sig")
 
           cat > latest.json <<-EOF
           {
@@ -172,11 +169,11 @@ jobs:
               },
               "linux-x86_64": {
                 "signature": "${LINUX_SIG}",
-                "url": "${BASE}/Margin_${VERSION}_amd64.AppImage.tar.gz"
+                "url": "${BASE}/Margin_${VERSION}_amd64.AppImage"
               },
               "windows-x86_64": {
-                "signature": "${WINDOWS_NSIS_SIG}",
-                "url": "${BASE}/Margin_${VERSION}_x64-setup.nsis.zip"
+                "signature": "${WINDOWS_SIG}",
+                "url": "${BASE}/Margin_${VERSION}_x64-setup.exe"
               }
             }
           }
