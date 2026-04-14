@@ -129,6 +129,7 @@ pub fn run() {
                     let s = url.as_str();
                     s.starts_with("http://localhost")
                         || s.starts_with("https://tauri.localhost")
+                        || s.starts_with("http://tauri.localhost")
                         || s.starts_with("tauri://")
                 })
                 .build()?;

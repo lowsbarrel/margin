@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: write
-  pages: write
-  id-token: write
 
 jobs:
   # ── App: Tauri builds for macOS / Linux / Windows ────────────────────────
@@ -168,47 +166,3 @@ jobs:
             artifacts/**/*.msi.zip
             artifacts/**/*.msi.zip.sig
             latest.json
-
-  # ── Web: GitHub Pages ────────────────────────────────────────────────────
-  deploy-pages:
-    name: Deploy Web to GitHub Pages
-    needs: [publish-release]
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v4
-        with:
-          version: 9
-
-      - uses: actions/setup-node@v6
-        with:
-          node-version: 22
-          cache: pnpm
-          cache-dependency-path: app/pnpm-lock.yaml
-
-      - name: Install dependencies
-        working-directory: app
-        run: pnpm install --frozen-lockfile
-
-      - name: Build static site
-        working-directory: app
-        run: pnpm build
-
-      - name: Add .nojekyll and SPA 404 fallback
-        working-directory: app/build
-        run: |
-          touch .nojekyll
-          cp index.html 404.html
-
-      - name: Upload Pages artifact
-        uses: actions/upload-pages-artifact@v3
-        with:
-          path: app/build
-
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
