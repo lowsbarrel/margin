@@ -89,8 +89,8 @@
     font-family: var(--font-sans);
     font-weight: 500;
     border-radius: var(--radius-xs);
-    background: var(--accent);
-    color: var(--on-accent, #fff);
+    background: var(--text-primary);
+    color: var(--bg-primary);
     flex-shrink: 0;
     cursor: pointer;
   }
