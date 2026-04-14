@@ -31,7 +31,8 @@ export function resolveImagePaths(
     /!\[([^\]]*)\]\((?!https?:\/\/|data:|localfile:\/\/)([^)]+)\)/g,
     (_match, alt, relPath) => {
       const absPath = `${vaultPath}/${relPath}`;
-      return `![${alt}](localfile://localhost${absPath})`;
+      const prefix = absPath.startsWith("/") ? "" : "/";
+      return `![${alt}](localfile://localhost${prefix}${absPath})`;
     },
   );
 }
@@ -43,10 +44,12 @@ export function unresolveImagePaths(
 ): string {
   if (!vaultPath) return md;
   return md.replace(
-    /!\[([^\]]*)\]\(localfile:\/\/localhost([^)]+)\)/g,
+    /!\[([^\]]*)\]\(localfile:\/\/localhost\/?([^)]+)\)/g,
     (_match, alt, absPath) => {
-      const relPath = absPath.startsWith(vaultPath + "/")
-        ? absPath.substring(vaultPath.length + 1)
+      const normalizedAbs = absPath.startsWith("/") ? absPath : "/" + absPath;
+      const normalizedVault = vaultPath.startsWith("/") ? vaultPath : "/" + vaultPath;
+      const relPath = normalizedAbs.startsWith(normalizedVault + "/")
+        ? normalizedAbs.substring(normalizedVault.length + 1)
         : absPath;
       return `![${alt}](${relPath})`;
     },

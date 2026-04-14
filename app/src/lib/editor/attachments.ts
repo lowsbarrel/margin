@@ -74,7 +74,8 @@ function insertIntoEditor(
   vaultPath: string,
 ): void {
   if (isImage) {
-    const src = `localfile://localhost${vaultPath}/${relPath}`;
+    const prefix = vaultPath.startsWith("/") ? "" : "/";
+    const src = `localfile://localhost${prefix}${vaultPath}/${relPath}`;
     editor.chain().focus().setImage({ src, alt: displayName }).run();
   } else {
     editor
