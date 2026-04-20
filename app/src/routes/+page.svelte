@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, untrack } from "svelte";
   import { vault } from "$lib/stores/vault.svelte";
   import { files } from "$lib/stores/files.svelte";
   import { favourites } from "$lib/stores/favourites.svelte";
@@ -286,9 +286,23 @@
         return false;
       }
     });
-    if (targetPos >= 0) {
-      tiptap.commands.setTextSelection(targetPos);
-      tiptap.commands.scrollIntoView();
+    if (targetPos < 0) return;
+    tiptap.commands.setTextSelection(targetPos);
+    // Manual scroll — scrollIntoView doesn't work with .editor-container
+    try {
+      const view = tiptap.view;
+      const coords = view.coordsAtPos(targetPos);
+      const scrollContainer = view.dom.closest(".editor-container");
+      if (scrollContainer && coords) {
+        const rect = scrollContainer.getBoundingClientRect();
+        const relativeTop = coords.top - rect.top + scrollContainer.scrollTop;
+        scrollContainer.scrollTo({
+          top: relativeTop - rect.height / 2,
+          behavior: "smooth",
+        });
+      }
+    } catch {
+      /* ignore scroll errors */
     }
   }
 
@@ -805,76 +819,82 @@
     if (vault.isUnlocked && vault.vaultPath) {
       const currentVaultPath = vault.vaultPath;
       const currentKey = vault.encryptionKey;
-      files.refresh(currentVaultPath);
-      favourites.load();
-      // Start watching the entire vault for external changes
-      watchVault(currentVaultPath).catch((err) =>
-        console.warn("Failed to start vault watcher:", err),
-      );
-      if (currentKey) {
-        loadSettings(currentVaultPath, currentKey)
-          .then((settings) => {
-            if (vault.vaultPath !== currentVaultPath) return;
-            if (settings?.s3) {
-              s3Configure(settings.s3);
+      // Wrap in untrack so that reactive reads inside files.refresh / _rebuild
+      // (e.g. expandedFolders, sortOrder) don't become dependencies of this
+      // effect — otherwise every file-tree navigation re-triggers the full
+      // vault-setup + auto-sync flow.
+      untrack(() => {
+        files.refresh(currentVaultPath);
+        favourites.load();
+        // Start watching the entire vault for external changes
+        watchVault(currentVaultPath).catch((err) =>
+          console.warn("Failed to start vault watcher:", err),
+        );
+        if (currentKey) {
+          loadSettings(currentVaultPath, currentKey)
+            .then((settings) => {
+              if (vault.vaultPath !== currentVaultPath) return;
+              if (settings?.s3) {
+                s3Configure(settings.s3);
 
-              // Always store sync credentials so the manual sync button works
-              if (vault.vaultId && vault.encryptionKey) {
-                const syncOpts = {
-                  conflictStrategy:
-                    (settings?.conflict_strategy as ConflictStrategy) ??
-                    "local_wins",
-                };
-                setSyncCredentials(
-                  currentVaultPath,
-                  vault.vaultId,
-                  vault.encryptionKey,
-                  settings.s3,
-                  syncOpts,
-                );
-              }
+                // Always store sync credentials so the manual sync button works
+                if (vault.vaultId && vault.encryptionKey) {
+                  const syncOpts = {
+                    conflictStrategy:
+                      (settings?.conflict_strategy as ConflictStrategy) ??
+                      "local_wins",
+                  };
+                  setSyncCredentials(
+                    currentVaultPath,
+                    vault.vaultId,
+                    vault.encryptionKey,
+                    settings.s3,
+                    syncOpts,
+                  );
+                }
 
-              // Check if vault has unsynced local changes
-              if (currentKey) {
-                hasUnsyncedChanges(currentVaultPath, currentKey)
-                  .then((pending) => {
-                    if (vault.vaultPath !== currentVaultPath) return;
-                    // Don't override if a sync is already in flight
-                    if (editor.syncStatus === "syncing") return;
-                    editor.setSyncStatus(pending ? "idle" : "synced");
-                  })
-                  .catch(() => {
-                    if (editor.syncStatus === "syncing") return;
-                    // If check fails, assume needs sync
-                    editor.setSyncStatus("idle");
-                  });
-              }
+                // Check if vault has unsynced local changes
+                if (currentKey) {
+                  hasUnsyncedChanges(currentVaultPath, currentKey)
+                    .then((pending) => {
+                      if (vault.vaultPath !== currentVaultPath) return;
+                      // Don't override if a sync is already in flight
+                      if (editor.syncStatus === "syncing") return;
+                      editor.setSyncStatus(pending ? "idle" : "synced");
+                    })
+                    .catch(() => {
+                      if (editor.syncStatus === "syncing") return;
+                      // If check fails, assume needs sync
+                      editor.setSyncStatus("idle");
+                    });
+                }
 
-              // Start auto-sync if enabled and S3 is configured
-              if (settings.auto_sync && vault.vaultId && vault.encryptionKey) {
-                const syncOpts = {
-                  conflictStrategy:
-                    (settings?.conflict_strategy as ConflictStrategy) ??
-                    "local_wins",
-                };
-                startAutoSync(
-                  currentVaultPath,
-                  vault.vaultId,
-                  vault.encryptionKey,
-                  settings.s3,
-                  undefined,
-                  syncOpts,
-                );
+                // Start auto-sync if enabled and S3 is configured
+                if (settings.auto_sync && vault.vaultId && vault.encryptionKey) {
+                  const syncOpts = {
+                    conflictStrategy:
+                      (settings?.conflict_strategy as ConflictStrategy) ??
+                      "local_wins",
+                  };
+                  startAutoSync(
+                    currentVaultPath,
+                    vault.vaultId,
+                    vault.encryptionKey,
+                    settings.s3,
+                    undefined,
+                    syncOpts,
+                  );
+                }
+              } else {
+                editor.setSyncStatus("idle");
               }
-            } else {
-              editor.setSyncStatus("idle");
-            }
-            attachmentFolder = settings?.attachment_folder ?? null;
-          })
-          .catch((err) => {
-            console.warn("Failed to load settings:", err);
-          });
-      }
+              attachmentFolder = settings?.attachment_folder ?? null;
+            })
+            .catch((err) => {
+              console.warn("Failed to load settings:", err);
+            });
+        }
+      });
     }
   });
 </script>
