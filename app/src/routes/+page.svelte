@@ -49,6 +49,12 @@
   import { mimeForPath } from "$lib/utils/mime";
   import { checkForAppUpdate } from "$lib/utils/updater";
   import {
+    saveWorkspaceState,
+    loadWorkspaceState,
+    type WorkspaceState,
+  } from "$lib/settings/workspace";
+  import type { SidebarView } from "$lib/components/Sidebar.svelte";
+  import {
     type TabType,
     type Tab,
     type Pane,
@@ -73,6 +79,8 @@
   let showHistory = $state(false);
   let sidebarOpen = $state(true);
   let sidebarFocusSearch = $state(false);
+  let sidebarActiveView = $state<SidebarView>("files");
+  let sidebarWidth = $state(280);
   let attachmentFolder = $state<string | null>(null);
   let pendingScrollText = $state<string | null>(null);
   let lastSaveTime = 0;
@@ -737,6 +745,10 @@
   }
 
   function handleLogout() {
+    // Save workspace state before logging out
+    doSaveWorkspaceState();
+    if (workspaceSaveTimer) clearTimeout(workspaceSaveTimer);
+    workspaceRestored = false;
     stopAutoSync();
     clearSyncCredentials();
     panes.forEach((pane) => revokeBlobUrls(pane.tabs));
@@ -753,6 +765,153 @@
 
   function handleSwitchVault() {
     handleLogout();
+  }
+
+  // ── Workspace state persistence ───────────────────────────────────────────────
+  let workspaceSaveTimer: ReturnType<typeof setTimeout> | null = null;
+  let workspaceRestored = false;
+
+  function scheduleWorkspaceSave() {
+    if (!vault.isUnlocked || !vault.vaultPath || !vault.encryptionKey) return;
+    if (!workspaceRestored) return;
+    if (workspaceSaveTimer) clearTimeout(workspaceSaveTimer);
+    workspaceSaveTimer = setTimeout(() => {
+      workspaceSaveTimer = null;
+      doSaveWorkspaceState();
+    }, 1000);
+  }
+
+  function doSaveWorkspaceState() {
+    if (!vault.vaultPath || !vault.encryptionKey) return;
+    const wsState: WorkspaceState = {
+      panes: panes.map((p) => ({
+        tabs: p.tabs.map((t) => ({ path: t.path, type: t.type })),
+        active_tab_index: p.activeTabIndex,
+      })),
+      pane_flexes: [...paneFlexes],
+      active_pane_index: activePaneIndex,
+      expanded_folders: [...files.expandedFolders],
+      sidebar_open: sidebarOpen,
+      sidebar_width: sidebarWidth,
+      sidebar_view: sidebarActiveView,
+      sort_order: files.sortOrder,
+    };
+    saveWorkspaceState(vault.vaultPath, vault.encryptionKey, wsState).catch(
+      (err) => console.warn("Failed to save workspace state:", err),
+    );
+  }
+
+  async function restoreWorkspaceState() {
+    if (!vault.vaultPath || !vault.encryptionKey) return;
+    try {
+      const ws = await loadWorkspaceState(vault.vaultPath, vault.encryptionKey);
+      if (!ws || ws.panes.length === 0) {
+        workspaceRestored = true;
+        return;
+      }
+
+      // Restore sidebar state
+      sidebarOpen = ws.sidebar_open;
+      sidebarWidth = ws.sidebar_width;
+      sidebarActiveView = (ws.sidebar_view as SidebarView) || "files";
+
+      // Restore sort order
+      if (ws.sort_order && ws.sort_order !== files.sortOrder) {
+        files.setSortOrder(ws.sort_order as "name" | "date");
+      }
+
+      // Restore expanded folders
+      for (const folder of ws.expanded_folders) {
+        files.expandedFolders.add(folder);
+      }
+      await files.refresh(vault.vaultPath);
+
+      // Restore panes and tabs
+      const restoredPanes: Pane[] = [];
+      for (const wsPane of ws.panes) {
+        const tabs: Tab[] = [];
+        for (const wsTab of wsPane.tabs) {
+          const tabType = getTabType(wsTab.path);
+          if (tabType === "unknown" && wsTab.path !== "__graph__") continue;
+
+          let content = "";
+          let blobUrl: string | undefined;
+          let pdfData: Uint8Array | undefined;
+          const type = wsTab.path === "__graph__" ? "graph" as TabType : tabType;
+
+          try {
+            if (wsTab.path === "__graph__") {
+              // Graph tab has no file content
+            } else {
+              const bytes = await readFileBytes(wsTab.path);
+              if (type === "markdown" || type === "canvas") {
+                content = new TextDecoder().decode(bytes);
+              } else if (type === "pdf") {
+                pdfData = new Uint8Array(bytes);
+              } else {
+                const blob = new Blob([bytes.buffer as ArrayBuffer], {
+                  type: mimeForPath(wsTab.path),
+                });
+                blobUrl = URL.createObjectURL(blob);
+              }
+            }
+          } catch {
+            // File may have been deleted — skip this tab
+            continue;
+          }
+
+          tabs.push({
+            id: nextTabId(),
+            path: wsTab.path,
+            content,
+            type,
+            blobUrl,
+            pdfData,
+          });
+        }
+
+        if (tabs.length > 0) {
+          const activeIdx = Math.min(
+            Math.max(wsPane.active_tab_index, 0),
+            tabs.length - 1,
+          );
+          restoredPanes.push({
+            id: nextPaneId(),
+            tabs,
+            activeTabIndex: activeIdx,
+            externalContentVersion: 0,
+          });
+        }
+      }
+
+      if (restoredPanes.length > 0) {
+        panes = restoredPanes;
+        paneFlexes =
+          ws.pane_flexes.length === restoredPanes.length
+            ? ws.pane_flexes
+            : restoredPanes.map(() => 1);
+        activePaneIndex = Math.min(
+          ws.active_pane_index,
+          restoredPanes.length - 1,
+        );
+
+        // Set active file and start watching
+        const ap = panes[activePaneIndex];
+        const at =
+          ap.activeTabIndex >= 0 && ap.activeTabIndex < ap.tabs.length
+            ? ap.tabs[ap.activeTabIndex]
+            : null;
+        if (at) {
+          files.setActiveFile(at.path);
+          if (at.type === "markdown") {
+            await watchFile(at.path);
+          }
+        }
+      }
+    } catch (err) {
+      console.warn("Failed to restore workspace state:", err);
+    }
+    workspaceRestored = true;
   }
 
   $effect(() => {
@@ -813,6 +972,9 @@
   });
 
   onDestroy(() => {
+    // Final save before unmount
+    if (workspaceSaveTimer) clearTimeout(workspaceSaveTimer);
+    doSaveWorkspaceState();
     if (updateInterval) clearInterval(updateInterval);
     stopAutoSync();
     clearSyncCredentials();
@@ -833,6 +995,8 @@
       untrack(() => {
         files.refresh(currentVaultPath);
         favourites.load();
+        // Restore workspace state (open tabs, folders, sidebar)
+        restoreWorkspaceState();
         // Start watching the entire vault for external changes
         watchVault(currentVaultPath).catch((err) =>
           console.warn("Failed to start vault watcher:", err),
@@ -904,6 +1068,25 @@
       });
     }
   });
+
+  // Auto-save workspace state when layout changes
+  $effect(() => {
+    // Read reactive state to create dependencies
+    const _panes = panes.map((p) => ({
+      tabs: p.tabs.map((t) => t.path),
+      activeTabIndex: p.activeTabIndex,
+    }));
+    const _flexes = paneFlexes;
+    const _activePane = activePaneIndex;
+    const _sidebarOpen = sidebarOpen;
+    const _sidebarWidth = sidebarWidth;
+    const _sidebarView = sidebarActiveView;
+    const _expanded = files.expandedFolders;
+    const _sort = files.sortOrder;
+
+    // Schedule debounced save
+    scheduleWorkspaceSave();
+  });
 </script>
 
 {#if vault.isUnlocked}
@@ -917,6 +1100,8 @@
         panelOpen={sidebarOpen}
         ontoggle={() => (sidebarOpen = !sidebarOpen)}
         bind:focusSearch={sidebarFocusSearch}
+        bind:activeView={sidebarActiveView}
+        bind:panelWidth={sidebarWidth}
       />
 
       <!-- svelte-ignore a11y_no_static_element_interactions -->

@@ -193,6 +193,8 @@ pub fn run() {
             settings::load_settings,
             settings::export_settings_string,
             settings::import_settings_string,
+            settings::save_workspace_state,
+            settings::load_workspace_state,
             session::save_session,
             session::load_session,
             session::clear_session,

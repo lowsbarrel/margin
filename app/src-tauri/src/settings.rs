@@ -113,3 +113,73 @@ pub fn import_settings_string(
     validate_settings(&settings)?;
     Ok(settings)
 }
+
+// ─── Workspace state persistence ─────────────────────────────────────────────
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WorkspaceTab {
+    pub path: String,
+    #[serde(rename = "type")]
+    pub tab_type: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WorkspacePane {
+    pub tabs: Vec<WorkspaceTab>,
+    pub active_tab_index: i32,
+}
+
+#[derive(Serialize, Deserialize, Clone, Debug)]
+pub struct WorkspaceState {
+    pub panes: Vec<WorkspacePane>,
+    pub pane_flexes: Vec<f64>,
+    pub active_pane_index: usize,
+    pub expanded_folders: Vec<String>,
+    pub sidebar_open: bool,
+    pub sidebar_width: f64,
+    pub sidebar_view: String,
+    pub sort_order: String,
+}
+
+/// Save workspace state encrypted to disk at {vault_path}/.margin/workspace.enc
+#[tauri::command]
+pub fn save_workspace_state(
+    vault_path: String,
+    encryption_key: Vec<u8>,
+    state: WorkspaceState,
+) -> Result<(), String> {
+    let json = serde_json::to_vec(&state).map_err(|e| format!("Serialize failed: {e}"))?;
+    let encrypted = crypto::encrypt_blob(json, encryption_key)?;
+
+    let ws_path = Path::new(&vault_path).join(".margin").join("workspace.enc");
+    if let Some(parent) = ws_path.parent() {
+        fs::create_dir_all(parent).map_err(|e| format!("Dir creation failed: {e}"))?;
+    }
+    let tmp = ws_path.with_extension("tmp");
+    fs::write(&tmp, &encrypted).map_err(|e| format!("Write failed: {e}"))?;
+    fs::rename(&tmp, &ws_path).map_err(|e| {
+        let _ = fs::remove_file(&tmp);
+        format!("Failed to finalise workspace state write: {e}")
+    })?;
+
+    Ok(())
+}
+
+/// Load workspace state from disk and decrypt
+#[tauri::command]
+pub fn load_workspace_state(
+    vault_path: String,
+    encryption_key: Vec<u8>,
+) -> Result<Option<WorkspaceState>, String> {
+    let ws_path = Path::new(&vault_path).join(".margin").join("workspace.enc");
+    if !ws_path.exists() {
+        return Ok(None);
+    }
+
+    let encrypted = fs::read(&ws_path).map_err(|e| format!("Read failed: {e}"))?;
+    let decrypted = crypto::decrypt_blob(encrypted, encryption_key)?;
+    let state: WorkspaceState =
+        serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
+
+    Ok(Some(state))
+}

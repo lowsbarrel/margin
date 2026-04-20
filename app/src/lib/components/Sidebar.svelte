@@ -49,7 +49,7 @@
   import * as m from "$lib/paraglide/messages.js";
   import { validateName } from "$lib/utils/filename";
 
-  type SidebarView = "files" | "search" | "favourites";
+  export type SidebarView = "files" | "search" | "favourites";
 
   interface Props {
     onfileselect: (path: string, searchText?: string) => void;
@@ -59,6 +59,8 @@
     panelOpen: boolean;
     ontoggle: () => void;
     focusSearch?: boolean;
+    activeView?: SidebarView;
+    panelWidth?: number;
   }
 
   type MenuTarget =
@@ -73,8 +75,9 @@
     panelOpen,
     ontoggle,
     focusSearch = $bindable(false),
+    activeView = $bindable<SidebarView>("files"),
+    panelWidth = $bindable(280),
   }: Props = $props();
-  let activeView = $state<SidebarView>("files");
   let menuTarget = $state<MenuTarget | null>(null);
   let menuX = $state(0);
   let menuY = $state(0);
@@ -84,7 +87,6 @@
   // Resize state
   const PANEL_MIN = 180;
   const PANEL_MAX = 480;
-  let panelWidth = $state(280);
   let resizing = $state(false);
 
   function onResizeStart(e: MouseEvent) {
