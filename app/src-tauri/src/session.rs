@@ -49,6 +49,7 @@ fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
         {
             if let Ok(meta) = fs::metadata(&key_path) {
                 let mut p = meta.permissions();
+                #[allow(clippy::permissions_set_readonly_false)]
                 p.set_readonly(false);
                 let _ = fs::set_permissions(&key_path, p);
             }
@@ -227,7 +228,7 @@ pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result
     let mut data = load_profiles_internal(&app)?;
     let norm = normalise_vault_path(&vault_path);
     data.profiles.retain(|p| normalise_vault_path(&p.vault_path) != norm);
-    if data.last_used.as_deref().map(|s| normalise_vault_path(s)) == Some(norm) {
+    if data.last_used.as_deref().map(normalise_vault_path) == Some(norm) {
         data.last_used = data.profiles.first().map(|p| p.vault_path.clone());
     }
     save_profiles_internal(&app, &data)

@@ -9,6 +9,7 @@
     resolveWikiEmbeds,
   } from "$lib/editor/image-paths";
   import { transformImagePaths } from "$lib/editor/text-transform-bridge";
+  import { isLocalfileUrl, stripLocalfilePrefix } from "$lib/editor/image-url";
   import { insertPastedFile, insertDroppedFile } from "$lib/editor/attachments";
   import { editor as editorStore } from "$lib/stores/editor.svelte";
   import { toast } from "$lib/stores/toast.svelte";
@@ -369,10 +370,11 @@
     }
   });
 
-  /** Resolve a src attribute (localfile:// or relative) to an absolute path */
+  /** Resolve a src attribute (localfile URL or relative) to an absolute path */
   function resolveAbsPath(src: string): string | null {
-    if (src.startsWith("localfile://")) {
-      return decodeURIComponent(src.replace("localfile://localhost", ""));
+    if (isLocalfileUrl(src)) {
+      const tail = stripLocalfilePrefix(src) ?? "";
+      return decodeURIComponent(tail);
     }
     if (
       !src.startsWith("http://") &&
@@ -449,10 +451,9 @@
       openUrl(href).catch((err) =>
         toast.error(m.toast_cannot_open_url({ error: String(err) })),
       );
-    } else if (href.startsWith("localfile://")) {
-      const absPath = decodeURIComponent(
-        href.replace("localfile://localhost", ""),
-      );
+    } else if (isLocalfileUrl(href)) {
+      const tail = stripLocalfilePrefix(href) ?? "";
+      const absPath = decodeURIComponent(tail);
       openPath(absPath).catch((err) =>
         toast.error(m.toast_cannot_open_file({ error: String(err) })),
       );
@@ -538,7 +539,14 @@
       }
     }
 
-    if (pastedFiles.length === 0) return;
+    // Fallback for Windows screenshot paste (Win+Shift+S): WebView2 sometimes
+    // hides the image from the synchronous DataTransfer API but still exposes
+    // it via the async Clipboard API. Detect image intent via types.
+    const hasImageType =
+      pastedFiles.length === 0 &&
+      Array.from(clipData.types || []).some((t) => t.startsWith("image/"));
+
+    if (pastedFiles.length === 0 && !hasImageType) return;
     event.preventDefault();
     event.stopPropagation();
 
@@ -547,6 +555,24 @@
     const af = attachmentFolder;
 
     (async () => {
+      if (pastedFiles.length === 0 && hasImageType) {
+        try {
+          const items = await navigator.clipboard.read();
+          for (const item of items) {
+            for (const type of item.types) {
+              if (!type.startsWith("image/")) continue;
+              const blob = await item.getType(type);
+              const ext = type.split("/")[1]?.split("+")[0] || "png";
+              pastedFiles.push(
+                new File([blob], `pasted-${Date.now()}.${ext}`, { type }),
+              );
+            }
+          }
+        } catch (err) {
+          console.error("Clipboard image read failed:", err);
+        }
+      }
+
       for (const file of pastedFiles) {
         try {
           await insertPastedFile(file, {
@@ -1095,6 +1121,12 @@
     opacity: 1;
   }
 
+  @media print {
+    .editor-wrap :global(.block-drag-handle) {
+      display: none !important;
+    }
+  }
+
   /* ── Selection ─────────────────────────────────── */
   .editor-wrap :global(::selection) {
     background: color-mix(in srgb, var(--accent-link) 25%, transparent);
@@ -1501,15 +1533,40 @@
     text-decoration: none;
     font-weight: 500;
     transition: background 0.1s;
+    display: inline;
+  }
+
+  .editor-wrap :global(.wiki-link-icon) {
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    vertical-align: text-bottom;
+    margin-right: 2px;
+    background: currentColor;
+    -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 13H14'/%3E%3Cpath d='M10 17H8'/%3E%3Cpath d='M16 17H14'/%3E%3C/svg%3E");
+    mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 13H14'/%3E%3Cpath d='M10 17H8'/%3E%3Cpath d='M16 17H14'/%3E%3C/svg%3E");
+    -webkit-mask-size: contain;
+    mask-size: contain;
+    -webkit-mask-repeat: no-repeat;
+    mask-repeat: no-repeat;
+    opacity: 0.65;
+    flex-shrink: 0;
+  }
+
+  .editor-wrap :global(.wiki-link-title) {
+    border-bottom: 0.05em solid color-mix(in srgb, var(--accent-link, rgb(255, 102, 51)) 40%, transparent);
   }
 
   .editor-wrap :global(.wiki-link:hover) {
     background: color-mix(
       in srgb,
-      var(--accent-link, rgb(255, 102, 51)) 15%,
+      var(--accent-link, rgb(255, 102, 51)) 12%,
       transparent
     );
-    text-decoration: underline;
+  }
+
+  .editor-wrap :global(.wiki-link:hover .wiki-link-title) {
+    border-bottom-color: var(--accent-link, rgb(255, 102, 51));
   }
 
   .editor-wrap :global(.ProseMirror-selectednode .wiki-link),
@@ -1576,18 +1633,34 @@
 	   Content Drag — drop cursor + dragging state
 	   ═══════════════════════════════════════════════════ */
   .editor-wrap :global(.content-drop-cursor) {
-    display: inline-block;
-    width: 2px;
-    height: 1.2em;
+    display: block;
+    width: 100%;
+    height: 3px;
     background: var(--accent-link, rgb(255, 102, 51));
-    vertical-align: text-bottom;
+    border-radius: 2px;
     pointer-events: none;
-    animation: drop-cursor-blink 1s step-end infinite;
-    margin: 0 -1px;
+    margin: -1px 0;
+    position: relative;
   }
 
-  @keyframes drop-cursor-blink {
-    50% { opacity: 0; }
+  .editor-wrap :global(.content-drop-cursor::before),
+  .editor-wrap :global(.content-drop-cursor::after) {
+    content: "";
+    position: absolute;
+    top: -3px;
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-link, rgb(255, 102, 51));
+    pointer-events: none;
+  }
+
+  .editor-wrap :global(.content-drop-cursor::before) {
+    left: -4px;
+  }
+
+  .editor-wrap :global(.content-drop-cursor::after) {
+    right: -4px;
   }
 
   :global(body.content-dragging) {
@@ -1596,6 +1669,467 @@
 
   :global(body.content-dragging *) {
     cursor: grabbing !important;
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Details/Toggle Block
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.details-block) {
+    position: relative;
+    display: flex;
+    gap: 4px;
+    padding: 4px 8px;
+    margin: 8px 0;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-primary);
+  }
+
+  .editor-wrap :global(.details-toggle) {
+    flex: 0 0 auto;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    margin-top: 4px;
+    padding: 0;
+    border: none;
+    background: transparent;
+    color: var(--text-secondary);
+    cursor: pointer;
+    border-radius: var(--radius-xs);
+    transition: transform 0.15s ease, color 0.1s;
+  }
+
+  .editor-wrap :global(.details-toggle:hover) {
+    color: var(--text-primary);
+    background: var(--bg-hover);
+  }
+
+  .editor-wrap :global(.details-toggle.is-open) {
+    transform: rotate(90deg);
+  }
+
+  .editor-wrap :global(.details-wrapper) {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  .editor-wrap :global(.details-inner) {
+    display: flex;
+    flex-direction: column;
+  }
+
+  .editor-wrap :global(.details-block:not(.is-open) .details-inner > :nth-child(n+2)) {
+    display: none;
+  }
+
+  .editor-wrap :global(.details-summary) {
+    font-weight: 600;
+    padding: 2px 0;
+  }
+
+  .editor-wrap :global(.details-content) {
+    padding: 4px 0 2px 0;
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Code Block — language selector + copy button
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.code-block-wrapper) {
+    position: relative;
+    margin: 8px 0;
+  }
+
+  .editor-wrap :global(.code-block-toolbar) {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 4px 8px;
+    background: var(--bg-tertiary);
+    border: 1px solid var(--border);
+    border-bottom: none;
+    border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+  }
+
+  .editor-wrap :global(.code-block-wrapper pre) {
+    margin: 0 !important;
+    border-top-left-radius: 0 !important;
+    border-top-right-radius: 0 !important;
+  }
+
+  .editor-wrap :global(.code-lang-select) {
+    height: 22px;
+    padding: 0 4px;
+    font-size: 0.72rem;
+    font-family: var(--font-mono);
+    background: var(--bg-secondary);
+    color: var(--text-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    outline: none;
+    cursor: pointer;
+    -webkit-appearance: none;
+    appearance: none;
+    padding-right: 14px;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
+    background-repeat: no-repeat;
+    background-position: right 3px center;
+  }
+
+  .editor-wrap :global(.code-lang-select:hover) {
+    border-color: var(--text-secondary);
+  }
+
+  .editor-wrap :global(.code-copy-btn) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 22px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .editor-wrap :global(.code-copy-btn:hover) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Resizable Image
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.image-node-view) {
+    position: relative;
+    display: inline-block;
+    max-width: 100%;
+    line-height: 0;
+  }
+
+  .editor-wrap :global(.image-node-view[data-align="center"]) {
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .editor-wrap :global(.image-node-view[data-align="right"]) {
+    display: block;
+    margin-left: auto;
+    margin-right: 0;
+  }
+
+  .editor-wrap :global(.image-node-view[data-align="left"]) {
+    display: block;
+    margin-left: 0;
+    margin-right: auto;
+  }
+
+  .editor-wrap :global(.image-node-view img) {
+    display: block;
+    max-width: 100%;
+    cursor: default;
+  }
+
+  .editor-wrap :global(.image-resize-handle) {
+    position: absolute;
+    top: 0;
+    width: 8px;
+    height: 100%;
+    cursor: col-resize;
+    z-index: 10;
+  }
+
+  .editor-wrap :global(.image-resize-handle::after) {
+    content: "";
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    width: 4px;
+    height: 40px;
+    max-height: 50%;
+    border-radius: 2px;
+    background: var(--accent-link, rgb(255, 102, 51));
+    opacity: 0;
+    transition: opacity 0.15s;
+  }
+
+  .editor-wrap :global(.image-node-view:hover .image-resize-handle::after),
+  .editor-wrap :global(.image-node-view.ProseMirror-selectednode .image-resize-handle::after) {
+    opacity: 1;
+  }
+
+  .editor-wrap :global(.image-resize-handle-left) {
+    left: -4px;
+  }
+
+  .editor-wrap :global(.image-resize-handle-left::after) {
+    left: 0;
+  }
+
+  .editor-wrap :global(.image-resize-handle-right) {
+    right: -4px;
+  }
+
+  .editor-wrap :global(.image-resize-handle-right::after) {
+    right: 0;
+  }
+
+  .editor-wrap :global(.image-align-toolbar) {
+    position: absolute;
+    top: 8px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 2px;
+    padding: 2px 4px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.15s;
+    z-index: 20;
+  }
+
+  .editor-wrap :global(.image-node-view.ProseMirror-selectednode .image-align-toolbar) {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .editor-wrap :global(.image-align-btn) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: background 0.1s, color 0.1s;
+  }
+
+  .editor-wrap :global(.image-align-btn:hover),
+  .editor-wrap :global(.image-align-btn.is-active) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Columns Layout
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.columns-block) {
+    display: flex;
+    gap: 16px;
+    margin: 8px 0;
+    min-height: 40px;
+  }
+
+  .editor-wrap :global(.columns-block > [data-column]) {
+    flex: 1 1 0%;
+    min-width: 0;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius-xs);
+    padding: 8px;
+  }
+
+  .editor-wrap :global(.columns-block > [data-column]:focus-within) {
+    border-color: var(--accent-link, rgb(255, 102, 51));
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Status Badge
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.status-badge) {
+    display: inline-flex;
+    align-items: center;
+    padding: 1px 8px;
+    border-radius: 3px;
+    font-size: 0.78rem;
+    font-weight: 600;
+    line-height: 1.6;
+    white-space: nowrap;
+    vertical-align: middle;
+    cursor: default;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="gray"]) {
+    background: rgba(107, 114, 128, 0.15);
+    color: #6b7280;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="blue"]) {
+    background: rgba(59, 130, 246, 0.15);
+    color: #3b82f6;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="green"]) {
+    background: rgba(34, 197, 94, 0.15);
+    color: #22c55e;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="yellow"]) {
+    background: rgba(234, 179, 8, 0.15);
+    color: #b45309;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="red"]) {
+    background: rgba(239, 68, 68, 0.15);
+    color: #ef4444;
+  }
+
+  .editor-wrap :global(.status-badge[data-color="purple"]) {
+    background: rgba(168, 85, 247, 0.15);
+    color: #a855f7;
+  }
+
+  .editor-wrap :global(.status-popover) {
+    position: absolute;
+    bottom: calc(100% + 4px);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 8px;
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    box-shadow: var(--shadow-lg);
+    z-index: 100;
+  }
+
+  .editor-wrap :global(.status-input) {
+    width: 120px;
+    height: 24px;
+    padding: 0 6px;
+    font-size: 0.78rem;
+    background: var(--bg-tertiary);
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+    border-radius: var(--radius-xs);
+    outline: none;
+  }
+
+  .editor-wrap :global(.status-swatches) {
+    display: flex;
+    gap: 4px;
+  }
+
+  .editor-wrap :global(.status-swatch) {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    border: 2px solid transparent;
+    cursor: pointer;
+    padding: 0;
+  }
+
+  .editor-wrap :global(.status-swatch:hover),
+  .editor-wrap :global(.status-swatch.is-active) {
+    border-color: var(--text-primary);
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Heading Anchor
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.heading-anchor-btn) {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    margin-left: 4px;
+    background: transparent;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-secondary);
+    cursor: pointer;
+    opacity: 0;
+    vertical-align: middle;
+    transition: opacity 0.15s, background 0.1s;
+  }
+
+  .editor-wrap :global(h1:hover .heading-anchor-btn),
+  .editor-wrap :global(h2:hover .heading-anchor-btn),
+  .editor-wrap :global(h3:hover .heading-anchor-btn),
+  .editor-wrap :global(h4:hover .heading-anchor-btn),
+  .editor-wrap :global(h5:hover .heading-anchor-btn),
+  .editor-wrap :global(h6:hover .heading-anchor-btn) {
+    opacity: 1;
+  }
+
+  .editor-wrap :global(.heading-anchor-btn:hover) {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  @media print {
+    .editor-wrap :global(.heading-anchor-btn) {
+      display: none;
+    }
+  }
+
+  /* ═══════════════════════════════════════════════════
+	   Table DnD
+	   ═══════════════════════════════════════════════════ */
+  .editor-wrap :global(.table-drag-handle) {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 18px;
+    height: 18px;
+    border-radius: var(--radius-xs);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border);
+    cursor: grab;
+    z-index: 50;
+    opacity: 0.7;
+    transition: opacity 0.15s, background 0.1s;
+  }
+
+  .editor-wrap :global(.table-drag-handle::after) {
+    content: "⠿";
+    font-size: 10px;
+    line-height: 1;
+    color: var(--text-secondary);
+  }
+
+  .editor-wrap :global(.table-drag-handle:hover) {
+    opacity: 1;
+    background: var(--bg-hover);
+  }
+
+  .editor-wrap :global(.table-drag-handle:active) {
+    cursor: grabbing;
+  }
+
+  .editor-wrap :global(.table-dnd-preview) {
+    padding: 0;
+    background-color: rgba(255, 255, 255, 0.3);
+    backdrop-filter: blur(2px);
+    border-radius: var(--radius-xs);
+    z-index: 100;
+  }
+
+  .editor-wrap :global(.table-dnd-drop-indicator) {
+    background-color: var(--accent-link, rgb(255, 102, 51));
+    z-index: 99;
+  }
+
+  .editor-wrap:has(:global(.table-dnd-drop-indicator[data-dragging="true"])) :global(.prosemirror-dropcursor-block),
+  .editor-wrap:has(:global(.table-dnd-drop-indicator[data-dragging="true"])) :global(.prosemirror-dropcursor-inline) {
+    display: none;
   }
 
 </style>

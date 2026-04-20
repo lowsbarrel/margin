@@ -25,6 +25,8 @@ const dragKey = new PluginKey("contentDrag");
 const handleKey = new PluginKey("blockHandle");
 
 const THRESHOLD = 5; // px before a click becomes a drag
+const SCROLL_THRESHOLD = 80; // px from edge to start auto-scroll
+const SCROLL_SPEED = 15; // px per frame to scroll
 
 const HANDLE_SVG = `<svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="1.5" cy="2" r="1.2"/><circle cx="6.5" cy="2" r="1.2"/><circle cx="1.5" cy="7" r="1.2"/><circle cx="6.5" cy="7" r="1.2"/><circle cx="1.5" cy="12" r="1.2"/><circle cx="6.5" cy="12" r="1.2"/></svg>`;
 
@@ -55,6 +57,11 @@ export const ContentDrag = Extension.create({
       let rafScheduled = false;
       let latestMoveEvent: MouseEvent | null = null;
 
+      // Find scroll container for auto-scroll
+      const scrollParent =
+        view.dom.closest(".editor-container") ||
+        view.dom.parentElement;
+
       const flushMove = () => {
         rafScheduled = false;
         const e = latestMoveEvent;
@@ -68,6 +75,16 @@ export const ContentDrag = Extension.create({
         if (!dragging) {
           dragging = true;
           document.body.classList.add("content-dragging");
+        }
+
+        // Auto-scroll when near edges
+        if (scrollParent) {
+          const rect = scrollParent.getBoundingClientRect();
+          if (e.clientY < rect.top + SCROLL_THRESHOLD) {
+            scrollParent.scrollTop -= SCROLL_SPEED;
+          } else if (e.clientY > rect.bottom - SCROLL_THRESHOLD) {
+            scrollParent.scrollTop += SCROLL_SPEED;
+          }
         }
 
         // Compute drop position
@@ -317,14 +334,68 @@ export const ContentDrag = Extension.create({
         let hoveredDom: HTMLElement | null = null;
         let isHandleHovered = false;
 
-        /** Resolve the top-level block at the given viewport coordinates. */
-        function findTopBlock(view: EditorView, x: number, y: number) {
+        /** Draggable block selectors — matches nested elements like Docmost */
+        const BLOCK_SELECTORS =
+          "li, p:not(:first-child), pre, blockquote, h1, h2, h3, h4, h5, h6, " +
+          '[data-type="callout"], [data-type="mathBlock"], .file-embed, ' +
+          "table, hr";
+
+        /**
+         * Resolve the block at the given viewport coordinates.
+         * Unlike the old top-level-only approach, this finds nested blocks
+         * (list items, paragraphs inside callouts, etc.) by checking
+         * the DOM elements at the pointer location.
+         */
+        function findBlock(view: EditorView, x: number, y: number) {
+          // Use document.elementsFromPoint to find the deepest matching block
+          const elements = document.elementsFromPoint(x, y);
+          for (const el of elements) {
+            // Must be inside the editor
+            if (!editorDom.contains(el) || el === editorDom) continue;
+
+            // Check if element or a parent matches our selectors
+            const blockEl = (el as HTMLElement).closest(BLOCK_SELECTORS);
+            if (!blockEl || !editorDom.contains(blockEl)) continue;
+
+            // Skip elements that are part of the drag handle
+            if (blockEl.classList.contains("block-drag-handle")) continue;
+
+            try {
+              const pos = view.posAtDOM(blockEl, 0);
+              const $pos = view.state.doc.resolve(pos);
+
+              // Walk up to find the owning node
+              for (let d = $pos.depth; d >= 1; d--) {
+                const node = $pos.node(d);
+                const nodePos = $pos.before(d);
+                const dom = view.nodeDOM(nodePos);
+                if (!dom || !(dom instanceof HTMLElement)) continue;
+
+                // Match: the DOM element is the one we found, or it contains it
+                if (dom === blockEl || dom.contains(blockEl)) {
+                  return { pos: nodePos, node, dom };
+                }
+              }
+
+              // Fallback: try the node right after this position
+              const after = $pos.nodeAfter;
+              if (after) {
+                const dom = view.nodeDOM(pos);
+                if (dom instanceof HTMLElement) {
+                  return { pos, node: after, dom };
+                }
+              }
+            } catch {
+              continue;
+            }
+          }
+
+          // Fallback: top-level block resolution
           const coords = view.posAtCoords({ left: x, top: y });
           if (!coords) return null;
 
           const $pos = view.state.doc.resolve(coords.pos);
           if ($pos.depth === 0) {
-            // Cursor is between blocks — pick the nearest node
             const idx = $pos.index(0);
             if (idx >= view.state.doc.childCount) return null;
             let pos = 0;
@@ -362,7 +433,7 @@ export const ContentDrag = Extension.create({
         const onEditorMouseMove = (e: MouseEvent) => {
           if (document.body.classList.contains("content-dragging")) return;
 
-          const result = findTopBlock(editorView, e.clientX, e.clientY);
+          const result = findBlock(editorView, e.clientX, e.clientY);
           if (!result) {
             if (!isHandleHovered) hideHandle();
             return;
@@ -429,6 +500,14 @@ export const ContentDrag = Extension.create({
         editorDom.addEventListener("mouseleave", onEditorMouseLeave);
         scrollParent?.addEventListener("scroll", onScroll, { passive: true });
 
+        // Hide handle on keyboard input (like Docmost)
+        const onKeyDown = () => hideHandle();
+        editorDom.addEventListener("keydown", onKeyDown);
+
+        // Hide handle on scroll wheel
+        const onWheel = () => hideHandle();
+        editorDom.addEventListener("wheel", onWheel, { passive: true });
+
         return {
           update() {
             if (hoveredDom && activeNodePos != null) {
@@ -442,6 +521,8 @@ export const ContentDrag = Extension.create({
           destroy() {
             editorDom.removeEventListener("mousemove", onEditorMouseMove);
             editorDom.removeEventListener("mouseleave", onEditorMouseLeave);
+            editorDom.removeEventListener("keydown", onKeyDown);
+            editorDom.removeEventListener("wheel", onWheel);
             scrollParent?.removeEventListener("scroll", onScroll);
             handle.remove();
           },

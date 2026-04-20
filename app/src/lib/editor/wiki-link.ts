@@ -39,7 +39,11 @@ const WikiLink = Node.create({
         { "data-wiki-link": "", class: "wiki-link" },
         HTMLAttributes,
       ),
-      `[[${node.attrs.title}]]`,
+      [
+        "span",
+        { class: "wiki-link-icon", contenteditable: "false" },
+      ],
+      ["span", { class: "wiki-link-title" }, node.attrs.title],
     ];
   },
 
@@ -179,7 +183,7 @@ function wikiLinkPlugin(md: any) {
     const token = tokens[idx];
     const title = token.attrGet("data-title") ?? "";
     const escaped = md.utils.escapeHtml(title);
-    return `<span data-wiki-link="" data-title="${escaped}" class="wiki-link">[[${escaped}]]</span>`;
+    return `<span data-wiki-link="" data-title="${escaped}" class="wiki-link"><span class="wiki-link-icon" contenteditable="false"></span><span class="wiki-link-title">${escaped}</span></span>`;
   };
 }
 

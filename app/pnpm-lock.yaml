@@ -44,6 +44,9 @@ importers:
       '@tiptap/extension-character-count':
         specifier: ^3.22.3
         version: 3.22.3(@tiptap/extensions@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3))
+      '@tiptap/extension-code':
+        specifier: ^3.22.4
+        version: 3.22.4(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extension-code-block-lowlight':
         specifier: ^3.22.3
         version: 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/extension-code-block@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)(highlight.js@11.11.1)(lowlight@3.3.0)
@@ -793,10 +796,10 @@ packages:
       '@tiptap/core': ^3.22.3
       '@tiptap/pm': ^3.22.3
 
-  '@tiptap/extension-code@3.22.3':
-    resolution: {integrity: sha512-wafWTDQOuMKtXpZEuk1PFQmzopabBciNLryL90MB9S03MNLaQQZYLnmYkDBlzAaLAbgF5QiC+2XZQEBQuTVjFQ==}
+  '@tiptap/extension-code@3.22.4':
+    resolution: {integrity: sha512-cnbxmVhAcc7X3G81QUYEmKP0ve2hRmvAiFXBuuv9RUtQlBiRnzmhHoJOMgkX0CsMR7+8kMRpTfeDUYq2xp5s5w==}
     peerDependencies:
-      '@tiptap/core': ^3.22.3
+      '@tiptap/core': 3.22.4
 
   '@tiptap/extension-color@3.22.3':
     resolution: {integrity: sha512-eZtOc4Zp5jnlZh4+gvr3JmOa3kPlIU8IbTByDMgXEMdVGZ5cOk+H4TMIlhU0j7j1TMWm8+r1WYtrU9E9ooz9hQ==}
@@ -1969,7 +1972,7 @@ snapshots:
       '@tiptap/core': 3.22.3(@tiptap/pm@3.22.3)
       '@tiptap/pm': 3.22.3
 
-  '@tiptap/extension-code@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))':
+  '@tiptap/extension-code@3.22.4(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))':
     dependencies:
       '@tiptap/core': 3.22.3(@tiptap/pm@3.22.3)
 
@@ -2136,7 +2139,7 @@ snapshots:
       '@tiptap/extension-blockquote': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extension-bold': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extension-bullet-list': 3.22.3(@tiptap/extension-list@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3))
-      '@tiptap/extension-code': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
+      '@tiptap/extension-code': 3.22.4(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extension-code-block': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3)
       '@tiptap/extension-document': 3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))
       '@tiptap/extension-dropcursor': 3.22.3(@tiptap/extensions@3.22.3(@tiptap/core@3.22.3(@tiptap/pm@3.22.3))(@tiptap/pm@3.22.3))

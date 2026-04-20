@@ -268,13 +268,17 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     let status = {
+        use std::os::windows::process::CommandExt;
         // explorer.exe requires native backslash paths
         let native = target.to_string_lossy().replace('/', "\\");
         if target.is_dir() {
             Command::new("explorer").arg(&native).status()
         } else {
+            // Use raw_arg so the /select,<path> argument isn't quoted by
+            // Rust's Command – explorer.exe chokes on the extra quotes and
+            // falls back to opening Documents instead of the target file.
             Command::new("explorer")
-                .arg(format!("/select,{}", native))
+                .raw_arg(format!("/select,{}", native))
                 .status()
         }
     };
@@ -289,7 +293,7 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
         Command::new("xdg-open").arg(open_target).status()
     };
 
-    let status = status.map_err(|e| format!("Failed to open file manager: {e}"))?;
+    let _status = status.map_err(|e| format!("Failed to open file manager: {e}"))?;
     // On Windows, explorer.exe always returns exit code 1 even on success,
     // so we skip the exit-code check on that platform.
     #[cfg(not(target_os = "windows"))]

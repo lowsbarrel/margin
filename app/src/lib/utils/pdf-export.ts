@@ -3,6 +3,7 @@ import { readFileBytes, writeFileBytes } from "$lib/fs/bridge";
 import { toast } from "$lib/stores/toast.svelte";
 import { mimeForPath } from "$lib/utils/mime";
 import { save } from "@tauri-apps/plugin-dialog";
+import { isLocalfileUrl, stripLocalfilePrefix } from "$lib/editor/image-url";
 
 /**
  * PDF render styles injected into the offscreen container.
@@ -34,6 +35,12 @@ const PDF_STYLES = `
 		text-decoration: none;
 		padding: 0 2px;
 	}
+	#pdf-render .wiki-link-icon {
+		display: none;
+	}
+	#pdf-render .wiki-link-title {
+		border-bottom: 0.05em solid rgba(255, 102, 51, 0.4);
+	}
 	#pdf-render .file-embed {
 		display: flex;
 		align-items: center;
@@ -54,11 +61,12 @@ const PDF_STYLES = `
 	}
 `;
 
-/** Convert a localfile:// image element to an inline base64 data URL. */
+/** Convert a localfile image element to an inline base64 data URL. */
 async function inlineLocalImage(img: HTMLImageElement): Promise<void> {
   const src = img.getAttribute("src") ?? "";
-  if (!src.startsWith("localfile://")) return;
-  const absPath = decodeURIComponent(src.replace("localfile://localhost", ""));
+  if (!isLocalfileUrl(src)) return;
+  const tail = stripLocalfilePrefix(src) ?? "";
+  const absPath = decodeURIComponent(tail);
   try {
     const bytes = await readFileBytes(absPath);
     const mime = mimeForPath(absPath);

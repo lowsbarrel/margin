@@ -798,8 +798,15 @@
     });
 
     // Listen for any file change in the vault (external programs, new files, deletions)
+    let vaultRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     onVaultFsChanged(() => {
       editor.markLocalChange();
+      // Debounce file tree refresh — pasting many files at once fires many events
+      if (vaultRefreshTimer) clearTimeout(vaultRefreshTimer);
+      vaultRefreshTimer = setTimeout(() => {
+        vaultRefreshTimer = null;
+        files.refresh();
+      }, 300);
     }).then((unlisten) => {
       unlistenVaultChange = unlisten;
     });

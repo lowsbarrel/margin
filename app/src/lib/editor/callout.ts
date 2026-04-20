@@ -1,5 +1,6 @@
 import { Node, mergeAttributes, wrappingInputRule } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 export type CalloutType = "info" | "note" | "success" | "warning" | "danger";
 
@@ -33,6 +34,7 @@ declare module "@tiptap/core" {
       setCallout: (attrs?: { type?: CalloutType }) => ReturnType;
       toggleCallout: (attrs?: { type?: CalloutType }) => ReturnType;
       unsetCallout: () => ReturnType;
+      setCalloutType: (type: CalloutType) => ReturnType;
     };
   }
 }
@@ -93,6 +95,26 @@ const Callout = Node.create({
         () =>
         ({ commands }) =>
           commands.lift(this.name),
+      setCalloutType:
+        (type: CalloutType) =>
+        ({ state, dispatch }) => {
+          const { $from } = state.selection;
+          for (let d = $from.depth; d > 0; d--) {
+            const node = $from.node(d);
+            if (node.type.name === "callout") {
+              if (dispatch) {
+                const pos = $from.before(d);
+                const tr = state.tr.setNodeMarkup(pos, undefined, {
+                  ...node.attrs,
+                  type: getValidCalloutType(type),
+                });
+                dispatch(tr);
+              }
+              return true;
+            }
+          }
+          return false;
+        },
     };
   },
 
@@ -177,6 +199,49 @@ const Callout = Node.create({
         return false;
       },
     };
+  },
+
+  addProseMirrorPlugins() {
+    const editor = this.editor;
+    return [
+      new Plugin({
+        key: new PluginKey("calloutClickHandler"),
+        props: {
+          handleDOMEvents: {
+            click(view, event) {
+              const target = event.target as HTMLElement;
+              if (!target.classList.contains("callout-indicator")) return false;
+
+              // Find the callout node this indicator belongs to
+              const calloutEl = target.closest("[data-type='callout']");
+              if (!calloutEl) return false;
+
+              const pos = view.posAtDOM(calloutEl, 0);
+              const $pos = view.state.doc.resolve(pos);
+
+              // Walk up to find the callout node
+              for (let d = $pos.depth; d >= 0; d--) {
+                const node = $pos.node(d);
+                if (node.type.name === "callout") {
+                  const currentType = node.attrs.type as CalloutType;
+                  const idx = VALID_TYPES.indexOf(currentType);
+                  const nextType = VALID_TYPES[(idx + 1) % VALID_TYPES.length];
+                  const nodePos = $pos.before(d);
+                  const tr = view.state.tr.setNodeMarkup(nodePos, undefined, {
+                    ...node.attrs,
+                    type: nextType,
+                  });
+                  view.dispatch(tr);
+                  event.preventDefault();
+                  return true;
+                }
+              }
+              return false;
+            },
+          },
+        },
+      }),
+    ];
   },
 
   addStorage() {

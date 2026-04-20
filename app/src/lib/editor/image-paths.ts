@@ -1,4 +1,5 @@
 import { IMAGE_EXTS_ARRAY } from "$lib/utils/mime";
+import { LOCALFILE_URL_PREFIX, stripLocalfilePrefix } from "$lib/editor/image-url";
 
 /**
  * Convert Obsidian-style wiki image embeds ![[filename.ext]] to standard
@@ -27,30 +28,47 @@ export function resolveImagePaths(
   vaultPath: string | null,
 ): string {
   if (!vaultPath) return md;
-  return md.replace(
+  // Fix previously-saved malformed localfile:// URLs (Windows bug:
+  // localfile://localhostC: → localfile://localhost/C:)
+  let fixed = md;
+  if (fixed.includes("localfile://localhost") && !fixed.includes("localfile://localhost/")) {
+    fixed = fixed.replaceAll("localfile://localhost", "localfile://localhost/");
+  }
+  // Encode spaces inside any existing localfile image URLs (both scheme forms)
+  // so tiptap-markdown and the WebView can parse them.
+  fixed = fixed.replace(
+    /!\[([^\]]*)\]\(((?:localfile:\/\/|http:\/\/localfile\.localhost)[^)]+)\)/g,
+    (_m, alt, url: string) => `![${alt}](${url.replace(/ /g, "%20")})`,
+  );
+  return fixed.replace(
     /!\[([^\]]*)\]\((?!https?:\/\/|data:|localfile:\/\/)([^)]+)\)/g,
     (_match, alt, relPath) => {
       const absPath = `${vaultPath}/${relPath}`;
       const prefix = absPath.startsWith("/") ? "" : "/";
-      return `![${alt}](localfile://localhost${prefix}${absPath})`;
+      const encoded = absPath.replace(/ /g, "%20");
+      return `![${alt}](${LOCALFILE_URL_PREFIX}${prefix}${encoded})`;
     },
   );
 }
 
-/** Convert localfile:// URLs back to vault-relative paths for storage */
+/** Convert localfile image URLs back to vault-relative paths for storage */
 export function unresolveImagePaths(
   md: string,
   vaultPath: string | null,
 ): string {
   if (!vaultPath) return md;
   return md.replace(
-    /!\[([^\]]*)\]\(localfile:\/\/localhost\/?([^)]+)\)/g,
-    (_match, alt, absPath) => {
-      const normalizedAbs = absPath.startsWith("/") ? absPath : "/" + absPath;
-      const normalizedVault = vaultPath.startsWith("/") ? vaultPath : "/" + vaultPath;
+    /!\[([^\]]*)\]\(((?:localfile:\/\/localhost|http:\/\/localfile\.localhost)\/?[^)]+)\)/g,
+    (_match, alt: string, fullUrl: string) => {
+      const stripped = stripLocalfilePrefix(fullUrl) ?? fullUrl;
+      const noLead = stripped.startsWith("/") ? stripped.slice(1) : stripped;
+      // Decode %20 → spaces for vault path matching
+      const decoded = noLead.replace(/%20/g, " ");
+      const normalizedAbs = "/" + decoded;
+      const normalizedVault = vaultPath!.startsWith("/") ? vaultPath! : "/" + vaultPath!;
       const relPath = normalizedAbs.startsWith(normalizedVault + "/")
-        ? normalizedAbs.substring(normalizedVault.length + 1)
-        : absPath;
+        ? normalizedAbs.substring(normalizedVault!.length + 1)
+        : decoded;
       return `![${alt}](${relPath})`;
     },
   );

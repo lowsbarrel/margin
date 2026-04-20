@@ -248,6 +248,14 @@ input::placeholder, textarea::placeholder {
 	font-size: 16px;
 	line-height: 1.6;
 	user-select: none;
+	cursor: pointer;
+	border-radius: 4px;
+	padding: 0 2px;
+	transition: background 0.1s;
+}
+
+.callout-indicator:hover {
+	background: rgba(0, 0, 0, 0.08);
 }
 
 .callout-content {

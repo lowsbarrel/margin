@@ -6,6 +6,7 @@ import {
   copyFile,
 } from "$lib/fs/bridge";
 import { isImageFile } from "$lib/utils/mime";
+import { buildLocalfileUrl } from "$lib/editor/image-url";
 
 function makeSafeFileName(name: string): string {
   const ts = Date.now();
@@ -74,8 +75,7 @@ function insertIntoEditor(
   vaultPath: string,
 ): void {
   if (isImage) {
-    const prefix = vaultPath.startsWith("/") ? "" : "/";
-    const src = `localfile://localhost${prefix}${vaultPath}/${relPath}`;
+    const src = buildLocalfileUrl(`${vaultPath}/${relPath}`);
     editor.chain().focus().setImage({ src, alt: displayName }).run();
   } else {
     editor

@@ -245,7 +245,12 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
           editor
             .chain()
             .command(({ tr }: any) => {
-              tr.insertText(storage.replaceTerm, match.from, match.to);
+              // Collect marks from the matched range so we preserve formatting
+              const resolvedFrom = tr.doc.resolve(match.from);
+              const marks = resolvedFrom.marksAcross(tr.doc.resolve(match.to)) ?? resolvedFrom.marks();
+              const schema = editor.state.schema;
+              const replaceNode = schema.text(storage.replaceTerm, marks);
+              tr.replaceWith(match.from, match.to, replaceNode);
               tr.setMeta(searchPluginKey, { action: "update" });
               return true;
             })
@@ -269,12 +274,14 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
           editor
             .chain()
             .command(({ tr }: any) => {
+              const schema = editor.state.schema;
               for (let i = matches.length - 1; i >= 0; i--) {
-                tr.insertText(
-                  storage.replaceTerm,
-                  matches[i].from,
-                  matches[i].to,
-                );
+                const from = matches[i].from;
+                const to = matches[i].to;
+                const resolvedFrom = tr.doc.resolve(from);
+                const marks = resolvedFrom.marksAcross(tr.doc.resolve(to)) ?? resolvedFrom.marks();
+                const replaceNode = schema.text(storage.replaceTerm, marks);
+                tr.replaceWith(from, to, replaceNode);
               }
               tr.setMeta(searchPluginKey, { action: "update" });
               return true;

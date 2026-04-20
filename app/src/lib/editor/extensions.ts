@@ -31,7 +31,8 @@ import MentionCommand from "$lib/editor/mention-command";
 import renderMentionMenu from "$lib/editor/mention-menu-renderer.svelte";
 import { SearchReplace } from "$lib/editor/search-replace";
 import { ContentDrag } from "$lib/editor/content-drag";
-import type { Extensions } from "@tiptap/core";
+import { Extension, type Extensions } from "@tiptap/core";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 interface CreateExtensionsOptions {
   lowlight: any;
@@ -204,7 +205,41 @@ export function createEditorExtensions({
     Markdown.configure({
       html: true,
       transformPastedText: true,
-      transformCopiedText: true,
+      transformCopiedText: false,
+    }),
+    // Selective clipboard serializer: only convert lists to markdown on copy.
+    // Tables and other content use the default ProseMirror text serializer
+    // (matching Docmost behaviour).
+    Extension.create({
+      name: "selectiveClipboardMarkdown",
+      priority: 100,
+      addProseMirrorPlugins() {
+        return [
+          new Plugin({
+            key: new PluginKey("selectiveClipboardMarkdown"),
+            props: {
+              clipboardTextSerializer: (slice) => {
+                const listTypes = ["bulletList", "orderedList", "taskList"];
+                let topLevelCount = 0;
+                let hasList = false;
+                slice.content.forEach((node) => {
+                  if (listTypes.includes(node.type.name)) {
+                    hasList = true;
+                    topLevelCount += node.childCount;
+                  } else {
+                    topLevelCount++;
+                  }
+                });
+                if (!hasList || topLevelCount < 2) return null;
+                const serializer =
+                  (this.editor.storage as any).markdown?.serializer;
+                if (!serializer) return null;
+                return serializer.serialize(slice.content);
+              },
+            },
+          }),
+        ];
+      },
     }),
     SearchReplace,
     ContentDrag,

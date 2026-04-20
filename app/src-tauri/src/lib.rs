@@ -53,6 +53,22 @@ pub fn run() {
                 .decode_utf8_lossy()
                 .into_owned();
 
+            // On Windows the URL path looks like "/C:/Users/..." — strip the
+            // leading slash so Path::canonicalize can resolve it.
+            #[cfg(windows)]
+            let decoded = {
+                let bytes = decoded.as_bytes();
+                if bytes.len() >= 3
+                    && bytes[0] == b'/'
+                    && bytes[1].is_ascii_alphabetic()
+                    && bytes[2] == b':'
+                {
+                    decoded[1..].to_string()
+                } else {
+                    decoded
+                }
+            };
+
             // 1. Canonicalize first so symlinks are fully resolved before any check.
             //    This eliminates the TOCTOU window between check and read.
             let path = std::path::Path::new(&decoded);
