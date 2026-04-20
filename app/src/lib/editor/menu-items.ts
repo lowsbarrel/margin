@@ -63,7 +63,20 @@ const items: SlashMenuItem[] = [
     icon: "☑",
     searchTerms: ["todo", "task", "list", "check", "checkbox"],
     command: ({ editor, range }) => {
-      editor.chain().focus().deleteRange(range).toggleTaskList().run();
+      editor.chain().focus().deleteRange(range).run();
+
+      // When inside a bullet/ordered list, indent first so that
+      // toggleTaskList converts only the nested inner list instead
+      // of replacing the entire parent list.
+      if (editor.isActive("bulletList") || editor.isActive("orderedList")) {
+        const sunk = editor.chain().sinkListItem("listItem").run();
+        if (sunk) {
+          editor.chain().toggleTaskList().run();
+          return;
+        }
+      }
+
+      editor.chain().toggleTaskList().run();
     },
   },
   {

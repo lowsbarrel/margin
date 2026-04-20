@@ -1,5 +1,5 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import { vault } from "$lib/stores/vault.svelte";
   import { files } from "$lib/stores/files.svelte";
   import { favourites } from "$lib/stores/favourites.svelte";
@@ -265,7 +265,60 @@
     panes[paneIndex].activeTabIndex = panes[paneIndex].tabs.length - 1;
   }
 
-  async function handleFileSelect(path: string) {
+  function scrollEditorToLine(line: number) {
+    // Wait for the editor to mount and render the content
+    tick().then(() => {
+      setTimeout(() => {
+        const tiptap = editor.tiptap;
+        if (!tiptap) return;
+
+        // Get the text at the target line from the active tab's raw content
+        const pane = panes[activePaneIndex];
+        const tab = pane?.tabs[pane.activeTabIndex];
+        if (!tab?.content) return;
+
+        const lines = tab.content.split("\n");
+        const targetText = lines[line - 1]?.trim();
+        if (!targetText) return;
+
+        // Search for this text in the ProseMirror document
+        const doc = tiptap.state.doc;
+        let targetPos = -1;
+        doc.descendants((node, pos) => {
+          if (targetPos >= 0) return false; // already found
+          if (node.isText && node.text?.includes(targetText)) {
+            targetPos = pos + (node.text.indexOf(targetText));
+            return false;
+          }
+        });
+
+        if (targetPos < 0) {
+          // Fallback: try to find a text node that contains any part of the line
+          const shortText = targetText.replace(/^[#\-*>\s]+/, "").trim().slice(0, 20);
+          if (shortText) {
+            doc.descendants((node, pos) => {
+              if (targetPos >= 0) return false;
+              if (node.isText && node.text?.includes(shortText)) {
+                targetPos = pos + (node.text.indexOf(shortText));
+                return false;
+              }
+            });
+          }
+        }
+
+        if (targetPos >= 0) {
+          try {
+            tiptap.commands.setTextSelection(targetPos);
+            tiptap.commands.scrollIntoView();
+          } catch {
+            /* ignore if position is invalid */
+          }
+        }
+      }, 50);
+    });
+  }
+
+  async function handleFileSelect(path: string, line?: number) {
     if (!vault.vaultPath) return;
     const paneIndex = activePaneIndex;
     const pane = panes[paneIndex];
@@ -279,6 +332,7 @@
     const existingIndex = pane.tabs.findIndex((t) => t.path === path);
     if (existingIndex >= 0) {
       await switchTab(paneIndex, existingIndex);
+      if (line != null) scrollEditorToLine(line);
       return;
     }
 
@@ -322,6 +376,7 @@
 
     if (tabType === "markdown") {
       await watchFile(path);
+      if (line != null) scrollEditorToLine(line);
     }
   }
 

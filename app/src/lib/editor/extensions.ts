@@ -68,7 +68,70 @@ export function createEditorExtensions({
     TableCell,
     TableHeader,
     TaskList,
-    TaskItem.configure({
+    TaskItem.extend({
+      addKeyboardShortcuts() {
+        return {
+          ...this.parent?.(),
+          Backspace: ({ editor }) => {
+            const { state } = editor;
+            const { selection } = state;
+            if (!selection.empty) return false;
+
+            const { $from } = selection;
+            // Only act at the very start of the node
+            if ($from.parentOffset !== 0) return false;
+
+            // Check we're in a taskItem
+            let taskItemDepth: number | null = null;
+            for (let d = $from.depth; d > 0; d--) {
+              if ($from.node(d).type.name === "taskItem") {
+                taskItemDepth = d;
+                break;
+              }
+            }
+            if (taskItemDepth === null) return false;
+
+            // Check if taskList is nested inside a listItem
+            const taskListDepth = taskItemDepth - 1;
+            if (taskListDepth < 1) return false;
+            const taskListNode = $from.node(taskListDepth);
+            if (taskListNode.type.name !== "taskList") return false;
+
+            const parentDepth = taskListDepth - 1;
+            if (parentDepth < 1) return false;
+            const parentNode = $from.node(parentDepth);
+            if (parentNode.type.name !== "listItem") return false;
+
+            const taskItemNode = $from.node(taskItemDepth);
+
+            // Empty task item → delete it (and the taskList if last)
+            if (taskItemNode.content.size <= 2) {
+              if (taskListNode.childCount === 1) {
+                // Last task item: remove the whole taskList
+                const taskListPos = $from.before(taskListDepth);
+                const tr = state.tr.delete(
+                  taskListPos,
+                  taskListPos + taskListNode.nodeSize,
+                );
+                editor.view.dispatch(tr);
+              } else {
+                // Remove just this task item
+                const taskItemPos = $from.before(taskItemDepth);
+                const tr = state.tr.delete(
+                  taskItemPos,
+                  taskItemPos + taskItemNode.nodeSize,
+                );
+                editor.view.dispatch(tr);
+              }
+              return true;
+            }
+
+            // Non-empty task item → lift out of task list into parent
+            return editor.commands.liftListItem("taskItem");
+          },
+        };
+      },
+    }).configure({
       nested: true,
     }),
     Placeholder.configure({
@@ -139,7 +202,7 @@ export function createEditorExtensions({
     MathBlock,
     MathInline,
     Markdown.configure({
-      html: false,
+      html: true,
       transformPastedText: true,
       transformCopiedText: true,
     }),

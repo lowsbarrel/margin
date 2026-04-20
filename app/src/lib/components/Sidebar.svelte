@@ -52,7 +52,7 @@
   type SidebarView = "files" | "search" | "favourites";
 
   interface Props {
-    onfileselect: (path: string) => void;
+    onfileselect: (path: string, line?: number) => void;
     onrenameentry: (from: string, to: string, isDir: boolean) => Promise<void>;
     ondeleteentry: (path: string, isDir: boolean) => Promise<void>;
     onopengraph: () => void;
@@ -1079,7 +1079,7 @@
                   <button
                     class="search-match-item"
                     onclick={() => {
-                      onfileselect(match.path);
+                      onfileselect(match.path, match.line);
                     }}
                   >
                     <span class="search-match-line">L{match.line}</span>
