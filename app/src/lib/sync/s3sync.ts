@@ -2,6 +2,7 @@ import {
   s3Configure,
   s3Download,
   s3Delete,
+  s3TestConnection,
   type S3Config,
 } from "$lib/s3/bridge";
 import { decryptBlob } from "$lib/crypto/bridge";
@@ -174,6 +175,14 @@ async function doSyncToS3(
     await s3Configure(s3Config);
     const s3Prefix = `${vaultId}/`;
 
+    // Check connectivity before proceeding — prevents mass deletion when offline
+    checkAbort(signal);
+    try {
+      await s3TestConnection();
+    } catch (err) {
+      throw new Error(`Cannot reach S3 server: ${err}`);
+    }
+
     // 1. Load base manifest (last synced state) — fully in Rust
     checkAbort(signal);
     const baseManifest = await loadManifest(vaultPath, encryptionKey);
@@ -232,16 +241,16 @@ async function doSyncToS3(
       );
     } catch (err) {
       if (signal.aborted) throw new Error("Sync cancelled");
-      // Only treat as "first sync" when the base is also empty — that means
-      // we have never synced before and the remote truly has no manifest.
-      // If the base has files but we failed to fetch the remote manifest
-      // (network error, auth expiry, decryption failure, etc.) we must NOT
-      // proceed with an empty remote manifest because the 3-way diff would
-      // interpret every unchanged local file as "deleted on remote" and
-      // delete it locally.
+      // CRITICAL SAFEGUARD: If we cannot fetch the remote manifest (network error,
+      // auth expiry, decryption failure, etc.) we must NOT proceed with an empty
+      // remote manifest. The 3-way diff would interpret every file in base as
+      // "deleted on remote" and generate delete-local actions for ALL files.
+      // This is the primary protection against mass file deletion when offline.
+      // Only allow proceeding if base is empty (true first-sync scenario).
       if (baseManifest.files.length > 0) {
-        throw new Error(`Failed to download remote manifest: ${err}`);
+        throw new Error(`Failed to download remote manifest. Check your internet connection: ${err}`);
       }
+      // Base is empty — this is a true first sync, remote manifest not expected
     }
 
     // 4. Build maps & compute 3-way diff — fully in Rust
