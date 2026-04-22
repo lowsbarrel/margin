@@ -293,7 +293,8 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
         Command::new("xdg-open").arg(open_target).status()
     };
 
-    let _exit_status = status.map_err(|e| format!("Failed to open file manager: {e}"))?;
+    #[allow(unused_variables)]
+    let exit_status = status.map_err(|e| format!("Failed to open file manager: {e}"))?;
     // On Windows, explorer.exe always returns exit code 1 even on success,
     // so we skip the exit-code check on that platform.
     #[cfg(not(target_os = "windows"))]
