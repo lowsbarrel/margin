@@ -2,7 +2,6 @@ import {
   s3Configure,
   s3Download,
   s3Delete,
-  s3TestConnection,
   type S3Config,
 } from "$lib/s3/bridge";
 import { decryptBlob } from "$lib/crypto/bridge";
@@ -175,14 +174,6 @@ async function doSyncToS3(
     await s3Configure(s3Config);
     const s3Prefix = `${vaultId}/`;
 
-    // Check connectivity before proceeding — prevents mass deletion when offline
-    checkAbort(signal);
-    try {
-      await s3TestConnection();
-    } catch (err) {
-      throw new Error(`Cannot reach S3 server: ${err}`);
-    }
-
     // 1. Load base manifest (last synced state) — fully in Rust
     checkAbort(signal);
     const baseManifest = await loadManifest(vaultPath, encryptionKey);
@@ -241,16 +232,12 @@ async function doSyncToS3(
       );
     } catch (err) {
       if (signal.aborted) throw new Error("Sync cancelled");
-      // CRITICAL SAFEGUARD: If we cannot fetch the remote manifest (network error,
-      // auth expiry, decryption failure, etc.) we must NOT proceed with an empty
-      // remote manifest. The 3-way diff would interpret every file in base as
-      // "deleted on remote" and generate delete-local actions for ALL files.
-      // This is the primary protection against mass file deletion when offline.
-      // Only allow proceeding if base is empty (true first-sync scenario).
+      // If base has files but remote fetch fails, abort — otherwise the
+      // 3-way diff treats every file as "deleted on remote" and wipes them.
       if (baseManifest.files.length > 0) {
-        throw new Error(`Failed to download remote manifest. Check your internet connection: ${err}`);
+        throw new Error(`Failed to download remote manifest: ${err}`);
       }
-      // Base is empty — this is a true first sync, remote manifest not expected
+      // Base is empty — first sync, no remote manifest expected
     }
 
     // 4. Build maps & compute 3-way diff — fully in Rust
