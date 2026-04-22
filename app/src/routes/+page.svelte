@@ -84,6 +84,7 @@
   let attachmentFolder = $state<string | null>(null);
   let pendingScrollText = $state<string | null>(null);
   let lastSaveTime = 0;
+  let fileSelectGeneration = 0;
   let unlistenFileChange: (() => void) | null = null;
   let unlistenVaultChange: (() => void) | null = null;
   let updateInterval: ReturnType<typeof setInterval> | null = null;
@@ -316,6 +317,7 @@
 
   async function handleFileSelect(path: string, searchText?: string) {
     if (!vault.vaultPath) return;
+    const gen = ++fileSelectGeneration;
     const paneIndex = activePaneIndex;
     const pane = panes[paneIndex];
 
@@ -333,13 +335,16 @@
     }
 
     files.revealFile(path, vault.vaultPath);
+    files.setActiveFile(path);
     await unwatchFile();
+    if (gen !== fileSelectGeneration) return;
 
     let content = "";
     let blobUrl: string | undefined;
     let pdfData: Uint8Array | undefined;
     try {
       const bytes = await readFileBytes(path);
+      if (gen !== fileSelectGeneration) return;
       if (tabType === "markdown" || tabType === "canvas") {
         content = new TextDecoder().decode(bytes);
       } else if (tabType === "pdf") {
