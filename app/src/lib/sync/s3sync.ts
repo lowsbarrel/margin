@@ -436,7 +436,7 @@ async function doSyncToS3(
       nowSeconds(),
     );
     const mergedManifest: Manifest = {
-      version: 2,
+      version: 3,
       files: [...Array.from(mergedFiles.values()), ...prunedTombstones],
     };
     await syncUploadManifest(s3Prefix, encryptionKey, mergedManifest);
