@@ -20,7 +20,7 @@ jobs:
             runner: macos-latest
             target: aarch64-apple-darwin
           - name: macOS (Intel)
-            runner: macos-latest
+            runner: macos-13
             target: x86_64-apple-darwin
           - name: Linux
             runner: ubuntu-22.04
