@@ -118,3 +118,28 @@ export async function syncUploadManifest(
     manifest,
   });
 }
+
+// ─── Delete files from S3 ─────────────────────────────────────────────────
+
+/** Delete files from S3 by relative paths (computes HMAC keys internally). */
+export async function syncDeleteFiles(
+  s3Prefix: string,
+  paths: string[],
+  encryptionKey: number[],
+): Promise<void> {
+  return invoke("sync_delete_files", {
+    s3Prefix,
+    paths,
+    encryptionKey,
+  });
+}
+
+// ─── Path → S3 key mapping ───────────────────────────────────────────────
+
+/** Compute the HMAC-SHA256 based S3 key for a given vault relative path. */
+export async function pathToS3Key(
+  relPath: string,
+  encryptionKey: number[],
+): Promise<string> {
+  return invoke<string>("path_to_s3_key", { relPath, encryptionKey });
+}

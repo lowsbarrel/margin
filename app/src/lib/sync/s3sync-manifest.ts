@@ -54,12 +54,12 @@ export async function loadBaseManifest(
 ): Promise<Manifest> {
   const path = `${vaultPath}/.margin/${BASE_MANIFEST_FILE}`;
   try {
-    if (!(await fileExists(path))) return { version: 2, files: [] };
+    if (!(await fileExists(path))) return { version: 3, files: [] };
     const enc = await readFileBytes(path);
     const dec = await decryptBlob(enc, encryptionKey);
     return validateManifest(JSON.parse(new TextDecoder().decode(dec)));
   } catch {
-    return { version: 2, files: [] };
+    return { version: 3, files: [] };
   }
 }
 

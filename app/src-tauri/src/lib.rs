@@ -222,6 +222,8 @@ pub fn run() {
             sync::sync_upload_files,
             sync::sync_download_files,
             sync::sync_upload_manifest,
+            sync::sync_delete_files,
+            sync::path_to_s3_key,
             themes::load_themes,
             themes::save_themes,
             themes::export_theme,

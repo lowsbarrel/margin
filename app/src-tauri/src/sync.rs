@@ -2,6 +2,7 @@ use aes_gcm_siv::{
     aead::{Aead, KeyInit, OsRng},
     Aes256GcmSiv, Nonce,
 };
+use hmac::{Hmac, Mac};
 use rand::RngCore;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
@@ -73,6 +74,56 @@ fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
         .map_err(|e| format!("Decryption failed: {e}"))
 }
 
+// ─── Path → S3 key mapping (HMAC-SHA256) ──────────────────────────────────
+
+type HmacSha256 = Hmac<Sha256>;
+
+/// Map a relative vault path to an opaque S3 object key.
+/// Uses HMAC-SHA256 with the encryption key to derive a deterministic 32-char
+/// hex identifier. Same path always maps to same key — no lookup table needed.
+#[tauri::command]
+pub fn path_to_s3_key(rel_path: String, encryption_key: Vec<u8>) -> String {
+    path_to_s3_key_internal(&rel_path, &encryption_key)
+}
+
+fn path_to_s3_key_internal(rel_path: &str, encryption_key: &[u8]) -> String {
+    let mut mac = <HmacSha256 as Mac>::new_from_slice(encryption_key)
+        .expect("HMAC can take key of any size");
+    mac.update(rel_path.as_bytes());
+    let result = mac.finalize().into_bytes();
+    hex::encode(&result[..16])
+}
+
+/// Delete files from S3 by their relative paths (computes HMAC keys internally).
+#[tauri::command]
+pub async fn sync_delete_files(
+    s3_prefix: String,
+    paths: Vec<String>,
+    encryption_key: Vec<u8>,
+    state: State<'_, S3State>,
+) -> Result<(), String> {
+    let bucket = {
+        let s3 = state.0.lock().map_err(|e| e.to_string())?;
+        let cached = s3.as_ref().ok_or("S3 not configured")?;
+        cached.bucket.clone()
+    };
+    for rel in &paths {
+        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
+        match bucket.delete_object(&key).await {
+            Ok(_) => {}
+            Err(e) => {
+                let err_str = format!("{e}");
+                if err_str.contains("NoSuchKey") || err_str.contains("404") {
+                    // Already gone, ignore
+                } else {
+                    return Err(format!("Delete failed for {rel}: {e}"));
+                }
+            }
+        }
+    }
+    Ok(())
+}
+
 // ─── Commands ────────────────────────────────────────────────────────────
 
 /// Compute SHA-256 hashes for a batch of files in parallel.
@@ -98,7 +149,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
     let path = Path::new(&vault_path).join(".margin/sync-base.enc");
     if !path.exists() {
         return Ok(Manifest {
-            version: 2,
+            version: 3,
             files: vec![],
         });
     }
@@ -106,7 +157,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
         Ok(d) => d,
         Err(_) => {
             return Ok(Manifest {
-                version: 2,
+                version: 3,
                 files: vec![],
             })
         }
@@ -115,12 +166,21 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
         Ok(d) => d,
         Err(_) => {
             return Ok(Manifest {
-                version: 2,
+                version: 3,
                 files: vec![],
             })
         }
     };
-    serde_json::from_slice(&dec).map_err(|e| format!("Invalid manifest JSON: {e}"))
+    let manifest: Manifest =
+        serde_json::from_slice(&dec).map_err(|e| format!("Invalid manifest JSON: {e}"))?;
+    // Discard legacy v2 manifests — they used plaintext S3 keys
+    if manifest.version < 3 {
+        return Ok(Manifest {
+            version: 3,
+            files: vec![],
+        });
+    }
+    Ok(manifest)
 }
 
 /// Encrypt and atomically save the base manifest to disk.
@@ -278,7 +338,7 @@ pub async fn sync_upload_files(
         let data =
             fs::read(&full).map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
         let enc = encrypt(&data, &encryption_key)?;
-        let key = format!("{}files/{}.enc", s3_prefix, rel);
+        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
         bucket
             .put_object(&key, &enc)
             .await
@@ -305,7 +365,7 @@ pub async fn sync_download_files(
     let base = Path::new(&vault_path);
 
     for rel in &paths {
-        let key = format!("{}files/{}.enc", s3_prefix, rel);
+        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
         let response = bucket
             .get_object(&key)
             .await

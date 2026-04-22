@@ -1,7 +1,6 @@
 import {
   s3Configure,
   s3Download,
-  s3Delete,
   type S3Config,
 } from "$lib/s3/bridge";
 import { decryptBlob } from "$lib/crypto/bridge";
@@ -30,6 +29,8 @@ import {
   syncUploadFiles,
   syncDownloadFiles,
   syncUploadManifest,
+  syncDeleteFiles,
+  pathToS3Key,
 } from "./bridge";
 
 // ─── Types ───────────────────────────────────────────────────────────────
@@ -185,7 +186,7 @@ async function doSyncToS3(
     const localFiles = await walkVault(vaultPath);
     checkAbort(signal);
 
-    const localManifest: Manifest = { version: 2, files: [] };
+    const localManifest: Manifest = { version: 3, files: [] };
     const unchangedEntries: ManifestEntry[] = [];
     const pathsToHash: string[] = [];
     const pathsMeta: { path: string; modified: number }[] = [];
@@ -222,14 +223,19 @@ async function doSyncToS3(
     }
 
     // 3. Download remote manifest
-    let remoteManifest: Manifest = { version: 2, files: [] };
+    let remoteManifest: Manifest = { version: 3, files: [] };
     try {
       checkAbort(signal);
       const encManifest = await s3Download(`${s3Prefix}manifest.enc`);
       const decManifest = await decryptBlob(encManifest, encryptionKey);
-      remoteManifest = validateManifest(
+      const parsed = validateManifest(
         JSON.parse(new TextDecoder().decode(decManifest)),
       );
+      // Discard legacy v2 manifests — S3 keys used plaintext paths.
+      // Treating it as empty forces a full re-upload with HMAC keys.
+      if (parsed.version >= 3) {
+        remoteManifest = parsed;
+      }
     } catch (err) {
       if (signal.aborted) throw new Error("Sync cancelled");
       // If base has files but remote fetch fails, abort — otherwise the
@@ -309,7 +315,7 @@ async function doSyncToS3(
         // ── Locally deleted → delete from S3 ─────────────────────
         case "delete-remote": {
           try {
-            await s3Delete(`${s3Prefix}files/${action.path}.enc`);
+            await syncDeleteFiles(s3Prefix, [action.path], encryptionKey);
           } catch {
             /* already gone */
           }
@@ -361,8 +367,9 @@ async function doSyncToS3(
             });
           } else {
             // Local wins (default) → save remote as conflict copy
+            const s3Key = await pathToS3Key(action.path, encryptionKey);
             const encrypted = await s3Download(
-              `${s3Prefix}files/${action.path}.enc`,
+              `${s3Prefix}files/${s3Key}.enc`,
             );
             const decrypted = await decryptBlob(encrypted, encryptionKey);
             const conflictPath = conflictCopyName(action.path);
