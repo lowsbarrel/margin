@@ -232,7 +232,16 @@ async function doSyncToS3(
       );
     } catch (err) {
       if (signal.aborted) throw new Error("Sync cancelled");
-      // First sync — no remote manifest yet
+      // Only treat as "first sync" when the base is also empty — that means
+      // we have never synced before and the remote truly has no manifest.
+      // If the base has files but we failed to fetch the remote manifest
+      // (network error, auth expiry, decryption failure, etc.) we must NOT
+      // proceed with an empty remote manifest because the 3-way diff would
+      // interpret every unchanged local file as "deleted on remote" and
+      // delete it locally.
+      if (baseManifest.files.length > 0) {
+        throw new Error(`Failed to download remote manifest: ${err}`);
+      }
     }
 
     // 4. Build maps & compute 3-way diff — fully in Rust
