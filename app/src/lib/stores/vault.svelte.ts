@@ -47,8 +47,7 @@ export const vault = {
     mnemonic?: string,
     profileName?: string,
   ) {
-    // Normalise to forward slashes so every comparison with paths returned
-    // by Rust (which always use '/') works on Windows too.
+    // Normalise to forward slashes for cross-platform path matching
     const normalised = vaultPath.replaceAll("\\", "/");
     state.isUnlocked = true;
     state.vaultId = keys.vault_id;

@@ -1,12 +1,7 @@
 import { IMAGE_EXTS_ARRAY } from "$lib/utils/mime";
 import { LOCALFILE_URL_PREFIX, stripLocalfilePrefix } from "$lib/editor/image-url";
 
-/**
- * Convert Obsidian-style wiki image embeds ![[filename.ext]] to standard
- * markdown image syntax so that resolveImagePaths can handle them.
- * Only handles image file extensions; non-image embeds are left for the
- * FileEmbed markdown-it plugin.
- */
+/** Convert wiki image embeds ![[file.ext]] to standard markdown syntax. */
 export function resolveWikiEmbeds(
   md: string,
   attachmentFolder: string | null,

@@ -1,10 +1,12 @@
 mod walk;
 mod search;
+mod tags;
 mod watch;
 mod export;
 
 pub use walk::*;
 pub use search::*;
+pub use tags::*;
 pub use watch::*;
 pub use export::*;
 

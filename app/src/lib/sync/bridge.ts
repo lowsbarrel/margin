@@ -1,16 +1,15 @@
 import { invoke } from "@tauri-apps/api/core";
 import type { ManifestEntry, Manifest } from "./s3sync-manifest";
 
-// ─── Types matching Rust sync module ─────────────────────────────────────
+// ── Types ──
 
 export interface SyncAction {
   kind: string;
   path: string;
 }
 
-// ─── SHA-256 hashing ─────────────────────────────────────────────────────
+// ── SHA-256 hashing ──
 
-/** Compute SHA-256 hashes for multiple files in a single native call (parallel). */
 export async function hashFilesBatch(
   vaultPath: string,
   paths: string[],
@@ -18,9 +17,9 @@ export async function hashFilesBatch(
   return invoke<string[]>("hash_files_batch", { vaultPath, paths });
 }
 
-// ─── Manifest I/O ────────────────────────────────────────────────────────
+// ── Manifest I/O ──
 
-/** Load and decrypt the local base manifest. Returns default if missing. */
+/** Returns default manifest if missing. */
 export async function loadManifest(
   vaultPath: string,
   encryptionKey: number[],
@@ -28,7 +27,6 @@ export async function loadManifest(
   return invoke<Manifest>("load_manifest", { vaultPath, encryptionKey });
 }
 
-/** Encrypt and atomically save the base manifest to disk. */
 export async function saveManifest(
   vaultPath: string,
   encryptionKey: number[],
@@ -37,9 +35,8 @@ export async function saveManifest(
   return invoke("save_manifest", { vaultPath, encryptionKey, manifest });
 }
 
-// ─── 3-way diff ──────────────────────────────────────────────────────────
+// ── 3-way diff ──
 
-/** Compute sync actions from base, local, and remote manifest entries. */
 export async function computeSyncActionsNative(
   baseFiles: ManifestEntry[],
   localFiles: ManifestEntry[],
@@ -52,7 +49,7 @@ export async function computeSyncActionsNative(
   });
 }
 
-// ─── Tombstone helpers ───────────────────────────────────────────────────
+// ── Tombstone helpers ──
 
 export async function collectTombstonesNative(
   files: ManifestEntry[],
@@ -74,9 +71,8 @@ export async function pruneTombstonesNative(
   return invoke<ManifestEntry[]>("prune_tombstones", { tombstones, nowSeconds });
 }
 
-// ─── Batch upload / download ─────────────────────────────────────────────
+// ── Batch upload / download ──
 
-/** Read, encrypt, and upload files to S3 in a single native batch. */
 export async function syncUploadFiles(
   vaultPath: string,
   s3Prefix: string,
@@ -91,7 +87,6 @@ export async function syncUploadFiles(
   });
 }
 
-/** Download, decrypt, and write files from S3 in a single native batch. */
 export async function syncDownloadFiles(
   vaultPath: string,
   s3Prefix: string,
@@ -106,7 +101,6 @@ export async function syncDownloadFiles(
   });
 }
 
-/** Encrypt and upload manifest to S3. */
 export async function syncUploadManifest(
   s3Prefix: string,
   encryptionKey: number[],
@@ -119,9 +113,9 @@ export async function syncUploadManifest(
   });
 }
 
-// ─── Delete files from S3 ─────────────────────────────────────────────────
+// ── Delete files from S3 ──
 
-/** Delete files from S3 by relative paths (computes HMAC keys internally). */
+/** Computes HMAC keys internally. */
 export async function syncDeleteFiles(
   s3Prefix: string,
   paths: string[],
@@ -134,9 +128,8 @@ export async function syncDeleteFiles(
   });
 }
 
-// ─── Path → S3 key mapping ───────────────────────────────────────────────
+// ── Path → S3 key mapping ──
 
-/** Compute the HMAC-SHA256 based S3 key for a given vault relative path. */
 export async function pathToS3Key(
   relPath: string,
   encryptionKey: number[],

@@ -45,12 +45,7 @@ pub fn load_themes(app: tauri::AppHandle) -> Result<ThemeData, String> {
 pub fn save_themes(app: tauri::AppHandle, data: ThemeData) -> Result<(), String> {
     let path = themes_path(&app)?;
     let json = serde_json::to_string_pretty(&data).map_err(|e| format!("Serialize failed: {e}"))?;
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, &json).map_err(|e| format!("Write failed: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        format!("Failed to finalise themes write: {e}")
-    })?;
+    crate::fs::atomic_write(&path, json.as_bytes())?;
     Ok(())
 }
 

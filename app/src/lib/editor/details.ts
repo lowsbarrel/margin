@@ -1,8 +1,4 @@
-// Details/Toggle block — collapsible content sections.
-// Adapted from Docmost's Details/DetailsSummary/DetailsContent extensions.
-//
-// Three cooperating nodes: `details` wraps `detailsSummary` + `detailsContent`.
-// The summary is always visible; the content toggles open/closed.
+// Collapsible details/toggle block (details + detailsSummary + detailsContent).
 
 import { Node, mergeAttributes, wrappingInputRule } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
@@ -188,7 +184,6 @@ export const DetailsSummary = Node.create({
         const { $from } = state.selection;
         if ($from.parentOffset !== 0) return false;
 
-        // Check if we're in a detailsSummary inside a details block
         for (let d = $from.depth; d >= 1; d--) {
           if ($from.node(d).type.name === "details") {
             return editor.commands.lift("details");
@@ -243,8 +238,7 @@ export const DetailsContent = Node.create({
         const { $from } = state.selection;
         if (!state.selection.empty) return false;
 
-        // Check if we're at the end of a detailsContent,
-        // in an empty last block — exit the details
+        // At empty last block in detailsContent — exit the details
         for (let d = $from.depth; d >= 1; d--) {
           if ($from.node(d).type.name === "detailsContent") {
             const contentNode = $from.node(d);

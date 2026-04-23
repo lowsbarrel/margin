@@ -79,10 +79,8 @@ export function createEditorExtensions({
             if (!selection.empty) return false;
 
             const { $from } = selection;
-            // Only act at the very start of the node
             if ($from.parentOffset !== 0) return false;
 
-            // Check we're in a taskItem
             let taskItemDepth: number | null = null;
             for (let d = $from.depth; d > 0; d--) {
               if ($from.node(d).type.name === "taskItem") {
@@ -92,7 +90,6 @@ export function createEditorExtensions({
             }
             if (taskItemDepth === null) return false;
 
-            // Check if taskList is nested inside a listItem
             const taskListDepth = taskItemDepth - 1;
             if (taskListDepth < 1) return false;
             const taskListNode = $from.node(taskListDepth);
@@ -207,9 +204,7 @@ export function createEditorExtensions({
       transformPastedText: true,
       transformCopiedText: false,
     }),
-    // Selective clipboard serializer: only convert lists to markdown on copy.
-    // Tables and other content use the default ProseMirror text serializer
-    // (matching Docmost behaviour).
+    // Serialize lists as markdown on copy; tables use default PM serializer
     Extension.create({
       name: "selectiveClipboardMarkdown",
       priority: 100,

@@ -26,13 +26,10 @@
   let searching = $state(false);
   let debounceTimer: ReturnType<typeof setTimeout> | null = null;
 
-  // Tag mode
   let allTags = $state<TagInfo[]>([]);
   let tagResults = $state<{ entry: FsEntry; tag: string }[]>([]);
   let isTagMode = $derived(query.trimStart().startsWith("#"));
 
-  // Unified flattened result list determines keyboard navigation target
-  // In file mode: results[]; in tag mode: tagResults[]
   let resultCount = $derived(isTagMode ? tagResults.length : results.length);
 
   function getIcon(path: string) {
@@ -60,24 +57,20 @@
     return rel.slice(0, lastSlash);
   }
 
-  // Fuzzy match scoring — returns -1 if no match, higher = better
+  // Fuzzy match scoring: -1 = no match, higher = better
   function fuzzyScore(query: string, target: string): number {
     const q = query.toLowerCase();
     const t = target.toLowerCase();
 
-    // Fast reject: every char in query must exist in target
     for (let i = 0; i < q.length; i++) {
       if (t.indexOf(q[i]) === -1) return -1;
     }
 
-    // Exact substring match gets high score
     const substringIdx = t.indexOf(q);
     if (substringIdx !== -1) {
-      // Bonus for matching at start
       return 1000 - substringIdx + (q.length / t.length) * 500;
     }
 
-    // Fuzzy character matching
     let qi = 0;
     let score = 0;
     let lastMatchIdx = -1;
@@ -85,9 +78,7 @@
     for (let ti = 0; ti < t.length && qi < q.length; ti++) {
       if (t[ti] === q[qi]) {
         score += 10;
-        // Consecutive match bonus
         if (lastMatchIdx === ti - 1) score += 15;
-        // Start-of-word bonus
         if (
           ti === 0 ||
           t[ti - 1] === "/" ||
@@ -102,12 +93,8 @@
       }
     }
 
-    // All query chars must match
     if (qi < q.length) return -1;
-
-    // Penalty for longer targets
     score -= (t.length - q.length) * 0.5;
-
     return score;
   }
 
@@ -128,8 +115,6 @@
     searching = true;
     try {
       const raw = await searchFiles(vault.vaultPath, trimmed);
-      // Filter out directories first, then score with fuzzy matching.
-      // Limit scoring to first 200 candidates to avoid O(n) on huge vaults.
       const files = raw.filter((e) => !e.is_dir);
       const candidates = files.length > 200 ? files.slice(0, 200) : files;
       const scored = candidates
@@ -155,16 +140,13 @@
     if (!vault.vaultPath) return;
     searching = true;
     try {
-      // Lazily load tags via shared store
       if (allTags.length === 0) {
         allTags = await tagsStore.load(vault.vaultPath);
       }
-      // Filter matching tags (prefix match)
       const matchingTags = tagQuery
         ? allTags.filter((t) => t.tag.startsWith(tagQuery))
         : allTags;
 
-      // Collect files from matching tags, deduplicate
       const seen = new Set<string>();
       const flat: { entry: FsEntry; tag: string }[] = [];
       for (const tagInfo of matchingTags.slice(0, 10)) {

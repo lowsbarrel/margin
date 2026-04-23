@@ -33,7 +33,7 @@ import {
   pathToS3Key,
 } from "./bridge";
 
-// ─── Types ───────────────────────────────────────────────────────────────
+// ── Types ──
 
 export type ConflictStrategy = "local_wins" | "keep_newer";
 
@@ -47,7 +47,6 @@ let activeSyncAbort: AbortController | null = null;
 /** Resolves when no sync is in flight. Used as a mutex to prevent concurrent syncs. */
 let syncLock: Promise<void> = Promise.resolve();
 
-/** Cancel any in-flight sync operation */
 export function cancelSync(): void {
   activeSyncAbort?.abort();
   activeSyncAbort = null;
@@ -61,9 +60,7 @@ function checkAbort(signal: AbortSignal): void {
   if (signal.aborted) throw new Error("Sync cancelled");
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────
-
-// sha256hex replaced by native hash_files_batch — see bridge.ts
+// ── Helpers ──
 
 interface LocalFile {
   path: string;
@@ -72,7 +69,6 @@ interface LocalFile {
 }
 
 async function walkVault(basePath: string): Promise<LocalFile[]> {
-  // Single IPC call for the whole tree — replaces recursive JS walk
   const all = await walkDirectory(basePath);
   return all
     .filter((e) => !e.is_dir)
@@ -113,13 +109,8 @@ async function ensureParentDir(
   }
 }
 
-// ─── Main sync ───────────────────────────────────────────────────────────
+// ── Main sync ──
 
-// readAndEncrypt replaced by native sync_upload_files — see bridge.ts
-
-// downloadAndDecrypt replaced by native sync_download_files — see bridge.ts
-
-/** Record a file as deleted in tombstones and remove it from mergedFiles. */
 function markTombstone(
   path: string,
   tombstones: Map<string, ManifestEntry>,
@@ -206,7 +197,6 @@ async function doSyncToS3(
       }
     }
 
-    // Batch hash all changed files in Rust (parallel SHA-256)
     const hashes =
       pathsToHash.length > 0
         ? await hashFilesBatch(vaultPath, pathsToHash)
@@ -265,7 +255,6 @@ async function doSyncToS3(
       actionsTotal > 0 ? { total: actionsTotal, done: 0 } : null,
     );
 
-    // Collect tombstones from both sides and merge them — fully in Rust
     const baseTombstones = await collectTombstonesNative(baseManifest.files);
     const remoteTombstones = await collectTombstonesNative(remoteManifest.files);
     const mergedTombstonesList = await mergeTombstonesNative(
@@ -274,7 +263,6 @@ async function doSyncToS3(
     );
     const tombstones = new Map(mergedTombstonesList.map((e) => [e.path, e]));
 
-    // Start with all local files in the merged result
     for (const entry of localManifest.files) mergedFiles.set(entry.path, entry);
 
     for (const action of actions) {
@@ -376,7 +364,6 @@ async function doSyncToS3(
             await ensureParentDir(vaultPath, conflictPath);
             await writeFileBytes(`${vaultPath}/${conflictPath}`, decrypted);
 
-            // Push local to S3
             await syncUploadFiles(
               vaultPath,
               s3Prefix,
@@ -504,7 +491,7 @@ export function clearSyncCredentials(): void {
   syncCredentials = null;
 }
 
-// ─── Auto-sync ───────────────────────────────────────────────────────────
+// ── Auto-sync ──
 
 let autoSyncInterval: ReturnType<typeof setInterval> | null = null;
 

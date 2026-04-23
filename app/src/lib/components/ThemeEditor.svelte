@@ -45,7 +45,6 @@
   function startEdit(t: Theme) {
     isNewTheme = false;
     editingName = t.name;
-    // Merge with defaults so all keys are present
     editingColors = { ...defaults(), ...t.colors };
     editingTheme = t;
   }

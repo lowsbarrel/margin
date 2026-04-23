@@ -3,9 +3,7 @@ import type { Editor } from "@tiptap/core";
 export type SyncStatus = "idle" | "syncing" | "synced" | "error";
 
 export interface SyncProgress {
-  /** Total number of actions to execute */
   total: number;
-  /** Number of actions completed so far */
   done: number;
 }
 
@@ -15,7 +13,6 @@ interface EditorState {
   cursorLine: number;
   cursorCol: number;
   dirty: boolean;
-  /** True when a local change occurred while a sync is in flight. */
   localChangeDuringSync: boolean;
 }
 
@@ -52,7 +49,6 @@ export const editor = {
 
   setSyncStatus(status: SyncStatus) {
     if (status === "synced" && state.localChangeDuringSync) {
-      // A local change happened while syncing — stay 'idle' instead of 'synced'
       state.localChangeDuringSync = false;
       state.syncStatus = "idle";
     } else {
@@ -81,7 +77,6 @@ export const editor = {
       state.localChangeDuringSync = true;
     }
   },
-  /** Mark that the vault has local changes (e.g. canvas edit, new file) without affecting the dirty flag. */
   markLocalChange() {
     if (state.syncStatus === "synced") {
       state.syncStatus = "idle";

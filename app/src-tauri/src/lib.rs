@@ -135,7 +135,7 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Create the main window with on_navigation to block external navigations
+            // Block external navigations
             use tauri::WebviewUrl;
             use tauri::WebviewWindowBuilder;
             let _win = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())

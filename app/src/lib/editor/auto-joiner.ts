@@ -1,9 +1,4 @@
-// Adapted from https://github.com/NiclasDev63/tiptap-extension-auto-joiner - MIT
-// and Docmost's implementation.
-//
-// Automatically joins adjacent nodes of the same type (e.g. two consecutive
-// bulletList nodes) after every transaction. This prevents paste and other
-// editing operations from creating split lists.
+// Auto-joins adjacent same-type nodes (e.g. split lists) after transactions.
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -11,12 +6,7 @@ import { canJoin } from "@tiptap/pm/transform";
 import type { NodeType } from "@tiptap/pm/model";
 import type { Transaction } from "@tiptap/pm/state";
 
-/**
- * Collect changed ranges from a set of transactions, mapping positions
- * forward through later mappings so every position lands in the latest
- * document space. Then find joinable points within those ranges and join
- * them (in reverse order to preserve earlier positions).
- */
+/** Collect changed ranges and join adjacent same-type nodes within them. */
 function autoJoin(
   transactions: readonly Transaction[],
   newTr: Transaction,

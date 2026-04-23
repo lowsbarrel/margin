@@ -1,7 +1,6 @@
 import { buildVisibleTree, buildSubtree, type TreeEntry } from "$lib/fs/bridge";
 
 export type SortOrder = "name" | "date";
-// Re-export for consumers that need the type
 export type { TreeEntry };
 
 export interface SelectedEntry {
@@ -10,16 +9,12 @@ export interface SelectedEntry {
 }
 
 interface FilesState {
-  /** Flat, sorted, depth-annotated list of all currently-visible tree rows.
-   *  Built by Rust in one call — replaces the old per-FolderNode listDirectory pattern. */
+  /** Flat, sorted, depth-annotated visible tree rows. */
   flatTree: TreeEntry[];
-  /** Cached vault root used by reactive rebuilds. */
   vaultRoot: string | null;
   activeFile: string | null;
   selectedFolder: string | null;
-  /** Currently selected entries in the file tree (for clipboard ops & multi-select). */
   selectedEntries: Map<string, SelectedEntry>;
-  /** The last clicked path — anchor for Shift+click range selection. */
   lastSelectedPath: string | null;
   loading: boolean;
   expandedFolders: Set<string>;
@@ -42,7 +37,6 @@ let state = $state<FilesState>({
   sortOrder: "name",
 });
 
-/** Internal: ask Rust to rebuild the flat tree for the current expanded set. */
 async function _rebuild(): Promise<void> {
   if (!state.vaultRoot) return;
   const expanded = [...state.expandedFolders];
@@ -52,11 +46,9 @@ async function _rebuild(): Promise<void> {
     state.sortOrder,
   );
   state.flatTree = flatTree;
-  // Rebuild path→index lookup for O(1) range selection
   _pathIndex = new Map(flatTree.map((r, i) => [r.path, i]));
 }
 
-/** Cached path→index map — rebuilt alongside flatTree. */
 let _pathIndex = new Map<string, number>();
 
 export const files = {
@@ -80,7 +72,6 @@ export const files = {
     state.activeFile = path;
   },
 
-  /** Expand all ancestor folders of a file path so it's visible in the tree. */
   async revealFile(filePath: string, vaultPath: string) {
     const rel = filePath.slice(vaultPath.length + 1);
     const parts = rel.split("/");
@@ -97,13 +88,12 @@ export const files = {
     state.selectedFolder = path;
   },
 
-  // ─── Multi-selection ────────────────────────────────────────────────────
+  // ─── Multi-selection ───
 
   get selectedEntries() {
     return state.selectedEntries;
   },
 
-  /** Convenience: the single selected entry when exactly one is selected. */
   get selectedEntry(): SelectedEntry | null {
     if (state.selectedEntries.size === 1) {
       return state.selectedEntries.values().next().value!;
@@ -117,13 +107,11 @@ export const files = {
     return state.lastSelectedPath;
   },
 
-  /** Plain click — clear selection, select only this entry. */
   selectSingle(path: string, isDir: boolean) {
     state.selectedEntries = new Map([[path, { path, isDir }]]);
     state.lastSelectedPath = path;
   },
 
-  /** Cmd/Ctrl+click — toggle one entry in or out of the selection. */
   selectToggle(path: string, isDir: boolean) {
     const next = new Map(state.selectedEntries);
     if (next.has(path)) {
@@ -135,11 +123,9 @@ export const files = {
     state.lastSelectedPath = path;
   },
 
-  /** Shift+click — range select from lastSelectedPath to this path. */
   selectRange(path: string) {
     const anchor = state.lastSelectedPath;
     if (!anchor) {
-      // No anchor — just select the clicked item
       const row = state.flatTree.find((r) => r.path === path);
       if (row) {
         state.selectedEntries = new Map([[path, { path, isDir: row.is_dir }]]);
@@ -158,15 +144,12 @@ export const files = {
       next.set(flat[i].path, { path: flat[i].path, isDir: flat[i].is_dir });
     }
     state.selectedEntries = next;
-    // Don't update lastSelectedPath — keep the anchor
   },
 
-  /** Check if a path is selected. */
   isSelected(path: string) {
     return state.selectedEntries.has(path);
   },
 
-  /** Get all selected entries as arrays. */
   getSelectedPaths(): string[] {
     return [...state.selectedEntries.keys()];
   },
@@ -180,7 +163,6 @@ export const files = {
     state.lastSelectedPath = null;
   },
 
-  /** Select all visible entries. */
   selectAll() {
     const next = new Map<string, SelectedEntry>();
     for (const row of state.flatTree) {
@@ -189,7 +171,6 @@ export const files = {
     state.selectedEntries = next;
   },
 
-  /** Legacy compat for setSelectedEntry calls. */
   setSelectedEntry(path: string, isDir: boolean) {
     this.selectSingle(path, isDir);
   },
@@ -197,7 +178,6 @@ export const files = {
   async expandFolder(path: string) {
     state.expandedFolders.add(path);
     state.expandedFolders = new Set(state.expandedFolders);
-    // Incremental: only fetch the subtree for the expanded folder
     const idx = state.flatTree.findIndex((r) => r.path === path);
     if (idx !== -1 && state.vaultRoot) {
       const parentDepth = state.flatTree[idx].depth;
@@ -224,7 +204,6 @@ export const files = {
   async collapseFolder(path: string) {
     state.expandedFolders.delete(path);
     state.expandedFolders = new Set(state.expandedFolders);
-    // Incremental: remove children from flat array (no IPC needed)
     const idx = state.flatTree.findIndex((r) => r.path === path);
     if (idx !== -1) {
       const parentDepth = state.flatTree[idx].depth;
@@ -251,7 +230,6 @@ export const files = {
     }
   },
 
-  /** Rebuild the visible tree. Pass vaultPath on first call or vault change. */
   async refresh(vaultPath?: string) {
     if (vaultPath) state.vaultRoot = vaultPath;
     if (!state.vaultRoot) return;

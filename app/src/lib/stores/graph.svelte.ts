@@ -24,7 +24,6 @@ export interface GraphData {
 interface GraphState {
   data: GraphData;
   loading: boolean;
-  /** Maps node id (lowercase) -> absolute file path */
   nodeToPath: Map<string, string>;
 }
 
@@ -34,11 +33,8 @@ let state = $state<GraphState>({
   nodeToPath: new Map(),
 });
 
-// ─── Link cache ──────────────────────────────────────────────────────────────
-// Persisted at .margin/graph-cache.json inside the vault.
-// Stores per-file {mtime, links[]} so only files that changed since the last
-// build need to be read from disk. On a 10k-file vault where 5 files changed,
-// this turns ~10k file reads into ~5 file reads.
+// Per-file {mtime, links[]} cache at .margin/graph-cache.json.
+// Only stale files are re-read from disk.
 
 interface CacheEntry {
   mtime: number;
@@ -63,9 +59,7 @@ async function loadLinkCache(vaultPath: string): Promise<LinkCache> {
     ) {
       return parsed;
     }
-  } catch {
-    // Missing or corrupt — start fresh
-  }
+  } catch { /* ignore */ }
   return { version: CACHE_VERSION, entries: {} };
 }
 
@@ -77,9 +71,7 @@ async function saveLinkCache(
   try {
     const bytes = new TextEncoder().encode(JSON.stringify(cache));
     await writeFileBytes(path, bytes);
-  } catch {
-    // Cache write failure is non-fatal
-  }
+  } catch { /* non-fatal */ }
 }
 
 function fileNameToId(name: string): string {
@@ -104,7 +96,6 @@ export const graph = {
 
     state.loading = true;
     try {
-      // Single IPC call to get all files — replaces recursive JS walk
       const allEntries = await walkDirectory(vaultPath);
       const mdFiles = allEntries.filter(
         (e) => !e.is_dir && e.name.endsWith(".md"),
@@ -115,21 +106,18 @@ export const graph = {
         titleToAbs.set(fileNameToId(f.name).toLowerCase(), f.path);
       }
 
-      // Load the mtime cache
       const cache = await loadLinkCache(vaultPath);
       let cacheUpdated = false;
 
       const nodeSet = new Set<string>();
       const edges: GraphEdge[] = [];
 
-      // Determine which files actually need to be read from disk
       const stale: typeof mdFiles = [];
       for (const f of mdFiles) {
         const sourceId = fileNameToId(f.name);
         nodeSet.add(sourceId);
         const cached = cache.entries[f.path];
         if (cached && cached.mtime === f.modified) {
-          // Use cached links — no disk read needed
           for (const link of cached.links) {
             nodeSet.add(link);
             edges.push({ source: sourceId, target: link });
@@ -139,8 +127,6 @@ export const graph = {
         }
       }
 
-      // Batch-read only stale files — single native Rust call regardless of count.
-      // At 100k files with all stale (first build), this is still 1 IPC call.
       if (stale.length > 0) {
         const stalePaths = stale.map((f) => f.path);
         const freshEntries = await readLinkBatch(stalePaths);
@@ -158,7 +144,6 @@ export const graph = {
         }
       }
 
-      // Evict cache entries for files that no longer exist
       const existingPaths = new Set(mdFiles.map((f) => f.path));
       for (const p of Object.keys(cache.entries)) {
         if (!existingPaths.has(p)) {

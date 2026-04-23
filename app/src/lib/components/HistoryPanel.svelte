@@ -79,7 +79,6 @@
   async function handleRestore(snapshot: Snapshot) {
     if (!vault.vaultPath) return;
     try {
-      // Save a snapshot of the current content before restoring, so the user can undo
       try {
         const currentBytes = await readFileBytes(filePath);
         await saveSnapshot(vault.vaultPath, filePath, currentBytes);
@@ -94,9 +93,7 @@
       );
       const content = new TextDecoder().decode(bytes);
 
-      // Write restored content to the file
-      const encoder = new TextEncoder();
-      await writeFileBytes(filePath, encoder.encode(content));
+      await writeFileBytes(filePath, new TextEncoder().encode(content));
       editorStore.setDirty(false);
 
       onrestore?.(content);
@@ -141,14 +138,13 @@
     const now = new Date();
     const diff = now.getTime() - date.getTime();
 
-    // Today: show time only
     if (diff < 86400000 && date.getDate() === now.getDate()) {
       return date.toLocaleTimeString(undefined, {
         hour: "2-digit",
         minute: "2-digit",
       });
     }
-    // Yesterday
+
     const yesterday = new Date(now);
     yesterday.setDate(yesterday.getDate() - 1);
     if (
@@ -157,7 +153,7 @@
     ) {
       return `${m.history_yesterday()} ${date.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" })}`;
     }
-    // This year
+
     if (date.getFullYear() === now.getFullYear()) {
       return date.toLocaleDateString(undefined, {
         month: "short",
@@ -166,7 +162,7 @@
         minute: "2-digit",
       });
     }
-    // Older
+
     return date.toLocaleDateString(undefined, {
       year: "numeric",
       month: "short",
@@ -182,7 +178,6 @@
     return `${(bytes / 1048576).toFixed(1)} MB`;
   }
 
-  // Group snapshots by day
   function groupByDay(
     items: Snapshot[],
   ): { label: string; snapshots: Snapshot[] }[] {

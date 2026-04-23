@@ -1,7 +1,6 @@
 import { vault } from "$lib/stores/vault.svelte";
 
 interface FavouritesState {
-  /** Stored as relative paths (e.g. "notes/foo.md") */
   paths: Set<string>;
 }
 
@@ -20,7 +19,6 @@ function persist() {
   localStorage.setItem(key, JSON.stringify([...state.paths]));
 }
 
-/** Convert an absolute path to a vault-relative path */
 function toRelative(absPath: string): string {
   const vp = vault.vaultPath;
   if (vp && absPath.startsWith(vp + "/")) {
@@ -29,7 +27,6 @@ function toRelative(absPath: string): string {
   return absPath;
 }
 
-/** Convert a vault-relative path to an absolute path */
 function toAbsolute(relPath: string): string {
   const vp = vault.vaultPath;
   if (vp && !relPath.startsWith("/")) {
@@ -39,7 +36,7 @@ function toAbsolute(relPath: string): string {
 }
 
 export const favourites = {
-  /** Returns absolute paths for display/use by components */
+  /** Absolute paths for display/use by components */
   get paths(): Set<string> {
     return new Set([...state.paths].map(toAbsolute));
   },
@@ -71,7 +68,6 @@ export const favourites = {
     persist();
   },
 
-  /** Update path when a file is renamed */
   renamePath(oldPath: string, newPath: string) {
     const oldRel = toRelative(oldPath);
     if (!state.paths.has(oldRel)) return;
@@ -81,7 +77,6 @@ export const favourites = {
     persist();
   },
 
-  /** Remove path when a file is deleted */
   removePath(path: string) {
     const rel = toRelative(path);
     if (!state.paths.has(rel)) return;
@@ -90,7 +85,6 @@ export const favourites = {
     persist();
   },
 
-  /** Load favourites from localStorage for the current vault */
   load() {
     const key = storageKey();
     if (!key || typeof localStorage === "undefined") return;
@@ -100,11 +94,9 @@ export const favourites = {
         const arr = JSON.parse(raw);
         if (Array.isArray(arr)) {
           const items = arr.filter((p): p is string => typeof p === "string");
-          // Migrate: if any entry looks like an absolute path, convert it
           const vp = vault.vaultPath;
           state.paths = new Set(
             items.map((p) => {
-              // Normalise legacy Windows backslash paths
               const norm = p.replaceAll("\\", "/");
               return vp && norm.startsWith(vp + "/") ? norm.slice(vp.length + 1) : norm;
             }),
@@ -112,13 +104,10 @@ export const favourites = {
           return;
         }
       }
-    } catch {
-      // ignore corrupt data
-    }
+    } catch { /* ignore */ }
     state.paths = new Set();
   },
 
-  /** Clear state on vault lock */
   clear() {
     state.paths = new Set();
   },

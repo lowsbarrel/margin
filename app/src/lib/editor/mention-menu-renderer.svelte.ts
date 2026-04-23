@@ -6,7 +6,7 @@ import { vault } from "$lib/stores/vault.svelte";
 import { walkDirectory, type FsEntry } from "$lib/fs/bridge";
 import { fuzzyFilterFiles, type FuzzyEntry } from "./text-transform-bridge";
 
-/** Cache of all markdown files for fast filtering. Refreshed at most every 5 s. */
+/** Cached markdown file list (5s TTL). */
 let cachedFiles: FuzzyEntry[] = [];
 let cacheTimestamp = 0;
 const CACHE_TTL = 5000; // 5 seconds

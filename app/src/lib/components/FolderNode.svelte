@@ -39,7 +39,6 @@
   let { entry, activeFile, onfileselect, oncontextmenuentry, onrename }: Props =
     $props();
   let children = $state<FsEntry[]>([]);
-  // refreshVersion removed — FolderNode is superseded by the flat-tree FileTree.
   let lastRefresh = $state(0);
 
   let sortedChildren = $derived.by(() => {
@@ -133,7 +132,6 @@
         if (e.key === "Escape") files.cancelRename();
       }}
       onfocus={(e) => {
-        /* select text without extension */
         e.currentTarget.select();
       }}
     />
@@ -216,7 +214,6 @@
                 if (e.key === "Escape") files.cancelRename();
               }}
               onfocus={(e) => {
-                /* select name without .md extension */
                 const val = e.currentTarget.value;
                 const dot = val.lastIndexOf(".");
                 e.currentTarget.setSelectionRange(

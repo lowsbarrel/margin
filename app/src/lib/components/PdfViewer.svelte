@@ -3,7 +3,6 @@
   import * as pdfjsLib from "pdfjs-dist";
 
   interface Props {
-    /** Raw PDF bytes */
     data: Uint8Array;
   }
 
@@ -43,7 +42,6 @@
 
   function cleanupCanvases() {
     for (const canvas of canvases) {
-      // Release GPU memory by zeroing dimensions before removing
       canvas.width = 0;
       canvas.height = 0;
     }
@@ -56,7 +54,6 @@
     containerEl.innerHTML = "";
     renderedPages.clear();
 
-    // Create placeholders with correct dimensions
     for (let i = 1; i <= pdf.numPages; i++) {
       const page = await pdf.getPage(i);
       const viewport = page.getViewport({ scale });
@@ -69,7 +66,6 @@
       containerEl.appendChild(wrapper);
     }
 
-    // Observe visibility
     observer = new IntersectionObserver(handleIntersection, {
       root: containerEl.closest(".pdf-viewer"),
       rootMargin: "200px",

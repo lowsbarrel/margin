@@ -1,9 +1,4 @@
-use aes_gcm_siv::{
-    aead::{Aead, KeyInit, OsRng},
-    Aes256GcmSiv, Nonce,
-};
 use hmac::{Hmac, Mac};
-use rand::RngCore;
 use rayon::prelude::*;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
@@ -36,42 +31,6 @@ pub struct Manifest {
 pub struct SyncAction {
     pub kind: String,
     pub path: String,
-}
-
-// ─── Crypto helpers ──────────────────────────────────────────────────────
-
-fn encrypt(plaintext: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
-    if key.len() != 32 {
-        return Err("Key must be 32 bytes".into());
-    }
-    let cipher = Aes256GcmSiv::new_from_slice(key).map_err(|e| format!("Invalid key: {e}"))?;
-
-    let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
-    let nonce = Nonce::from_slice(&nonce_bytes);
-
-    let ciphertext = cipher
-        .encrypt(nonce, plaintext)
-        .map_err(|e| format!("Encryption failed: {e}"))?;
-
-    let mut result = nonce_bytes.to_vec();
-    result.extend(ciphertext);
-    Ok(result)
-}
-
-fn decrypt(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
-    if key.len() != 32 {
-        return Err("Key must be 32 bytes".into());
-    }
-    if ciphertext.len() < 12 {
-        return Err("Ciphertext too short".into());
-    }
-    let cipher = Aes256GcmSiv::new_from_slice(key).map_err(|e| format!("Invalid key: {e}"))?;
-
-    let nonce = Nonce::from_slice(&ciphertext[..12]);
-    cipher
-        .decrypt(nonce, &ciphertext[12..])
-        .map_err(|e| format!("Decryption failed: {e}"))
 }
 
 // ─── Path → S3 key mapping (HMAC-SHA256) ──────────────────────────────────
@@ -162,7 +121,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
             })
         }
     };
-    let dec = match decrypt(&enc, &encryption_key) {
+    let dec = match crate::crypto::decrypt_blob(enc, encryption_key) {
         Ok(d) => d,
         Err(_) => {
             return Ok(Manifest {
@@ -191,7 +150,7 @@ pub fn save_manifest(
     manifest: Manifest,
 ) -> Result<(), String> {
     let json = serde_json::to_vec(&manifest).map_err(|e| format!("JSON serialize failed: {e}"))?;
-    let enc = encrypt(&json, &encryption_key)?;
+    let enc = crate::crypto::encrypt_blob(json, encryption_key)?;
     let dir = Path::new(&vault_path).join(".margin");
     fs::create_dir_all(&dir).map_err(|e| format!("Failed to create .margin dir: {e}"))?;
     atomic_write(&dir.join("sync-base.enc"), &enc)
@@ -231,25 +190,22 @@ pub fn compute_sync_actions(
         let local_h = effective_hash(&local, path);
         let remote_h = effective_hash(&remote, path);
 
-        // Both sides agree → nothing to do
         if local_h == remote_h {
             continue;
         }
 
         let kind = if base_h.is_none() {
-            // File didn't exist at last sync
             match (local_h, remote_h) {
                 (Some(_), None) => "upload",
                 (None, Some(_)) => "download",
-                _ => "conflict", // Both added with different content
+                _ => "conflict",
             }
         } else {
-            // File existed at last sync
             let local_changed = local_h != base_h;
             let remote_changed = remote_h != base_h;
 
             match (local_h, remote_h) {
-                (None, None) => continue, // both deleted
+                (None, None) => continue,
                 (None, _) => {
                     if remote_changed {
                         "conflict-delete-local"
@@ -270,7 +226,7 @@ pub fn compute_sync_actions(
                     } else if !local_changed && remote_changed {
                         "download"
                     } else {
-                        "conflict" // Both changed differently
+                        "conflict"
                     }
                 }
             }
@@ -337,7 +293,7 @@ pub async fn sync_upload_files(
         let full = base.join(rel);
         let data =
             fs::read(&full).map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
-        let enc = encrypt(&data, &encryption_key)?;
+        let enc = crate::crypto::encrypt_blob(data, encryption_key.clone())?;
         let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
         bucket
             .put_object(&key, &enc)
@@ -370,7 +326,7 @@ pub async fn sync_download_files(
             .get_object(&key)
             .await
             .map_err(|e| format!("Download failed for {rel}: {e}"))?;
-        let dec = decrypt(response.bytes(), &encryption_key)?;
+        let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key.clone())?;
 
         let dest = base.join(rel);
         if let Some(parent) = dest.parent() {
@@ -399,7 +355,7 @@ pub async fn sync_upload_manifest(
     };
 
     let json = serde_json::to_vec(&manifest).map_err(|e| format!("JSON serialize failed: {e}"))?;
-    let enc = encrypt(&json, &encryption_key)?;
+    let enc = crate::crypto::encrypt_blob(json, encryption_key)?;
     let key = format!("{}manifest.enc", s3_prefix);
     bucket
         .put_object(&key, &enc)

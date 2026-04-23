@@ -28,7 +28,6 @@ async function rawWriteFileBytes(
   });
 }
 
-// Initialise per-path write serializer
 initWriteQueue(rawWriteFileBytes);
 
 /**
@@ -55,11 +54,7 @@ export async function listDirectory(path: string): Promise<FsEntry[]> {
   return invoke<FsEntry[]>("list_directory", { path });
 }
 
-/**
- * Recursively walk an entire directory tree in a single IPC call.
- * Much faster than calling listDirectory() per subdirectory from JS.
- * Hidden entries (starting with `.`) are excluded unless includeHidden is true.
- */
+/** Walk entire directory tree in one IPC call. Hidden entries excluded unless includeHidden. */
 export async function walkDirectory(
   root: string,
   includeHidden = false,
@@ -72,11 +67,7 @@ export interface LinkEntry {
   links: string[];
 }
 
-/**
- * Read multiple Markdown files and extract [[wiki-links]] from all of them in a
- * single native Rust call. Replaces the JS batch-read loop — at 100k files this
- * is the difference between 3,000+ IPC round-trips and 1.
- */
+/** Extract [[wiki-links]] from multiple Markdown files in a single native call. */
 export async function readLinkBatch(paths: string[]): Promise<LinkEntry[]> {
   return invoke<LinkEntry[]>("read_link_batch", { paths });
 }
@@ -90,12 +81,7 @@ export interface TreeEntry {
   depth: number;
 }
 
-/**
- * Build a flat sorted list of every currently-visible tree row in one native
- * Rust call. `expanded` is the set of directory paths that are open.
- * `sortBy` is `"name"` or `"date"`. This replaces the pattern of one
- * `listDirectory` call per expanded folder.
- */
+/** Build a flat sorted list of visible tree rows in one native call. */
 export async function buildVisibleTree(
   root: string,
   expanded: string[],
@@ -104,10 +90,7 @@ export async function buildVisibleTree(
   return invoke<TreeEntry[]>("build_visible_tree", { root, expanded, sortBy });
 }
 
-/**
- * Build the subtree for a single folder at a given depth offset.
- * Used for incremental expand — avoids rebuilding the entire tree.
- */
+/** Build subtree for a single folder — used for incremental expand. */
 export async function buildSubtree(
   folder: string,
   depthOffset: number,
@@ -173,11 +156,7 @@ export async function onVaultFsChanged(
   });
 }
 
-/**
- * Check whether the vault has local changes compared to the last-synced
- * base manifest. Runs entirely in Rust — O(n) mtime comparison, no hashing,
- * no IPC per-file overhead.
- */
+/** O(n) mtime comparison — no hashing, no per-file IPC. */
 export async function hasUnsyncedChanges(
   vaultPath: string,
   encryptionKey: number[],
@@ -251,7 +230,7 @@ export async function exportVaultZip(
   return invoke("export_vault_zip", { vaultPath, destPath });
 }
 
-// ─── Text processing (Rust-accelerated) ──────────────────────────────────────
+// ── Text processing (Rust-accelerated) ──
 
 export interface TextMatch {
   from: number;
@@ -259,14 +238,9 @@ export interface TextMatch {
 }
 
 /**
- * Fast substring search on flattened ProseMirror document text.
- * The actual string matching runs in Rust via memchr.
- *
- * @param text       Concatenated text content of all text nodes.
- * @param pmOffsets  Parallel array mapping each char index to its PM position.
- * @param gaps       Sorted char indices where a block boundary exists.
- * @param needle     Search term.
- * @param caseSensitive Whether to match case.
+ * Fast substring search on flattened ProseMirror text via Rust memchr.
+ * @param pmOffsets Parallel array mapping each char index to its PM position.
+ * @param gaps Sorted char indices where a block boundary exists.
  */
 export async function searchInText(
   text: string,
@@ -295,10 +269,7 @@ export interface WikiLinkMatch {
   title: string;
 }
 
-/**
- * Extract [[wiki-links]] from a batch of ProseMirror text nodes in a single
- * Rust call. Returns (from, to, title) triples in PM position space.
- */
+/** Extract [[wiki-links]] from ProseMirror text nodes in a single Rust call. */
 export async function extractWikiLinks(
   nodes: TextNode[],
 ): Promise<WikiLinkMatch[]> {

@@ -7,7 +7,6 @@ import {
 
 type BaseTheme = "dark" | "light";
 
-/** All CSS variable keys that a custom theme can override */
 export const THEME_COLOR_KEYS = [
   "bg-primary",
   "bg-secondary",
@@ -30,7 +29,6 @@ export const THEME_COLOR_KEYS = [
 
 export type ThemeColorKey = (typeof THEME_COLOR_KEYS)[number];
 
-/** Friendly labels for the color picker UI */
 export const THEME_COLOR_LABELS: Record<ThemeColorKey, string> = {
   "bg-primary": "Background",
   "bg-secondary": "Surface",
@@ -51,7 +49,6 @@ export const THEME_COLOR_LABELS: Record<ThemeColorKey, string> = {
   "border-subtle": "Border Subtle",
 };
 
-/** Default dark-theme colors (mirrors :root in app.css) */
 export const DARK_DEFAULTS: Record<ThemeColorKey, string> = {
   "bg-primary": "#0a0a0a",
   "bg-secondary": "#111111",
@@ -72,7 +69,6 @@ export const DARK_DEFAULTS: Record<ThemeColorKey, string> = {
   "border-subtle": "#1a1a1a",
 };
 
-/** Default light-theme colors (mirrors [data-theme='light'] in app.css) */
 export const LIGHT_DEFAULTS: Record<ThemeColorKey, string> = {
   "bg-primary": "#fafafa",
   "bg-secondary": "#f5f5f5",
@@ -116,11 +112,9 @@ function applyBaseTheme(t: BaseTheme) {
 function applyCustomColors(colors: Record<string, string>) {
   if (typeof document === "undefined") return;
   const root = document.documentElement;
-  // Clear any previously applied custom vars
   for (const key of THEME_COLOR_KEYS) {
     root.style.removeProperty(`--${key}`);
   }
-  // Apply custom overrides
   for (const [key, value] of Object.entries(colors)) {
     if (value) root.style.setProperty(`--${key}`, value);
   }
@@ -134,18 +128,15 @@ function clearCustomColors() {
   }
 }
 
-// Apply base theme on load
 $effect.root(() => {
   applyBaseTheme(baseTheme);
 
-  // Load custom themes from Rust backend on startup
   loadThemes()
     .then((data) => {
       customThemes = data.themes;
       if (data.active_theme) {
         activeThemeName = data.active_theme;
       }
-      // If there's an active custom theme, apply it
       const active = customThemes.find((t) => t.name === activeThemeName);
       if (active) {
         applyCustomColors(active.colors);
@@ -162,9 +153,7 @@ async function persistThemes() {
     themes: customThemes,
     active_theme: activeThemeName,
   };
-  // Save to app files (Rust backend)
   await saveThemes(data);
-  // Also cache in localStorage as backup
   if (typeof localStorage !== "undefined") {
     localStorage.setItem("margin-themes-backup", JSON.stringify(data));
     localStorage.setItem("margin-active-theme", activeThemeName ?? "");
@@ -199,7 +188,6 @@ export const theme = {
     if (typeof localStorage !== "undefined") {
       localStorage.setItem("margin-theme", baseTheme);
     }
-    // Re-apply active custom theme on top
     const active = customThemes.find((t) => t.name === activeThemeName);
     if (active) {
       applyCustomColors(active.colors);
@@ -207,7 +195,6 @@ export const theme = {
   },
 
   async addTheme(t: CustomTheme) {
-    // Replace if name already exists
     const idx = customThemes.findIndex((x) => x.name === t.name);
     if (idx >= 0) {
       customThemes[idx] = t;
@@ -241,12 +228,10 @@ export const theme = {
     await persistThemes();
   },
 
-  /** Live-preview colors without persisting */
   previewColors(colors: Record<string, string>) {
     applyCustomColors(colors);
   },
 
-  /** Cancel preview, restore persisted theme */
   cancelPreview() {
     const active = customThemes.find((t) => t.name === activeThemeName);
     if (active) {

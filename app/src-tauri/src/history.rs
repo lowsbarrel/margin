@@ -65,17 +65,9 @@ pub fn save_snapshot(
 
     let filename = format!("{timestamp}.{ext}");
     let snapshot_path = format!("{dir}/{filename}");
-    let snapshot_tmp = format!("{dir}/.{filename}.tmp");
 
-    // Write to a temp file first; rename atomically into place so a crash
-    // mid-write doesn't leave a partial (unreadable) snapshot.
-    fs::write(&snapshot_tmp, &content).map_err(|e| format!("Failed to write snapshot: {e}"))?;
-    fs::rename(&snapshot_tmp, &snapshot_path).map_err(|e| {
-        let _ = fs::remove_file(&snapshot_tmp);
-        format!("Failed to finalise snapshot: {e}")
-    })?;
+    crate::fs::atomic_write(Path::new(&snapshot_path), &content)?;
 
-    // Prune oldest snapshots if over the limit
     prune_old_snapshots(&dir, MAX_SNAPSHOTS_PER_FILE);
 
     Ok(filename)
@@ -106,7 +98,6 @@ fn prune_old_snapshots(dir: &str, max_count: usize) {
         return;
     }
 
-    // Sort oldest first
     files.sort_by_key(|(ts, _)| *ts);
     let to_remove = files.len() - max_count;
     for (_, path) in files.into_iter().take(to_remove) {
@@ -142,7 +133,6 @@ pub fn list_snapshots(vault_path: &str, file_path: &str) -> Result<Vec<Snapshot>
         })
         .collect();
 
-    // Newest first
     snapshots.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
 
     Ok(snapshots)
@@ -154,7 +144,6 @@ fn safe_snapshot_path(
     file_path: &str,
     snapshot_filename: &str,
 ) -> Result<String, String> {
-    // Basic character validation
     if snapshot_filename.contains('/')
         || snapshot_filename.contains('\\')
         || snapshot_filename.contains("..")
@@ -282,10 +271,9 @@ pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Resul
 
     let old_p = Path::new(&old_history);
     if !old_p.exists() {
-        return Ok(()); // No history to move
+        return Ok(());
     }
 
-    // Ensure parent of destination exists
     let new_p = Path::new(&new_history);
     if let Some(parent) = new_p.parent() {
         fs::create_dir_all(parent)

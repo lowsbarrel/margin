@@ -30,13 +30,7 @@ pub fn save_settings(
     if let Some(parent) = settings_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Dir creation failed: {e}"))?;
     }
-    // Atomic write: a crash mid-write loses settings but doesn't corrupt them.
-    let tmp = settings_path.with_extension("tmp");
-    fs::write(&tmp, &encrypted).map_err(|e| format!("Write failed: {e}"))?;
-    fs::rename(&tmp, &settings_path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        format!("Failed to finalise settings write: {e}")
-    })?;
+    crate::fs::atomic_write(&settings_path, &encrypted)?;
 
     Ok(())
 }
@@ -155,12 +149,7 @@ pub fn save_workspace_state(
     if let Some(parent) = ws_path.parent() {
         fs::create_dir_all(parent).map_err(|e| format!("Dir creation failed: {e}"))?;
     }
-    let tmp = ws_path.with_extension("tmp");
-    fs::write(&tmp, &encrypted).map_err(|e| format!("Write failed: {e}"))?;
-    fs::rename(&tmp, &ws_path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        format!("Failed to finalise workspace state write: {e}")
-    })?;
+    crate::fs::atomic_write(&ws_path, &encrypted)?;
 
     Ok(())
 }

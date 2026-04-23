@@ -1,10 +1,7 @@
 import { drag } from "$lib/stores/drag.svelte";
 import type { DragItem } from "$lib/stores/drag.svelte";
 
-/**
- * Start a pointer-based drag operation after a 4px movement threshold.
- * Returns a cleanup function (not usually needed — listeners auto-remove on mouseup).
- */
+/** Start a pointer-based drag after a 4px movement threshold. */
 export function startPointerDrag(
   e: MouseEvent,
   item: DragItem,

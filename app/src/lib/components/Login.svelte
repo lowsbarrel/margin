@@ -37,16 +37,13 @@
   let copied = $state(false);
   let autoLogging = $state(false);
 
-  // Multi-vault state
   let profiles = $state<VaultProfile[]>([]);
   let showNewVault = $state(false);
 
   onMount(async () => {
-    // Load all saved vault profiles
     const data = await vault.getVaultProfiles();
     profiles = data.profiles;
 
-    // Auto-login with last used vault if available
     if (data.last_used) {
       const lastProfile = data.profiles.find(
         (p) => p.vault_path === data.last_used,
@@ -57,7 +54,6 @@
       }
     }
 
-    // If no profiles, show the new vault form directly
     if (profiles.length === 0) {
       showNewVault = true;
     }
@@ -114,11 +110,7 @@
     }
   }
 
-  /**
-   * On first open: write vault_id to .margin/vault.id so future logins
-   * can verify that the mnemonic matches this specific vault.
-   * On subsequent opens: compare and throw if mismatch.
-   */
+  /** Write vault_id to .margin/vault.id on first open; verify on subsequent. */
   async function verifyOrInitVaultId(
     vaultPath: string,
     vaultId: string,
@@ -152,9 +144,7 @@
   async function pickDirectory() {
     const selected = await open({ directory: true, multiple: false });
     if (selected) {
-      // Normalise to forward slashes so path handling is consistent on Windows
       vaultPath = (selected as string).replaceAll("\\", "/");
-      // Auto-fill vault name from folder name if empty
       if (!vaultName.trim()) {
         const parts = vaultPath.split("/");
         vaultName = parts[parts.length - 1] || "";

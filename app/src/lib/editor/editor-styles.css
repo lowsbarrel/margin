@@ -1,0 +1,1160 @@
+/* ═══════════════════════════════════════════════════
+   Core — ported from margin core.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .md-editor {
+  overflow-y: visible;
+  padding: 12px 2.5rem 20vh;
+  max-width: 750px;
+  margin: 0 auto;
+  font-family: var(--font-sans);
+  font-size: 15px;
+  line-height: 1.6;
+  font-weight: 400;
+  color: var(--text-primary);
+  outline: none;
+  cursor: text;
+  user-select: text;
+  -webkit-user-select: text;
+  caret-color: var(--text-primary);
+}
+
+.editor-wrap .md-editor > * + * {
+  margin-top: 0.4em;
+}
+
+.editor-wrap .md-editor > *:first-child {
+  margin-top: 0;
+}
+
+/* ── Paragraphs ────────────────────────────────── */
+.editor-wrap p {
+  margin-top: 0.25em;
+  margin-bottom: 0.25em;
+}
+
+/* ── Headings ──────────────────────────────────── */
+.editor-wrap h1,
+.editor-wrap h2,
+.editor-wrap h3,
+.editor-wrap h4,
+.editor-wrap h5,
+.editor-wrap h6 {
+  letter-spacing: -0.015em;
+  line-height: 1.3;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.editor-wrap h1 {
+  font-size: 1.625em;
+  margin-top: 1.5em;
+}
+
+.editor-wrap h2 {
+  font-size: 1.35em;
+  margin-top: 1.25em;
+}
+
+.editor-wrap h3 {
+  font-size: 1.15em;
+  margin-top: 1em;
+}
+
+.editor-wrap h4 {
+  font-size: 1.05em;
+  margin-top: 0.8em;
+}
+
+.editor-wrap h5 {
+  font-size: 1em;
+  margin-top: 0.6em;
+  color: var(--text-secondary);
+}
+
+.editor-wrap h6 {
+  font-size: 1em;
+  margin-top: 0.6em;
+  color: var(--text-muted);
+}
+
+/* ── Links ─────────────────────────────────────── */
+.editor-wrap a {
+  color: var(--text-primary);
+  border-bottom: 0.07em solid var(--border);
+  font-weight: 500;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+/* ── Strong / Emphasis ─────────────────────────── */
+.editor-wrap strong {
+  font-weight: 600;
+}
+
+.editor-wrap em {
+  font-style: italic;
+}
+
+.editor-wrap s {
+  text-decoration: line-through;
+  opacity: 0.5;
+}
+
+/* ── Blockquotes ───────────────────────────────── */
+.editor-wrap blockquote {
+  padding-left: 0.8em;
+  border-left: 3px solid var(--border);
+  margin: 0.15em 0;
+}
+
+/* ── Horizontal Rule ───────────────────────────── */
+.editor-wrap hr {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1.25em 0;
+  cursor: pointer;
+}
+
+.editor-wrap hr.ProseMirror-selectednode {
+  border-top: 1px solid #68cef8;
+}
+
+/* ── Selected Node ─────────────────────────────── */
+.editor-wrap .ProseMirror-selectednode {
+  outline: 2px solid #70cff8;
+}
+
+/* ── Block Drag Handle ─────────────────────────── */
+.editor-wrap .block-drag-handle {
+  position: absolute;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 24px;
+  border-radius: 4px;
+  cursor: grab;
+  color: var(--text-muted);
+  opacity: 0.35;
+  transition: opacity 0.15s ease, background 0.15s ease;
+  user-select: none;
+  -webkit-user-select: none;
+  z-index: 10;
+}
+
+.editor-wrap .block-drag-handle:hover {
+  opacity: 0.8;
+  background: var(--bg-secondary);
+}
+
+.editor-wrap .block-drag-handle:active {
+  cursor: grabbing;
+  opacity: 1;
+}
+
+@media print {
+  .editor-wrap .block-drag-handle {
+    display: none !important;
+  }
+}
+
+/* ── Selection ─────────────────────────────────── */
+.editor-wrap ::selection {
+  background: color-mix(in srgb, var(--accent-link) 25%, transparent);
+}
+
+/* ── Resize Cursor ─────────────────────────────── */
+.editor-wrap .resize-cursor {
+  cursor: col-resize;
+}
+
+/* ═══════════════════════════════════════════════════
+   Lists — ported from margin ordered-list.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap ul,
+.editor-wrap ol {
+  padding: 0 0 0 1.5em;
+  margin-top: 0.15em;
+  margin-bottom: 0.15em;
+}
+
+.editor-wrap ul p,
+.editor-wrap ol p {
+  margin-top: 0;
+  margin-bottom: 0;
+}
+
+.editor-wrap li {
+  margin: 0;
+}
+
+.editor-wrap ol {
+  list-style-position: outside;
+}
+
+/* Nested ordered list type cycling */
+.editor-wrap ol ol,
+.editor-wrap ol ul,
+.editor-wrap ul ol {
+  margin-top: 0.1rem;
+  margin-bottom: 0.1rem;
+}
+
+.editor-wrap ol {
+  list-style-type: decimal;
+}
+.editor-wrap ol ol {
+  list-style-type: lower-alpha;
+}
+.editor-wrap ol ol ol {
+  list-style-type: lower-roman;
+}
+.editor-wrap ol ol ol ol {
+  list-style-type: decimal;
+}
+
+/* ═══════════════════════════════════════════════════
+   Task Lists
+   ═══════════════════════════════════════════════════ */
+.editor-wrap ul[data-type="taskList"] {
+  list-style: none;
+  padding: 0;
+  margin: 0.15em 0;
+}
+
+.editor-wrap ul[data-type="taskList"] p {
+  margin: 0;
+}
+
+.editor-wrap ul[data-type="taskList"] li {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 1px 0;
+}
+
+.editor-wrap ul[data-type="taskList"] li > label {
+  flex: 0 0 auto;
+  padding-top: 4px;
+  user-select: none;
+}
+
+.editor-wrap ul[data-type="taskList"] li > div {
+  flex: 1 1 auto;
+}
+
+.editor-wrap
+  ul[data-type="taskList"] li > label input[type="checkbox"] {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 15px;
+  height: 15px;
+  border: 1.5px solid var(--text-muted);
+  border-radius: 3px;
+  cursor: pointer;
+  margin: 0;
+  background: transparent;
+  transition: all 0.12s ease;
+  position: relative;
+}
+
+.editor-wrap
+  ul[data-type="taskList"] li > label input[type="checkbox"]:hover {
+  border-color: var(--text-secondary);
+}
+
+.editor-wrap
+  ul[data-type="taskList"] li > label input[type="checkbox"]:checked {
+  background: var(--accent-link);
+  border-color: var(--accent-link);
+}
+
+.editor-wrap
+  ul[data-type="taskList"] li > label input[type="checkbox"]:checked::after {
+  content: "";
+  position: absolute;
+  left: 3px;
+  top: 0px;
+  width: 4px;
+  height: 8px;
+  border: solid #fff;
+  border-width: 0 1.5px 1.5px 0;
+  transform: rotate(45deg);
+}
+
+.editor-wrap
+  ul[data-type="taskList"] li[data-checked="true"] > div p {
+  text-decoration: line-through;
+  opacity: 0.45;
+  color: var(--text-muted);
+}
+
+/* Nested lists inside tasks */
+.editor-wrap ul[data-type="taskList"] li ul li,
+.editor-wrap ul[data-type="taskList"] li ol li {
+  display: list-item;
+}
+
+.editor-wrap ul[data-type="taskList"] ul[data-type="taskList"] > li {
+  display: flex;
+}
+
+/* ═══════════════════════════════════════════════════
+   Inline Code — ported from margin code.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap :not(pre) > code {
+  font-family: var(--font-mono);
+  line-height: 1.6;
+  padding: 2px 4px;
+  border-radius: 4px;
+  margin: 0;
+  background: var(--bg-tertiary);
+  color: #c678dd;
+  font-size: 0.9em;
+}
+
+/* ═══════════════════════════════════════════════════
+   Code Blocks — ported from margin code.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap pre {
+  padding: 12px 16px;
+  margin: 4px 0;
+  font-family: var(--font-mono);
+  border-radius: 6px;
+  tab-size: 4;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  overflow-x: auto;
+}
+
+.editor-wrap pre code {
+  color: inherit;
+  padding: 0;
+  background: none;
+  font-size: 0.9em;
+  line-height: 1.6;
+}
+
+/* ── Syntax Highlighting ── */
+.editor-wrap .hljs-comment,
+.editor-wrap .hljs-quote {
+  color: var(--text-muted);
+}
+
+.editor-wrap .hljs-variable,
+.editor-wrap .hljs-template-variable,
+.editor-wrap .hljs-attribute,
+.editor-wrap .hljs-tag,
+.editor-wrap .hljs-name,
+.editor-wrap .hljs-regexp,
+.editor-wrap .hljs-link,
+.editor-wrap .hljs-selector-id,
+.editor-wrap .hljs-selector-class {
+  color: #e06c75;
+}
+
+.editor-wrap .hljs-number,
+.editor-wrap .hljs-meta,
+.editor-wrap .hljs-built_in,
+.editor-wrap .hljs-builtin-name,
+.editor-wrap .hljs-literal,
+.editor-wrap .hljs-type,
+.editor-wrap .hljs-params {
+  color: #56b6c2;
+}
+
+.editor-wrap .hljs-string,
+.editor-wrap .hljs-symbol,
+.editor-wrap .hljs-bullet {
+  color: #98c379;
+}
+
+.editor-wrap .hljs-title,
+.editor-wrap .hljs-section {
+  color: #e5c07b;
+}
+
+.editor-wrap .hljs-keyword,
+.editor-wrap .hljs-selector-tag {
+  color: #c678dd;
+}
+
+.editor-wrap .hljs-emphasis {
+  font-style: italic;
+}
+
+.editor-wrap .hljs-strong {
+  font-weight: 700;
+}
+
+/* ═══════════════════════════════════════════════════
+   Tables — ported from margin table.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .tableWrapper {
+  margin-top: 1rem;
+  margin-bottom: 1rem;
+  overflow-x: auto;
+}
+
+.editor-wrap table {
+  border-collapse: collapse;
+  margin: 0;
+  table-layout: fixed;
+  width: 100%;
+}
+
+.editor-wrap table td,
+.editor-wrap table th {
+  border: 1px solid var(--border);
+  box-sizing: border-box;
+  min-width: 1em;
+  padding: 3px 5px;
+  position: relative;
+  vertical-align: top;
+}
+
+.editor-wrap table td p,
+.editor-wrap table th p {
+  margin: 0;
+}
+
+.editor-wrap table td p + p,
+.editor-wrap table th p + p {
+  margin-top: 0.75rem;
+}
+
+.editor-wrap table th {
+  background: var(--bg-secondary);
+  font-weight: bold;
+  text-align: left;
+}
+
+.editor-wrap .column-resize-handle {
+  background-color: #adf;
+  bottom: -1px;
+  position: absolute;
+  right: -2px;
+  pointer-events: none;
+  top: 0;
+  width: 4px;
+}
+
+.editor-wrap .selectedCell::after {
+  background: rgba(200, 200, 255, 0.4);
+  content: "";
+  left: 0;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  pointer-events: none;
+  position: absolute;
+  z-index: 2;
+}
+
+/* ═══════════════════════════════════════════════════
+   Highlight — ported from margin highlight.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap mark {
+  padding: 1px 3px;
+  border-radius: 2px;
+  color: var(--text-normal) !important;
+}
+
+.editor-wrap mark[data-color="#faf594"] {
+  background-color: rgba(234, 179, 8, 0.55) !important;
+}
+
+.editor-wrap mark[data-color="#98d8f2"] {
+  background-color: rgba(37, 99, 235, 0.55) !important;
+}
+
+.editor-wrap mark[data-color="#7edb6c"] {
+  background-color: rgba(0, 138, 0, 0.55) !important;
+}
+
+.editor-wrap mark[data-color="#e0d6ed"] {
+  background-color: rgba(147, 51, 234, 0.55) !important;
+}
+
+.editor-wrap mark[data-color="#ffc6c2"] {
+  background-color: rgba(224, 0, 0, 0.55) !important;
+}
+
+.editor-wrap mark[data-color="#f5c8a9"] {
+  background-color: rgba(255, 165, 0, 0.6) !important;
+}
+
+/* Default highlight (no color) */
+.editor-wrap mark:not([data-color]) {
+  background: color-mix(in srgb, var(--warning) 55%, transparent);
+}
+
+/* ═══════════════════════════════════════════════════
+   Placeholder — ported from margin placeholder.css
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .is-editor-empty:first-child::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+.editor-wrap .is-empty::before {
+  content: attr(data-placeholder);
+  float: left;
+  color: var(--text-muted);
+  pointer-events: none;
+  height: 0;
+}
+
+.editor-wrap table .is-editor-empty:first-child::before,
+.editor-wrap table .is-empty::before {
+  display: none;
+}
+
+/* ═══════════════════════════════════════════════════
+   Images
+   ═══════════════════════════════════════════════════ */
+.editor-wrap img {
+  max-width: 100%;
+  height: auto;
+  border-radius: var(--radius-sm, 6px);
+  cursor: zoom-in;
+}
+
+.editor-wrap .ProseMirror-selectednode img {
+  outline: 2px solid var(--accent-link, rgb(255, 102, 51));
+  outline-offset: 2px;
+}
+
+/* ═══════════════════════════════════════════════════
+   File Embeds — Obsidian-style file cards
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .file-embed {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  margin: 6px 0;
+  background: var(--bg-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  user-select: none;
+  transition: background 0.12s ease;
+  border: 1px solid var(--border);
+}
+
+.editor-wrap .file-embed:hover {
+  background: var(--bg-tertiary);
+}
+
+/* ═══════════════════════════════════════════════════
+   Wiki Links — [[Note Title]] inline nodes
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .wiki-link {
+  color: var(--accent-link, rgb(255, 102, 51));
+  cursor: pointer;
+  border-radius: 3px;
+  padding: 0 2px;
+  text-decoration: none;
+  font-weight: 500;
+  transition: background 0.1s;
+  display: inline;
+}
+
+.editor-wrap .wiki-link-icon {
+  display: inline-block;
+  width: 16px;
+  height: 16px;
+  vertical-align: text-bottom;
+  margin-right: 2px;
+  background: currentColor;
+  -webkit-mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 13H14'/%3E%3Cpath d='M10 17H8'/%3E%3Cpath d='M16 17H14'/%3E%3C/svg%3E");
+  mask-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z'/%3E%3Cpath d='M14 2v4a2 2 0 0 0 2 2h4'/%3E%3Cpath d='M10 13H8'/%3E%3Cpath d='M16 13H14'/%3E%3Cpath d='M10 17H8'/%3E%3Cpath d='M16 17H14'/%3E%3C/svg%3E");
+  -webkit-mask-size: contain;
+  mask-size: contain;
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  opacity: 0.65;
+  flex-shrink: 0;
+}
+
+.editor-wrap .wiki-link-title {
+  border-bottom: 0.05em solid color-mix(in srgb, var(--accent-link, rgb(255, 102, 51)) 40%, transparent);
+}
+
+.editor-wrap .wiki-link:hover {
+  background: color-mix(
+    in srgb,
+    var(--accent-link, rgb(255, 102, 51)) 12%,
+    transparent
+  );
+}
+
+.editor-wrap .wiki-link:hover .wiki-link-title {
+  border-bottom-color: var(--accent-link, rgb(255, 102, 51));
+}
+
+.editor-wrap .ProseMirror-selectednode .wiki-link,
+.editor-wrap .wiki-link.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-link, rgb(255, 102, 51));
+  outline-offset: 1px;
+}
+
+.editor-wrap .ProseMirror-selectednode .file-embed,
+.editor-wrap .file-embed.ProseMirror-selectednode {
+  outline: 2px solid var(--accent-link, rgb(255, 102, 51));
+  outline-offset: 1px;
+}
+
+.editor-wrap .file-embed-name {
+  flex: 1 1 auto;
+  font-size: 0.9em;
+  font-weight: 500;
+  color: var(--text-secondary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ═══════════════════════════════════════════════════
+   Gapcursor
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .ProseMirror-gapcursor::after {
+  border-top: 1px solid var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════
+   Search Highlights
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .search-match {
+  background: rgba(234, 179, 8, 0.3);
+  border-radius: 2px;
+}
+
+.editor-wrap .search-match-current {
+  background: rgba(234, 179, 8, 0.6);
+  outline: 1px solid rgba(234, 179, 8, 0.8);
+}
+
+/* ═══════════════════════════════════════════════════
+   Bubble Menu Wrapper — positioned by @floating-ui
+   ═══════════════════════════════════════════════════ */
+.bubble-wrapper {
+  position: fixed;
+  top: -9999px;
+  left: -9999px;
+  z-index: 50;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
+}
+
+.bubble-wrapper.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* ═══════════════════════════════════════════════════
+   Content Drag — drop cursor + dragging state
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .content-drop-cursor {
+  display: block;
+  width: 100%;
+  height: 3px;
+  background: var(--accent-link, rgb(255, 102, 51));
+  border-radius: 2px;
+  pointer-events: none;
+  margin: -1px 0;
+  position: relative;
+}
+
+.editor-wrap .content-drop-cursor::before,
+.editor-wrap .content-drop-cursor::after {
+  content: "";
+  position: absolute;
+  top: -3px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--accent-link, rgb(255, 102, 51));
+  pointer-events: none;
+}
+
+.editor-wrap .content-drop-cursor::before {
+  left: -4px;
+}
+
+.editor-wrap .content-drop-cursor::after {
+  right: -4px;
+}
+
+body.content-dragging {
+  cursor: grabbing !important;
+}
+
+body.content-dragging * {
+  cursor: grabbing !important;
+}
+
+/* ═══════════════════════════════════════════════════
+   Details/Toggle Block
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .details-block {
+  position: relative;
+  display: flex;
+  gap: 4px;
+  padding: 4px 8px;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-primary);
+}
+
+.editor-wrap .details-toggle {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-top: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: var(--radius-xs);
+  transition: transform 0.15s ease, color 0.1s;
+}
+
+.editor-wrap .details-toggle:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+.editor-wrap .details-toggle.is-open {
+  transform: rotate(90deg);
+}
+
+.editor-wrap .details-wrapper {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.editor-wrap .details-inner {
+  display: flex;
+  flex-direction: column;
+}
+
+.editor-wrap .details-block:not(.is-open) .details-inner > :nth-child(n+2) {
+  display: none;
+}
+
+.editor-wrap .details-summary {
+  font-weight: 600;
+  padding: 2px 0;
+}
+
+.editor-wrap .details-content {
+  padding: 4px 0 2px 0;
+}
+
+/* ═══════════════════════════════════════════════════
+   Code Block — language selector + copy button
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .code-block-wrapper {
+  position: relative;
+  margin: 8px 0;
+}
+
+.editor-wrap .code-block-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 8px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-bottom: none;
+  border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.editor-wrap .code-block-wrapper pre {
+  margin: 0 !important;
+  border-top-left-radius: 0 !important;
+  border-top-right-radius: 0 !important;
+}
+
+.editor-wrap .code-lang-select {
+  height: 22px;
+  padding: 0 4px;
+  font-size: 0.72rem;
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  color: var(--text-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  outline: none;
+  cursor: pointer;
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 14px;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M0 0l4 5 4-5z' fill='%23888'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 3px center;
+}
+
+.editor-wrap .code-lang-select:hover {
+  border-color: var(--text-secondary);
+}
+
+.editor-wrap .code-copy-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 22px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.editor-wrap .code-copy-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════
+   Resizable Image
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .image-node-view {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  line-height: 0;
+}
+
+.editor-wrap .image-node-view[data-align="center"] {
+  display: block;
+  margin-left: auto;
+  margin-right: auto;
+}
+
+.editor-wrap .image-node-view[data-align="right"] {
+  display: block;
+  margin-left: auto;
+  margin-right: 0;
+}
+
+.editor-wrap .image-node-view[data-align="left"] {
+  display: block;
+  margin-left: 0;
+  margin-right: auto;
+}
+
+.editor-wrap .image-node-view img {
+  display: block;
+  max-width: 100%;
+  cursor: default;
+}
+
+.editor-wrap .image-resize-handle {
+  position: absolute;
+  top: 0;
+  width: 8px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 10;
+}
+
+.editor-wrap .image-resize-handle::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 40px;
+  max-height: 50%;
+  border-radius: 2px;
+  background: var(--accent-link, rgb(255, 102, 51));
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+
+.editor-wrap .image-node-view:hover .image-resize-handle::after,
+.editor-wrap .image-node-view.ProseMirror-selectednode .image-resize-handle::after {
+  opacity: 1;
+}
+
+.editor-wrap .image-resize-handle-left {
+  left: -4px;
+}
+
+.editor-wrap .image-resize-handle-left::after {
+  left: 0;
+}
+
+.editor-wrap .image-resize-handle-right {
+  right: -4px;
+}
+
+.editor-wrap .image-resize-handle-right::after {
+  right: 0;
+}
+
+.editor-wrap .image-align-toolbar {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  gap: 2px;
+  padding: 2px 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 20;
+}
+
+.editor-wrap .image-node-view.ProseMirror-selectednode .image-align-toolbar {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.editor-wrap .image-align-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.1s, color 0.1s;
+}
+
+.editor-wrap .image-align-btn:hover,
+.editor-wrap .image-align-btn.is-active {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════
+   Columns Layout
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .columns-block {
+  display: flex;
+  gap: 16px;
+  margin: 8px 0;
+  min-height: 40px;
+}
+
+.editor-wrap .columns-block > [data-column] {
+  flex: 1 1 0%;
+  min-width: 0;
+  border: 1px dashed var(--border);
+  border-radius: var(--radius-xs);
+  padding: 8px;
+}
+
+.editor-wrap .columns-block > [data-column]:focus-within {
+  border-color: var(--accent-link, rgb(255, 102, 51));
+}
+
+/* ═══════════════════════════════════════════════════
+   Status Badge
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .status-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 8px;
+  border-radius: 3px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 1.6;
+  white-space: nowrap;
+  vertical-align: middle;
+  cursor: default;
+}
+
+.editor-wrap .status-badge[data-color="gray"] {
+  background: rgba(107, 114, 128, 0.15);
+  color: #6b7280;
+}
+
+.editor-wrap .status-badge[data-color="blue"] {
+  background: rgba(59, 130, 246, 0.15);
+  color: #3b82f6;
+}
+
+.editor-wrap .status-badge[data-color="green"] {
+  background: rgba(34, 197, 94, 0.15);
+  color: #22c55e;
+}
+
+.editor-wrap .status-badge[data-color="yellow"] {
+  background: rgba(234, 179, 8, 0.15);
+  color: #b45309;
+}
+
+.editor-wrap .status-badge[data-color="red"] {
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.editor-wrap .status-badge[data-color="purple"] {
+  background: rgba(168, 85, 247, 0.15);
+  color: #a855f7;
+}
+
+.editor-wrap .status-popover {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+}
+
+.editor-wrap .status-input {
+  width: 120px;
+  height: 24px;
+  padding: 0 6px;
+  font-size: 0.78rem;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xs);
+  outline: none;
+}
+
+.editor-wrap .status-swatches {
+  display: flex;
+  gap: 4px;
+}
+
+.editor-wrap .status-swatch {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+}
+
+.editor-wrap .status-swatch:hover,
+.editor-wrap .status-swatch.is-active {
+  border-color: var(--text-primary);
+}
+
+/* ═══════════════════════════════════════════════════
+   Heading Anchor
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .heading-anchor-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  margin-left: 4px;
+  background: transparent;
+  border: none;
+  border-radius: var(--radius-xs);
+  color: var(--text-secondary);
+  cursor: pointer;
+  opacity: 0;
+  vertical-align: middle;
+  transition: opacity 0.15s, background 0.1s;
+}
+
+.editor-wrap h1:hover .heading-anchor-btn,
+.editor-wrap h2:hover .heading-anchor-btn,
+.editor-wrap h3:hover .heading-anchor-btn,
+.editor-wrap h4:hover .heading-anchor-btn,
+.editor-wrap h5:hover .heading-anchor-btn,
+.editor-wrap h6:hover .heading-anchor-btn {
+  opacity: 1;
+}
+
+.editor-wrap .heading-anchor-btn:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+@media print {
+  .editor-wrap .heading-anchor-btn {
+    display: none;
+  }
+}
+
+/* ═══════════════════════════════════════════════════
+   Table DnD
+   ═══════════════════════════════════════════════════ */
+.editor-wrap .table-drag-handle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border-radius: var(--radius-xs);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  cursor: grab;
+  z-index: 50;
+  opacity: 0.7;
+  transition: opacity 0.15s, background 0.1s;
+}
+
+.editor-wrap .table-drag-handle::after {
+  content: "⠿";
+  font-size: 10px;
+  line-height: 1;
+  color: var(--text-secondary);
+}
+
+.editor-wrap .table-drag-handle:hover {
+  opacity: 1;
+  background: var(--bg-hover);
+}
+
+.editor-wrap .table-drag-handle:active {
+  cursor: grabbing;
+}
+
+.editor-wrap .table-dnd-preview {
+  padding: 0;
+  background-color: rgba(255, 255, 255, 0.3);
+  backdrop-filter: blur(2px);
+  border-radius: var(--radius-xs);
+  z-index: 100;
+}
+
+.editor-wrap .table-dnd-drop-indicator {
+  background-color: var(--accent-link, rgb(255, 102, 51));
+  z-index: 99;
+}
+
+.editor-wrap:has(.table-dnd-drop-indicator[data-dragging="true"]) .prosemirror-dropcursor-block,
+.editor-wrap:has(.table-dnd-drop-indicator[data-dragging="true"]) .prosemirror-dropcursor-inline {
+  display: none;
+}

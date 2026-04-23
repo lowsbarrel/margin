@@ -5,9 +5,7 @@
   let { children }: { children: Snippet } = $props();
 
   onMount(() => {
-    // Prevent Escape from exiting native fullscreen on macOS.
-    // This runs in the capture phase so it fires before any other handlers.
-    // Existing Escape handlers still work because they check e.key, not the default action.
+    // Prevent Escape from exiting native fullscreen on macOS (capture phase).
     const handler = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
         e.preventDefault();

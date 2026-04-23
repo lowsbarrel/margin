@@ -8,7 +8,6 @@ pub fn watch_file(app: AppHandle, path: String) -> Result<(), String> {
     let watcher_state = app.state::<WatcherState>();
     let mut guard = watcher_state.0.lock().map_err(|e| e.to_string())?;
 
-    // Stop existing watcher
     *guard = None;
 
     let watch_path = path.clone();
@@ -49,7 +48,6 @@ pub fn watch_vault(app: AppHandle, path: String) -> Result<(), String> {
     let state = app.state::<VaultWatcherState>();
     let mut guard = state.0.lock().map_err(|e| e.to_string())?;
 
-    // Stop any previous vault watcher
     *guard = None;
 
     let vault_root = Path::new(&path).to_path_buf();

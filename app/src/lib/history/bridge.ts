@@ -4,7 +4,6 @@ export interface Snapshot {
   filename: string;
   /** Unix timestamp (seconds) */
   timestamp: number;
-  /** Size in bytes */
   size: number;
 }
 

@@ -1,11 +1,4 @@
-/**
- * Per-path write serializer.
- *
- * Guarantees that for any given file path, only one write is in flight at a time.
- * If a new write is requested while one is already running, the new content
- * replaces any previously queued content and executes immediately after the
- * current write finishes — no delays, no debouncing.
- */
+/** Per-path write serializer — one write per path in flight; new writes replace queued content. */
 
 type WriteFn = (path: string, content: Uint8Array) => Promise<void>;
 
@@ -24,12 +17,6 @@ export function initWriteQueue(rawWrite: WriteFn): void {
   _rawWrite = rawWrite;
 }
 
-/**
- * Enqueue a write for the given path.
- * - If no write is in flight for this path, starts immediately.
- * - If a write IS in flight, replaces any previously pending content
- *   so only the latest data is written when the current write finishes.
- */
 export function queuedWrite(path: string, content: Uint8Array): Promise<void> {
   if (!_rawWrite) throw new Error("writeQueue not initialised");
 

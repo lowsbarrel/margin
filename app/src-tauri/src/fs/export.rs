@@ -1,4 +1,4 @@
-use serde::Deserialize;
+use crate::sync::Manifest;
 use std::collections::HashMap;
 use std::fs;
 use std::path::Path;
@@ -62,40 +62,6 @@ pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String>
 }
 
 // ─── Unsynced-changes check (fully Rust-side) ────────────────────────────
-
-/// Manifest entry matching the JSON shape produced by s3sync.ts.
-#[derive(Deserialize)]
-struct ManifestEntry {
-    path: String,
-    #[allow(dead_code)]
-    hash: String,
-    modified: u64,
-    deleted_at: Option<u64>,
-}
-
-#[derive(Deserialize)]
-struct Manifest {
-    #[allow(dead_code)]
-    version: u64,
-    files: Vec<ManifestEntry>,
-}
-
-/// Decrypt nonce‖ciphertext with AES-256-GCM-SIV (same scheme as crypto.rs).
-fn decrypt_blob_inline(ciphertext: &[u8], key: &[u8]) -> Result<Vec<u8>, String> {
-    use aes_gcm_siv::{aead::Aead, Aes256GcmSiv, KeyInit, Nonce};
-    if key.len() != 32 {
-        return Err("Key must be 32 bytes".into());
-    }
-    if ciphertext.len() < 12 {
-        return Err("Ciphertext too short".into());
-    }
-    let cipher =
-        Aes256GcmSiv::new_from_slice(key).map_err(|e| format!("Invalid key: {e}"))?;
-    let nonce = Nonce::from_slice(&ciphertext[..12]);
-    cipher
-        .decrypt(nonce, &ciphertext[12..])
-        .map_err(|e| format!("Decryption failed: {e}"))
-}
 
 /// Collect all non-hidden files in the vault, returning (relative_path, mtime_secs).
 fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
@@ -164,7 +130,6 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    // Check cache
     if let Ok(guard) = CACHE.lock() {
         if let Some(ref cached) = *guard {
             if cached.manifest_mtime == manifest_mtime
@@ -178,7 +143,7 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
     let manifest: Manifest = if manifest_path.exists() {
         let enc = fs::read(&manifest_path)
             .map_err(|e| format!("Failed to read manifest: {e}"))?;
-        let dec = decrypt_blob_inline(&enc, &encryption_key)?;
+        let dec = crate::crypto::decrypt_blob(enc, encryption_key)?;
         serde_json::from_slice(&dec)
             .map_err(|e| format!("Failed to parse manifest: {e}"))?
     } else {
@@ -209,7 +174,6 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
         })
     };
 
-    // Store in cache
     if let Ok(mut guard) = CACHE.lock() {
         *guard = Some(CachedResult {
             result,

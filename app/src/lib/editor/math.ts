@@ -1,8 +1,6 @@
 import { Node, nodeInputRule, mergeAttributes } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import katex from "katex";
-
-// ─── KaTeX render cache ───────────────────────────────────
 // Avoids re-rendering identical expressions (20-100ms each).
 const katexCache = new Map<string, string>();
 const KATEX_CACHE_MAX = 512;
@@ -18,16 +16,12 @@ function cachedKatex(text: string, displayMode: boolean): string {
   }
   const html = katex.renderToString(text, { displayMode, throwOnError: false });
   if (katexCache.size >= KATEX_CACHE_MAX) {
-    // Evict oldest entry
     const first = katexCache.keys().next().value;
     if (first !== undefined) katexCache.delete(first);
   }
   katexCache.set(key, html);
   return html;
 }
-
-// ─── Math Block ───────────────────────────────────────────
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     mathBlock: {
@@ -112,8 +106,6 @@ export const MathBlock = Node.create({
       }
 
       renderMath(node.attrs.text || "");
-
-      // Show input on click
       dom.addEventListener("click", (e) => {
         if (!editor.isEditable) return;
         e.stopPropagation();
@@ -214,9 +206,6 @@ export const MathBlock = Node.create({
     };
   },
 });
-
-// ─── Math Inline ──────────────────────────────────────────
-
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
     mathInline: {
@@ -310,7 +299,6 @@ export const MathInline = Node.create({
       }
 
       function openEditor() {
-        // Create inline input overlay
         const input = document.createElement("input");
         input.type = "text";
         input.className = "math-inline-input";
@@ -329,7 +317,6 @@ export const MathInline = Node.create({
             const pos = getPos();
             if (pos != null) {
               if (!newText) {
-                // If empty, delete the node
                 editor.view.dispatch(
                   editor.view.state.tr.delete(pos, pos + node.nodeSize),
                 );
@@ -359,7 +346,7 @@ export const MathInline = Node.create({
             e.preventDefault();
             e.stopPropagation();
             if (e.key === "Escape") {
-              input.value = currentText; // revert
+              input.value = currentText;
             }
             committed = true;
             commit();
@@ -430,9 +417,6 @@ export const MathInline = Node.create({
     };
   },
 });
-
-// ─── Markdown Plugins ─────────────────────────────────────
-
 function mathBlockMarkdownPlugin(md: any) {
   md.block.ruler.before(
     "fence",
@@ -447,7 +431,7 @@ function mathBlockMarkdownPlugin(md: any) {
         return false;
       // Make sure it's just $$ (not $$$ which would be inline input rule territory)
       const rest = src.slice(pos + 2, max).trim();
-      if (rest) return false; // $$ must be alone on the line
+      if (rest) return false;
 
       if (silent) return true;
 
@@ -463,8 +447,6 @@ function mathBlockMarkdownPlugin(md: any) {
         }
       }
       if (!found) return false;
-
-      // Collect math text
       const lines: string[] = [];
       for (let i = startLine + 1; i < nextLine; i++) {
         lines.push(
@@ -503,12 +485,8 @@ function mathInlineMarkdownPlugin(md: any) {
 
     // Single $ for inline math (not $$ which is for block)
     if (src.charCodeAt(pos + 1) === 0x24) return false;
-
-    // Find closing $
     const closePos = src.indexOf("$", pos + 1);
     if (closePos === -1 || closePos > max) return false;
-
-    // No empty math
     const mathText = src.slice(pos + 1, closePos);
     if (!mathText.trim()) return false;
 
@@ -530,9 +508,6 @@ function mathInlineMarkdownPlugin(md: any) {
     return `<span data-type="mathInline" data-math-text="${escaped}">${escaped}</span>`;
   };
 }
-
-// ─── Helpers ──────────────────────────────────────────────
-
 function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")

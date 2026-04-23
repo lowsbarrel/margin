@@ -10,9 +10,14 @@
   import { toast } from "$lib/stores/toast.svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { validateName } from "$lib/utils/filename";
-  import { startPointerDrag } from "$lib/utils/drag-handler";
-  import { startDrag as startNativeDrag } from "@crabnebula/tauri-plugin-drag";
   import { resolveResource } from "@tauri-apps/api/path";
+  import {
+    isDescendantOrSelf,
+    handleFolderDrop as doFolderDrop,
+    handleRootDrop as doRootDrop,
+    tryNativeDrag,
+    startDragEntry,
+  } from "$lib/utils/file-tree-drag";
   import {
     ChevronRight,
     Folder,
@@ -33,15 +38,11 @@
   let { activeFile, onfileselect, oncontextmenuentry, onrename, onmoveentry, ondeleteentry }: Props =
     $props();
 
-  // ─── Drop target tracking ─────────────────────────────────────────────────
+
   let dropTargetFolder = $state<string | null>(null);
 
-  // ─── Virtual scroll ───────────────────────────────────────────────────────
-  // Only DOM nodes for the visible rows are created. Total height is maintained
-  // via a full-height spacer so the scrollbar is accurate. OVERSCAN renders a
-  // few extra rows above/below the viewport so fast scrolls don't flash blank.
-
-  const ROW_HEIGHT = 32; // px — must match .tree-row height in CSS
+  // Virtual scroll: only visible rows are in the DOM.
+  const ROW_HEIGHT = 32;
   const OVERSCAN = 5;
 
   let viewport = $state<HTMLDivElement | undefined>();
@@ -50,18 +51,12 @@
 
   let rows = $derived(files.flatTree);
 
-  // ─── Pending new-folder row ───────────────────────────────────────────────
-  // Inserted into the virtual scroll flow so it pushes rows down naturally.
-
+  // New-folder row inserted into virtual scroll flow
   let newFolderInsertIdx = $derived.by(() => {
     const parent = files.pendingNewFolder;
     if (!parent) return -1;
     const idx = rows.findIndex((r) => r.path === parent);
-    if (idx === -1) {
-      // Parent is the vault root — insert at the very top
-      return 0;
-    }
-    // Insert after all children of this directory
+    if (idx === -1) return 0;
     const depth = rows[idx].depth;
     let at = idx + 1;
     while (at < rows.length && rows[at].depth > depth) at++;
@@ -110,67 +105,9 @@
     return items;
   });
 
-  // ─── Drag support ─────────────────────────────────────────────────────────
+  // Drag support
   let suppressNextClick = false;
-  let nativeDragStarted = false;
-
-  /** Trigger native OS drag when cursor goes outside window bounds. */
-  function tryNativeDrag(clientX: number, clientY: number) {
-    if (!drag.active || nativeDragStarted) return;
-    const item = drag.item;
-    if (!item || item.kind !== "file") return;
-
-    const margin = 2; // px tolerance
-    const outside =
-      clientX <= margin ||
-      clientY <= margin ||
-      clientX >= window.innerWidth - margin ||
-      clientY >= window.innerHeight - margin;
-    if (!outside) return;
-
-    nativeDragStarted = true;
-    drag.end();
-
-    // Collect all selected file paths for multi-drag to desktop
-    const paths =
-      files.selectedEntries.size > 1 && files.isSelected(item.path)
-        ? files.getSelectedPaths()
-        : [item.path];
-
-    // Determine which entries are directories (for deletion after drop)
-    const dragEntries =
-      files.selectedEntries.size > 1 && files.isSelected(item.path)
-        ? files.getSelectedAsList()
-        : [{ path: item.path, isDir: item.isDir }];
-
-    startNativeDrag(
-      {
-        item: paths,
-        icon: dragIconPath,
-      },
-      ({ result }) => {
-        if (result === "Dropped") {
-          // File was successfully dropped outside — remove from vault
-          for (const entry of dragEntries) {
-            ondeleteentry(entry.path, entry.isDir).catch(() => {});
-          }
-        }
-      },
-    )
-      .catch(() => {
-        // drag cancelled or failed — that's fine
-      })
-      .finally(() => {
-        nativeDragStarted = false;
-      });
-  }
-
-  /** Track mouse globally while drag is active to detect window-leave. */
-  function handleGlobalMouseMove(e: MouseEvent) {
-    if (drag.active) {
-      tryNativeDrag(e.clientX, e.clientY);
-    }
-  }
+  const nativeDragState = { started: false };
 
   let dragIconPath = "";
   onMount(async () => {
@@ -183,71 +120,28 @@
 
   $effect(() => {
     if (drag.active) {
-      window.addEventListener("mousemove", handleGlobalMouseMove);
-      return () => {
-        window.removeEventListener("mousemove", handleGlobalMouseMove);
-      };
+      function onMove(e: MouseEvent) {
+        tryNativeDrag(e.clientX, e.clientY, dragIconPath, ondeleteentry, nativeDragState);
+      }
+      window.addEventListener("mousemove", onMove);
+      return () => { window.removeEventListener("mousemove", onMove); };
     }
   });
 
   function startDrag(e: MouseEvent, entry: TreeEntry) {
-    const label = entry.name.replace(/\.(md|canvas)$/, "");
-    startPointerDrag(
-      e,
-      { kind: "file", path: entry.path, label, isDir: entry.is_dir },
-      () => { suppressNextClick = true; },
-    );
-  }
-
-  /** Check if `target` is the same as or a descendant of `source` */
-  function isDescendantOrSelf(source: string, target: string): boolean {
-    return target === source || target.startsWith(source + "/");
-  }
-
-  /** Collect entries to move: all selected if the dragged item is part of the selection, otherwise just the dragged item. */
-  function getDropEntries(): { path: string; isDir: boolean }[] {
-    const item = drag.item;
-    if (!item || item.kind !== "file") return [];
-    if (files.selectedEntries.size > 1 && files.isSelected(item.path)) {
-      return files.getSelectedAsList();
-    }
-    return [{ path: item.path, isDir: item.isDir }];
+    startDragEntry(e, entry, () => { suppressNextClick = true; });
   }
 
   function handleFolderDrop(e: MouseEvent, folderPath: string) {
-    if (!drag.active || !drag.item || drag.item.kind !== "file") return;
-    e.stopPropagation();
-    const entries = getDropEntries();
-    // Validate: skip entries that are ancestors of the target or already in the target
-    const valid = entries.filter((entry) => {
-      if (isDescendantOrSelf(entry.path, folderPath)) return false;
-      const parent = entry.path.slice(0, entry.path.lastIndexOf("/"));
-      return parent !== folderPath;
-    });
-    drag.end();
-    dropTargetFolder = null;
-    for (const entry of valid) {
-      onmoveentry(entry.path, folderPath, entry.isDir);
-    }
+    doFolderDrop(e, folderPath, onmoveentry, (v) => { dropTargetFolder = v; });
   }
 
   function handleRootDrop(e: MouseEvent) {
-    if (!drag.active || !drag.item || drag.item.kind !== "file" || !vault.vaultPath) return;
-    const entries = getDropEntries();
-    const rootPath = vault.vaultPath;
-    const valid = entries.filter((entry) => {
-      const parent = entry.path.slice(0, entry.path.lastIndexOf("/"));
-      return parent !== rootPath;
-    });
-    drag.end();
-    dropTargetFolder = null;
-    for (const entry of valid) {
-      onmoveentry(entry.path, rootPath, entry.isDir);
-    }
+    if (!vault.vaultPath) return;
+    doRootDrop(e, vault.vaultPath, onmoveentry, (v) => { dropTargetFolder = v; });
   }
 
-  // ─── Inline editing ───────────────────────────────────────────────────────
-
+  // Inline editing
   function submitRename(entry: TreeEntry, input: HTMLInputElement) {
     const newName = input.value.trim();
     files.cancelRename();

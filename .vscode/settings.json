@@ -1,3 +1,7 @@
 {
-  "svelte.enable-ts-plugin": true
+  "svelte.enable-ts-plugin": true,
+  "rust-analyzer.linkedProjects": ["app/src-tauri/Cargo.toml"],
+  "rust-analyzer.checkOnSave": true,
+  "typescript.tsserver.experimental.enableProjectDiagnostics": true,
+  "svelte.plugin.diagnostics.enable": true
 }

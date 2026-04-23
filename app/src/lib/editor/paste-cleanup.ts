@@ -1,17 +1,5 @@
-// Adapted from Docmost's MarkdownClipboard extension.
-//
-// 1. Strips trailing whitespace-only paragraphs from pasted content.
-//    Terminals (GNOME Terminal, etc.) and some apps include trailing
-//    whitespace in their HTML clipboard data, which ProseMirror parses
-//    as an extra empty paragraph. Inside a list item this creates an
-//    orphan empty line that breaks the list structure.
-//
-// 2. Strips YAML front matter from pasted markdown text.
-//
-// 3. Prevents markdown parsing inside code blocks.
-//
-// 4. Normalizes localfile:// image URLs in pasted markdown so that spaces
-//    in Windows paths (Margin Vault → Margin%20Vault) don't break parsing.
+// Paste cleanup: strips trailing whitespace paragraphs, YAML front matter,
+// prevents markdown parsing in code blocks, and normalises localfile:// URLs.
 
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
@@ -37,11 +25,9 @@ export const PasteCleanup = Extension.create({
       new Plugin({
         key: new PluginKey("pasteCleanup"),
         props: {
-          // Intercept paste inside code blocks — let ProseMirror handle it
-          // as plain text (prevents markdown parsing inside code)
+          // Let ProseMirror handle paste in code blocks as plain text
           handlePaste: (view, event) => {
             if (this.editor.isActive("codeBlock")) {
-              // Return false = let ProseMirror default handle it (inserts as plain text in code blocks)
               return false;
             }
 
@@ -51,9 +37,7 @@ export const PasteCleanup = Extension.create({
             if (text && !html && YAML_FRONT_MATTER_REGEX.test(text)) {
               const cleaned = text.replace(YAML_FRONT_MATTER_REGEX, "").trimStart();
               if (cleaned !== text) {
-                // Create a new clipboard event with the cleaned text
-                // We can't modify clipboardData, so we manually set the
-                // text via the editor's insertContent
+                // Can't modify clipboardData — insert cleaned text directly
                 const { from, to } = view.state.selection;
                 const tr = view.state.tr.insertText(cleaned, from, to);
                 view.dispatch(tr);

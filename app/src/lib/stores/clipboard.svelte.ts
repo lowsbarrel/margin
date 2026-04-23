@@ -34,7 +34,6 @@ export const clipboard = {
     state = null;
   },
 
-  /** Return clipboard data and clear if it was a cut operation. */
   consume(): ClipboardData | null {
     const s = state;
     if (s?.operation === "cut") {

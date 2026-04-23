@@ -27,10 +27,7 @@ const RESERVED_NAMES = new Set([
   "LPT9",
 ]);
 
-/**
- * Validate a raw file or folder name.
- * Returns an error string if invalid, or null if the name is acceptable.
- */
+/** Returns error string if invalid, null if ok. */
 export function validateName(name: string): string | null {
   const trimmed = name.trim();
   if (!trimmed) return m.validate_name_empty();
@@ -46,4 +43,16 @@ export function validateName(name: string): string | null {
   if (RESERVED_NAMES.has(stem.toUpperCase()))
     return m.validate_name_reserved({ name: trimmed });
   return null;
+}
+
+export function displayName(name: string): string {
+  return name.replace(/\.(md|canvas)$/, "");
+}
+
+/** Ensure a name has .md extension. Returns null if invalid. */
+export function ensureMdExtension(raw: string): string | null {
+  const name = raw.trim();
+  const error = validateName(name);
+  if (error) return null;
+  return name.includes(".") ? name : `${name}.md`;
 }

@@ -50,7 +50,6 @@
         editor.chain().focus().toggleMark("code").run();
         break;
       case "highlight":
-        // If a color is specified via data-color, use it
         {
           const color = btn.dataset.color;
           if (color === "remove") {
@@ -69,7 +68,6 @@
         } else {
           showLinkInput = true;
           linkUrl = "";
-          // Focus input on next tick
           requestAnimationFrame(() => linkInputEl?.focus());
         }
         break;

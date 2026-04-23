@@ -93,7 +93,7 @@ export const ResizableImage = Image.extend({
 
   addNodeView() {
     return ({ node, editor, getPos }) => {
-      // --- DOM structure ---
+      // DOM structure
       const container = document.createElement("div");
       container.classList.add("image-node-view");
       container.setAttribute("data-align", node.attrs.align || "center");
@@ -117,7 +117,7 @@ export const ResizableImage = Image.extend({
 
       wrapper.appendChild(img);
 
-      // --- Resize handles ---
+      // Resize handles
       const handleLeft = document.createElement("div");
       handleLeft.classList.add(
         "image-resize-handle",
@@ -135,7 +135,7 @@ export const ResizableImage = Image.extend({
       wrapper.appendChild(handleLeft);
       wrapper.appendChild(handleRight);
 
-      // --- Alignment toolbar ---
+      // Alignment toolbar
       const toolbar = document.createElement("div");
       toolbar.classList.add("image-align-toolbar");
       toolbar.contentEditable = "false";
@@ -177,14 +177,13 @@ export const ResizableImage = Image.extend({
       wrapper.appendChild(toolbar);
       container.appendChild(wrapper);
 
-      // --- Selection tracking ---
+      // Selection tracking
       let selected = false;
 
       function updateToolbarVisibility() {
         toolbar.style.display = selected && editor.isEditable ? "" : "none";
         container.classList.toggle("image-selected", selected);
 
-        // Update active button
         const currentAlign =
           container.getAttribute("data-align") || "center";
         toolbar
@@ -197,7 +196,7 @@ export const ResizableImage = Image.extend({
           });
       }
 
-      // --- Resize logic ---
+      // Resize logic
       let startX = 0;
       let startWidth = 0;
       let aspectRatio = 1;
@@ -268,8 +267,7 @@ export const ResizableImage = Image.extend({
         onMouseDown(e, "right"),
       );
 
-      // --- Selection plugin ---
-      // Check selection on every editor transaction
+      // Selection plugin
       const selectionHandler = () => {
         const { selection } = editor.state;
         if (typeof getPos !== "function") return;

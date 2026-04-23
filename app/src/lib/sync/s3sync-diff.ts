@@ -1,6 +1,6 @@
 import type { ManifestEntry, Manifest } from "./s3sync-manifest";
 
-// ─── Types ───────────────────────────────────────────────────────────────
+// ── Types ──
 
 export type ChangeKind =
   | "upload"

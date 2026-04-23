@@ -31,7 +31,6 @@ const SCROLL_SPEED = 15; // px per frame to scroll
 const HANDLE_SVG = `<svg width="8" height="14" viewBox="0 0 8 14" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><circle cx="1.5" cy="2" r="1.2"/><circle cx="6.5" cy="2" r="1.2"/><circle cx="1.5" cy="7" r="1.2"/><circle cx="6.5" cy="7" r="1.2"/><circle cx="1.5" cy="12" r="1.2"/><circle cx="6.5" cy="12" r="1.2"/></svg>`;
 
 interface DragState {
-  /** Document position the drop indicator is at, or null */
   dropPos: number | null;
 }
 
@@ -57,7 +56,6 @@ export const ContentDrag = Extension.create({
       let rafScheduled = false;
       let latestMoveEvent: MouseEvent | null = null;
 
-      // Find scroll container for auto-scroll
       const scrollParent =
         view.dom.closest(".editor-container") ||
         view.dom.parentElement;
@@ -77,7 +75,6 @@ export const ContentDrag = Extension.create({
           document.body.classList.add("content-dragging");
         }
 
-        // Auto-scroll when near edges
         if (scrollParent) {
           const rect = scrollParent.getBoundingClientRect();
           if (e.clientY < rect.top + SCROLL_THRESHOLD) {
@@ -87,14 +84,12 @@ export const ContentDrag = Extension.create({
           }
         }
 
-        // Compute drop position
         const result = view.posAtCoords({
           left: e.clientX,
           top: e.clientY,
         });
         if (result) {
           let dp = result.pos;
-          // For nodes, find a valid block drop point
           if (isNode) {
             const best = dropPoint(view.state.doc, dp, slice);
             if (best != null) dp = best;
@@ -103,7 +98,6 @@ export const ContentDrag = Extension.create({
           lastDropPos = dp;
         }
 
-        // Update drop cursor decoration
         const tr = view.state.tr;
         tr.setMeta(dragKey, { dropPos: lastDropPos } satisfies DragState);
         view.dispatch(tr);
@@ -122,12 +116,10 @@ export const ContentDrag = Extension.create({
         window.removeEventListener("mouseup", onUp, true);
         document.body.classList.remove("content-dragging");
 
-        // Clear drop cursor
         const clearTr = view.state.tr;
         clearTr.setMeta(dragKey, { dropPos: null } satisfies DragState);
 
         if (!dragging) {
-          // Was a click, not a drag — collapse selection to click point
           if (!isNode) {
             const clickPos = view.posAtCoords({
               left: e.clientX,
@@ -159,25 +151,22 @@ export const ContentDrag = Extension.create({
           return;
         }
 
-        // ── Execute the move ──
+        // Execute move
         const tr = view.state.tr;
         tr.setMeta(dragKey, { dropPos: null } satisfies DragState);
 
         let insertAt = lastDropPos;
 
         if (insertAt <= srcFrom) {
-          // Dropping before source: insert at target, then delete shifted source
           tr.insert(insertAt, slice.content);
           const shift = slice.content.size;
           tr.delete(srcFrom + shift, srcTo + shift);
         } else if (insertAt >= srcTo) {
-          // Dropping after source: delete source first, then insert at adjusted pos
           tr.delete(srcFrom, srcTo);
           insertAt -= srcTo - srcFrom;
           const safePos = Math.min(insertAt, tr.doc.content.size);
           tr.insert(safePos, slice.content);
         } else {
-          // Inside source range — shouldn't reach here after the check above
           view.dispatch(clearTr);
           return;
         }
@@ -190,7 +179,7 @@ export const ContentDrag = Extension.create({
       window.addEventListener("mouseup", onUp, true);
     }
 
-    /* ── Plugin 1: content drag (text + node) ──────── */
+    /* ── Content drag plugin ── */
 
     const contentDragPlugin = new Plugin<DragState>({
       key: dragKey,
@@ -239,7 +228,7 @@ export const ContentDrag = Extension.create({
 
             const { state } = view;
 
-            // ── Node drag: click on a draggable atom node ──
+            // Node drag
             const target = event.target as HTMLElement;
             const nodeEl =
               target.closest("img") ||
@@ -253,7 +242,6 @@ export const ContentDrag = Extension.create({
               let from = nodePos;
               let to = nodePos;
 
-              // Find the draggable node range
               const after = resolved.nodeAfter;
               if (
                 after &&
@@ -261,7 +249,6 @@ export const ContentDrag = Extension.create({
               ) {
                 to = nodePos + after.nodeSize;
               } else {
-                // walk up
                 for (let d = resolved.depth; d >= 1; d--) {
                   const n = resolved.node(d);
                   if (n.type.spec.draggable) {
@@ -274,7 +261,6 @@ export const ContentDrag = Extension.create({
 
               if (from === to) return false;
 
-              // Select the node
               try {
                 const tr = state.tr.setSelection(
                   NodeSelection.create(state.doc, from),
@@ -289,7 +275,7 @@ export const ContentDrag = Extension.create({
               return true;
             }
 
-            // ── Text drag: click inside an existing non-empty selection ──
+            // Text drag
             if (state.selection.empty) return false;
             if (!(state.selection instanceof TextSelection)) return false;
 
@@ -302,7 +288,6 @@ export const ContentDrag = Extension.create({
             const { from, to } = state.selection;
             if (pos.pos < from || pos.pos > to) return false;
 
-            // This click is inside the selection — start potential drag
             startDrag(view, event, from, to, false);
             event.preventDefault();
             return true;
@@ -311,13 +296,12 @@ export const ContentDrag = Extension.create({
       },
     });
 
-    /* ── Plugin 2: block drag handle ───────────────── */
+    /* ── Block drag handle ── */
 
     const blockHandlePlugin = new Plugin({
       key: handleKey,
 
       view(editorView) {
-        // Build the handle DOM element
         const handle = document.createElement("div");
         handle.className = "block-drag-handle";
         handle.contentEditable = "false";
@@ -334,44 +318,32 @@ export const ContentDrag = Extension.create({
         let hoveredDom: HTMLElement | null = null;
         let isHandleHovered = false;
 
-        /** Draggable block selectors — matches nested elements like Docmost */
         const BLOCK_SELECTORS =
           "li, p:not(:first-child), pre, blockquote, h1, h2, h3, h4, h5, h6, " +
           '[data-type="callout"], [data-type="mathBlock"], .file-embed, ' +
           "table, hr";
 
-        /**
-         * Resolve the block at the given viewport coordinates.
-         * Unlike the old top-level-only approach, this finds nested blocks
-         * (list items, paragraphs inside callouts, etc.) by checking
-         * the DOM elements at the pointer location.
-         */
+        /** Resolve the nearest draggable block at viewport coordinates. */
         function findBlock(view: EditorView, x: number, y: number) {
-          // Use document.elementsFromPoint to find the deepest matching block
           const elements = document.elementsFromPoint(x, y);
           for (const el of elements) {
-            // Must be inside the editor
             if (!editorDom.contains(el) || el === editorDom) continue;
 
-            // Check if element or a parent matches our selectors
             const blockEl = (el as HTMLElement).closest(BLOCK_SELECTORS);
             if (!blockEl || !editorDom.contains(blockEl)) continue;
 
-            // Skip elements that are part of the drag handle
             if (blockEl.classList.contains("block-drag-handle")) continue;
 
             try {
               const pos = view.posAtDOM(blockEl, 0);
               const $pos = view.state.doc.resolve(pos);
 
-              // Walk up to find the owning node
               for (let d = $pos.depth; d >= 1; d--) {
                 const node = $pos.node(d);
                 const nodePos = $pos.before(d);
                 const dom = view.nodeDOM(nodePos);
                 if (!dom || !(dom instanceof HTMLElement)) continue;
 
-                // Match: the DOM element is the one we found, or it contains it
                 if (dom === blockEl || dom.contains(blockEl)) {
                   return { pos: nodePos, node, dom };
                 }
@@ -429,7 +401,7 @@ export const ContentDrag = Extension.create({
           hoveredDom = null;
         }
 
-        // ── Editor mouse tracking ──
+        // Editor mouse tracking
         const onEditorMouseMove = (e: MouseEvent) => {
           if (document.body.classList.contains("content-dragging")) return;
 
@@ -453,7 +425,7 @@ export const ContentDrag = Extension.create({
           }, 80);
         };
 
-        // ── Handle hover ──
+        // Handle hover
         handle.addEventListener("mouseenter", () => {
           isHandleHovered = true;
         });
@@ -462,7 +434,7 @@ export const ContentDrag = Extension.create({
           if (!editorDom.matches(":hover")) hideHandle();
         });
 
-        // ── Handle click / drag ──
+        // Handle click/drag
         handle.addEventListener("mousedown", (e: MouseEvent) => {
           e.preventDefault();
           e.stopPropagation();
@@ -492,7 +464,7 @@ export const ContentDrag = Extension.create({
           startDrag(editorView, e, from, to, true);
         });
 
-        // ── Scroll hides handle ──
+        // Scroll hides handle
         const scrollParent = wrap.closest(".editor-container");
         const onScroll = () => hideHandle();
 
@@ -500,11 +472,9 @@ export const ContentDrag = Extension.create({
         editorDom.addEventListener("mouseleave", onEditorMouseLeave);
         scrollParent?.addEventListener("scroll", onScroll, { passive: true });
 
-        // Hide handle on keyboard input (like Docmost)
         const onKeyDown = () => hideHandle();
         editorDom.addEventListener("keydown", onKeyDown);
 
-        // Hide handle on scroll wheel
         const onWheel = () => hideHandle();
         editorDom.addEventListener("wheel", onWheel, { passive: true });
 

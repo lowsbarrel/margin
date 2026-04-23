@@ -18,7 +18,7 @@ interface SearchMatch {
 
 const searchPluginKey = new PluginKey("searchReplace");
 
-// ─── Document flattening (must stay in JS — needs ProseMirror API) ───────────
+// ── Document flattening ──
 
 /** Cached flattened document text + ProseMirror position mapping. */
 let cachedDoc: any = null;
@@ -50,7 +50,7 @@ function flattenDoc(doc: any) {
   cachedGaps = gaps;
 }
 
-// ─── Rust-accelerated async search ───────────────────────────────────────────
+// ── Async search (Rust IPC) ──
 
 let searchVersion = 0;
 
@@ -68,9 +68,7 @@ function triggerAsyncSearch(
 
   searchInText(cachedFullText, cachedPmPos, cachedGaps, searchTerm, caseSensitive)
     .then((rustMatches: TextMatch[]) => {
-      // Discard if a newer search was started
       if (version !== searchVersion) return;
-      // Dispatch results back into the PM plugin
       const { tr } = editor.state;
       tr.setMeta(searchPluginKey, {
         action,
@@ -88,7 +86,7 @@ function triggerAsyncSearch(
     });
 }
 
-// ─── Sync JS fallback (for replace commands that need immediate results) ─────
+// ── Sync JS fallback ──
 
 function findMatchesSync(
   doc: any,
@@ -126,7 +124,7 @@ function findMatchesSync(
   return matches;
 }
 
-// ─── Plugin state helpers ────────────────────────────────────────────────────
+// ── Plugin state helpers ──
 
 interface PluginState {
   baseDecos: DecorationSet;
@@ -157,7 +155,7 @@ function buildCurrentDeco(
   ]);
 }
 
-// ─── Extension ───────────────────────────────────────────────────────────────
+// ── Extension ──
 
 export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
   name: "searchReplace",
@@ -321,7 +319,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
             const meta = tr.getMeta(searchPluginKey);
             const docChanged = tr.docChanged;
 
-            // ── Async results arrived from Rust ──
+            // Async results arrived
             if (meta?.asyncResults) {
               const matches = meta.asyncResults as SearchMatch[];
               const storage = extensionThis.storage;
@@ -332,7 +330,6 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
               const baseDecos = buildBaseDecos(newState.doc, matches);
               const currentDeco = buildCurrentDeco(newState.doc, matches, storage.currentIndex);
 
-              // Scroll to current match
               if (meta.action === "navigate" || meta.action === "update") {
                 scrollToMatch(matches, storage.currentIndex);
               }
@@ -344,14 +341,14 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
 
             const storage = extensionThis.storage;
 
-            // ── Navigation: only rebuild the single current-match decoration ──
+            // Navigate: rebuild current-match deco
             if (meta?.action === "navigate" && prev.matchDoc === newState.doc) {
               const currentDeco = buildCurrentDeco(newState.doc, prev.matches, storage.currentIndex);
               scrollToMatch(prev.matches, storage.currentIndex);
               return { ...prev, currentDeco };
             }
 
-            // ── Search term changed or doc changed: kick off async Rust search ──
+            // Term/doc changed: async re-search
             if (storage.searchTerm) {
               triggerAsyncSearch(
                 extensionThis.editor,
@@ -365,8 +362,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
               return { baseDecos: DecorationSet.empty, currentDeco: DecorationSet.empty, matches: [], matchDoc: newState.doc };
             }
 
-            // Return stale decorations while async search is in flight.
-            // If doc changed, try to map old decorations to new positions.
+            // Map stale decos while async search runs
             if (docChanged && prev.baseDecos !== DecorationSet.empty) {
               return {
                 ...prev,

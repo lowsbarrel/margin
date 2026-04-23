@@ -163,7 +163,6 @@ fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, Strin
                     last_used: Some(profile.vault_path.clone()),
                     profiles: vec![profile],
                 };
-                // Save in new format and remove legacy file
                 save_profiles_internal(app, &profiles)?;
                 let _ = fs::remove_file(&legacy_path);
                 return Ok(profiles);
@@ -182,15 +181,7 @@ fn save_profiles_internal(app: &tauri::AppHandle, profiles: &VaultProfiles) -> R
     let json = serde_json::to_vec(profiles).map_err(|e| format!("Serialize failed: {e}"))?;
     let encrypted = crypto::encrypt_blob(json, key)?;
     let path = profiles_path(app)?;
-    // Write atomically: a crash mid-write to profiles.enc (which holds every
-    // vault's encrypted seed phrase) would brick all saved vaults permanently.
-    // Write to a sibling .tmp file first, then rename atomically into place.
-    let tmp = path.with_extension("tmp");
-    fs::write(&tmp, &encrypted).map_err(|e| format!("Write failed: {e}"))?;
-    fs::rename(&tmp, &path).map_err(|e| {
-        let _ = fs::remove_file(&tmp);
-        format!("Failed to finalise profiles write: {e}")
-    })?;
+    crate::fs::atomic_write(&path, &encrypted)?;
     Ok(())
 }
 

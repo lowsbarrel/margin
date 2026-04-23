@@ -6,14 +6,14 @@ import {
   createDirectory,
 } from "$lib/fs/bridge";
 
-// ─── Types ───────────────────────────────────────────────────────────────
+// ── Types ──
 
 export interface ManifestEntry {
   path: string;
   hash: string;
-  /** Seconds since UNIX epoch — actual file modification time */
+  /** Seconds since UNIX epoch. */
   modified: number;
-  /** Seconds since UNIX epoch — set when the file is soft-deleted */
+  /** Seconds since UNIX epoch. */
   deleted_at?: number;
 }
 
@@ -22,7 +22,6 @@ export interface Manifest {
   files: ManifestEntry[];
 }
 
-/** Validate that a parsed object has the expected Manifest shape. */
 export function validateManifest(obj: unknown): Manifest {
   if (typeof obj !== "object" || obj === null)
     throw new Error("Manifest is not an object");
