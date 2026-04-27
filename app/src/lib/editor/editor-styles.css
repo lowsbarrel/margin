@@ -285,8 +285,8 @@
 .editor-wrap
   ul[data-type="taskList"] li[data-checked="true"] > div p {
   text-decoration: line-through;
-  opacity: 0.45;
-  color: var(--text-muted);
+  opacity: 0.65;
+  color: var(--text-secondary);
 }
 
 /* Nested lists inside tasks */
