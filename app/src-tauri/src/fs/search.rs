@@ -1,4 +1,4 @@
-use super::{FsEntry, path_to_string, atomic_write};
+use super::{atomic_write, path_to_string, FsEntry};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs;
@@ -59,7 +59,10 @@ fn collect_files_recursive(
         if results.len() >= max_results {
             return;
         }
-        let name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+        let name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
         if name.starts_with('.') {
             continue;
         }
@@ -236,7 +239,12 @@ pub fn replace_in_file(
     Ok(count)
 }
 
-pub(crate) fn collect_md_paths(dir: &Path, out: &mut Vec<std::path::PathBuf>, depth: usize, max_depth: usize) {
+pub(crate) fn collect_md_paths(
+    dir: &Path,
+    out: &mut Vec<std::path::PathBuf>,
+    depth: usize,
+    max_depth: usize,
+) {
     if depth >= max_depth {
         return;
     }
@@ -245,7 +253,10 @@ pub(crate) fn collect_md_paths(dir: &Path, out: &mut Vec<std::path::PathBuf>, de
         Err(_) => return,
     };
     for entry in entries.flatten() {
-        let name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+        let name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
         if name.starts_with('.') {
             continue;
         }

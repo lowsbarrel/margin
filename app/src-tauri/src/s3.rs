@@ -83,10 +83,7 @@ const PART_SIZE: usize = 5 * 1024 * 1024;
 const MULTIPART_MAX_RETRIES: u32 = 3;
 
 #[tauri::command]
-pub async fn s3_upload(
-    request: Request<'_>,
-    state: State<'_, S3State>,
-) -> Result<(), String> {
+pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Result<(), String> {
     let key: String = request
         .headers()
         .get("x-key")

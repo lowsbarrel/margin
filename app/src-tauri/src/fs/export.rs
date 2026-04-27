@@ -29,7 +29,10 @@ pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String>
         let entries =
             std::fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
         for entry in entries.flatten() {
-            let name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+            let name = entry
+                .file_name()
+                .into_string()
+                .unwrap_or_else(|s| s.to_string_lossy().into_owned());
             if name.starts_with('.') {
                 continue;
             }
@@ -48,8 +51,7 @@ pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String>
                     .map_err(|e| format!("Failed to start file in zip: {e}"))?;
                 let mut f =
                     std::fs::File::open(&path).map_err(|e| format!("Failed to open file: {e}"))?;
-                std::io::copy(&mut f, zip)
-                    .map_err(|e| format!("Failed to write to zip: {e}"))?;
+                std::io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {e}"))?;
             }
         }
         Ok(())
@@ -118,9 +120,7 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
     static CACHE: Mutex<Option<CachedResult>> = Mutex::new(None);
     const CACHE_TTL_SECS: u64 = 2;
 
-    let manifest_path = Path::new(vault_path)
-        .join(".margin")
-        .join("sync-base.enc");
+    let manifest_path = Path::new(vault_path).join(".margin").join("sync-base.enc");
 
     // Get manifest mtime for cache invalidation
     let manifest_mtime = fs::metadata(&manifest_path)
@@ -141,11 +141,9 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
     }
 
     let manifest: Manifest = if manifest_path.exists() {
-        let enc = fs::read(&manifest_path)
-            .map_err(|e| format!("Failed to read manifest: {e}"))?;
+        let enc = fs::read(&manifest_path).map_err(|e| format!("Failed to read manifest: {e}"))?;
         let dec = crate::crypto::decrypt_blob(enc, encryption_key)?;
-        serde_json::from_slice(&dec)
-            .map_err(|e| format!("Failed to parse manifest: {e}"))?
+        serde_json::from_slice(&dec).map_err(|e| format!("Failed to parse manifest: {e}"))?
     } else {
         Manifest {
             version: 2,
@@ -165,13 +163,13 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
     let result = if local_files.len() != base.len() {
         true
     } else {
-        local_files.iter().any(|(path, mtime)| {
-            match base.get(path.as_str()) {
+        local_files
+            .iter()
+            .any(|(path, mtime)| match base.get(path.as_str()) {
                 None => true,
                 Some(&bm) if bm != *mtime => true,
                 _ => false,
-            }
-        })
+            })
     };
 
     if let Ok(mut guard) = CACHE.lock() {

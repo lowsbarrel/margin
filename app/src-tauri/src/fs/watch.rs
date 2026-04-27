@@ -1,4 +1,4 @@
-use super::{WatcherState, VaultWatcherState};
+use super::{VaultWatcherState, WatcherState};
 use notify::{recommended_watcher, Event, EventKind, RecursiveMode, Watcher};
 use std::path::Path;
 use tauri::{AppHandle, Emitter, Manager};

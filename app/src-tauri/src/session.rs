@@ -135,7 +135,9 @@ fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, Strin
         for p in &mut profiles.profiles {
             p.vault_path = normalise_vault_path(&p.vault_path);
         }
-        profiles.profiles.retain(|p| seen.insert(p.vault_path.clone()));
+        profiles
+            .profiles
+            .retain(|p| seen.insert(p.vault_path.clone()));
         if let Some(ref mut lu) = profiles.last_used {
             *lu = normalise_vault_path(lu);
         }
@@ -218,7 +220,8 @@ pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Resul
 pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
     let norm = normalise_vault_path(&vault_path);
-    data.profiles.retain(|p| normalise_vault_path(&p.vault_path) != norm);
+    data.profiles
+        .retain(|p| normalise_vault_path(&p.vault_path) != norm);
     if data.last_used.as_deref().map(normalise_vault_path) == Some(norm) {
         data.last_used = data.profiles.first().map(|p| p.vault_path.clone());
     }
@@ -263,7 +266,11 @@ pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, Strin
     let data = load_profiles_internal(&app)?;
     if let Some(last) = &data.last_used {
         let norm_last = normalise_vault_path(last);
-        if let Some(profile) = data.profiles.iter().find(|p| normalise_vault_path(&p.vault_path) == norm_last) {
+        if let Some(profile) = data
+            .profiles
+            .iter()
+            .find(|p| normalise_vault_path(&p.vault_path) == norm_last)
+        {
             return Ok(Some(profile.clone()));
         }
     }

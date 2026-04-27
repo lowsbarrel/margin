@@ -99,6 +99,41 @@ function conflictCopyName(path: string): string {
   return `${path}.${suffix}`;
 }
 
+function isMissingRemoteManifestError(err: unknown): boolean {
+  const message = String(err);
+  return (
+    message.includes("NoSuchKey") ||
+    message.includes("Not Found") ||
+    message.includes("404")
+  );
+}
+
+async function writeConflictCopy(
+  vaultPath: string,
+  path: string,
+  content: Uint8Array,
+  hash: string,
+  mergedFiles: Map<string, ManifestEntry>,
+  s3Prefix: string,
+  encryptionKey: number[],
+): Promise<string> {
+  const conflictPath = conflictCopyName(path);
+  const modified = nowSeconds();
+
+  await ensureParentDir(vaultPath, conflictPath);
+  await writeFileBytes(`${vaultPath}/${conflictPath}`, content);
+  await setMtime(`${vaultPath}/${conflictPath}`, modified);
+  await syncUploadFiles(vaultPath, s3Prefix, [conflictPath], encryptionKey);
+
+  mergedFiles.set(conflictPath, {
+    path: conflictPath,
+    hash,
+    modified,
+  });
+
+  return conflictPath;
+}
+
 async function ensureParentDir(
   vaultPath: string,
   relativePath: string,
@@ -228,6 +263,9 @@ async function doSyncToS3(
       }
     } catch (err) {
       if (signal.aborted) throw new Error("Sync cancelled");
+      if (!isMissingRemoteManifestError(err)) {
+        throw new Error(`Failed to download remote manifest: ${err}`);
+      }
       // If base has files but remote fetch fails, abort — otherwise the
       // 3-way diff treats every file as "deleted on remote" and wipes them.
       if (baseManifest.files.length > 0) {
@@ -336,9 +374,15 @@ async function doSyncToS3(
             const localData = await readFileBytes(
               `${vaultPath}/${action.path}`,
             );
-            const conflictPath = conflictCopyName(action.path);
-            await ensureParentDir(vaultPath, conflictPath);
-            await writeFileBytes(`${vaultPath}/${conflictPath}`, localData);
+            await writeConflictCopy(
+              vaultPath,
+              action.path,
+              localData,
+              localEntry.hash,
+              mergedFiles,
+              s3Prefix,
+              encryptionKey,
+            );
 
             await syncDownloadFiles(
               vaultPath,
@@ -360,9 +404,15 @@ async function doSyncToS3(
               `${s3Prefix}files/${s3Key}.enc`,
             );
             const decrypted = await decryptBlob(encrypted, encryptionKey);
-            const conflictPath = conflictCopyName(action.path);
-            await ensureParentDir(vaultPath, conflictPath);
-            await writeFileBytes(`${vaultPath}/${conflictPath}`, decrypted);
+            await writeConflictCopy(
+              vaultPath,
+              action.path,
+              decrypted,
+              remoteEntry.hash,
+              mergedFiles,
+              s3Prefix,
+              encryptionKey,
+            );
 
             await syncUploadFiles(
               vaultPath,

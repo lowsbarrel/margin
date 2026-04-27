@@ -10,13 +10,11 @@ pub struct Theme {
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
-#[derive(Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default)]
 pub struct ThemeData {
     pub themes: Vec<Theme>,
     pub active_theme: Option<String>,
 }
-
 
 fn themes_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     let data_dir = app

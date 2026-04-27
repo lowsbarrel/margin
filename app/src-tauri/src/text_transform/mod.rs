@@ -68,7 +68,13 @@ pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: usize) -
             }
         }
 
-        scored.push((FuzzyEntry { name, path: entry.path }, score));
+        scored.push((
+            FuzzyEntry {
+                name,
+                path: entry.path,
+            },
+            score,
+        ));
     }
 
     scored.sort_by(|a, b| {

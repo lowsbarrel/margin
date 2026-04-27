@@ -43,13 +43,16 @@ pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
                 if let Some(close) = find_close_brackets(bytes, i + 2) {
                     let title_bytes = &bytes[i + 2..close];
                     // Reject if title contains [ or ] or newline
-                    if !title_bytes.iter().any(|&b| b == b'[' || b == b']' || b == b'\n') {
+                    if !title_bytes
+                        .iter()
+                        .any(|&b| b == b'[' || b == b']' || b == b'\n')
+                    {
                         if let Ok(title) = std::str::from_utf8(title_bytes) {
                             let title = title.trim();
                             if !title.is_empty() {
                                 let match_start = i;
                                 let match_end = close + 2; // past the ]]
-                                // Convert byte offsets to char offsets for correct PM mapping
+                                                           // Convert byte offsets to char offsets for correct PM mapping
                                 let char_start = node.text[..match_start].chars().count();
                                 let char_end = node.text[..match_end].chars().count();
                                 results.push(WikiLinkMatch {

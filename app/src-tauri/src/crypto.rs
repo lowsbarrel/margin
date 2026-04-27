@@ -114,7 +114,8 @@ fn parse_key_header(request: &Request) -> Result<Vec<u8>, String> {
 fn parse_body(request: &Request) -> Result<Vec<u8>, String> {
     match request.body() {
         InvokeBody::Raw(bytes) => Ok(bytes.clone()),
-        InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
-            .map_err(|e| format!("Invalid body: {e}")),
+        InvokeBody::Json(val) => {
+            serde_json::from_value::<Vec<u8>>(val.clone()).map_err(|e| format!("Invalid body: {e}"))
+        }
     }
 }

@@ -25,7 +25,9 @@ fn history_dir(vault_path: &str, file_path: &str) -> Result<String, String> {
     // Use case-insensitive comparison on Windows where drive letters may differ in case.
     let vault_prefix = format!("{vault}/");
     #[cfg(target_os = "windows")]
-    let inside = file.to_lowercase().starts_with(&vault_prefix.to_lowercase());
+    let inside = file
+        .to_lowercase()
+        .starts_with(&vault_prefix.to_lowercase());
     #[cfg(not(target_os = "windows"))]
     let inside = file.starts_with(&vault_prefix);
     if !inside {

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path, PathBuf};
 use tauri::State;
 
 use crate::fs::atomic_write;
@@ -46,11 +46,34 @@ pub fn path_to_s3_key(rel_path: String, encryption_key: Vec<u8>) -> String {
 }
 
 fn path_to_s3_key_internal(rel_path: &str, encryption_key: &[u8]) -> String {
-    let mut mac = <HmacSha256 as Mac>::new_from_slice(encryption_key)
-        .expect("HMAC can take key of any size");
+    let mut mac =
+        <HmacSha256 as Mac>::new_from_slice(encryption_key).expect("HMAC can take key of any size");
     mac.update(rel_path.as_bytes());
     let result = mac.finalize().into_bytes();
     hex::encode(&result[..16])
+}
+
+fn vault_file_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
+    if rel.is_empty() || rel.contains('\\') {
+        return Err(format!("Invalid sync path: {rel}"));
+    }
+
+    for component in Path::new(rel).components() {
+        match component {
+            Component::Normal(name) => {
+                if name
+                    .to_str()
+                    .map(|s| s.is_empty() || s.starts_with('.'))
+                    .unwrap_or(true)
+                {
+                    return Err(format!("Invalid sync path: {rel}"));
+                }
+            }
+            _ => return Err(format!("Invalid sync path: {rel}")),
+        }
+    }
+
+    Ok(base.join(rel))
 }
 
 /// Delete files from S3 by their relative paths (computes HMAC keys internally).
@@ -67,7 +90,11 @@ pub async fn sync_delete_files(
         cached.bucket.clone()
     };
     for rel in &paths {
-        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
+        let key = format!(
+            "{}files/{}.enc",
+            s3_prefix,
+            path_to_s3_key_internal(rel, &encryption_key)
+        );
         match bucket.delete_object(&key).await {
             Ok(_) => {}
             Err(e) => {
@@ -92,7 +119,7 @@ pub fn hash_files_batch(vault_path: String, paths: Vec<String>) -> Result<Vec<St
     paths
         .par_iter()
         .map(|rel| {
-            let full = base.join(rel);
+            let full = vault_file_path(base, rel)?;
             let data =
                 fs::read(&full).map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
             let mut hasher = Sha256::new();
@@ -244,7 +271,10 @@ pub fn compute_sync_actions(
 /// Return only entries that have a `deleted_at` timestamp.
 #[tauri::command]
 pub fn collect_tombstones(files: Vec<ManifestEntry>) -> Vec<ManifestEntry> {
-    files.into_iter().filter(|e| e.deleted_at.is_some()).collect()
+    files
+        .into_iter()
+        .filter(|e| e.deleted_at.is_some())
+        .collect()
 }
 
 /// Merge two tombstone lists, keeping the one with the later `deleted_at`.
@@ -290,11 +320,15 @@ pub async fn sync_upload_files(
     let base = Path::new(&vault_path);
 
     for rel in &paths {
-        let full = base.join(rel);
+        let full = vault_file_path(base, rel)?;
         let data =
             fs::read(&full).map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
         let enc = crate::crypto::encrypt_blob(data, encryption_key.clone())?;
-        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
+        let key = format!(
+            "{}files/{}.enc",
+            s3_prefix,
+            path_to_s3_key_internal(rel, &encryption_key)
+        );
         bucket
             .put_object(&key, &enc)
             .await
@@ -321,20 +355,22 @@ pub async fn sync_download_files(
     let base = Path::new(&vault_path);
 
     for rel in &paths {
-        let key = format!("{}files/{}.enc", s3_prefix, path_to_s3_key_internal(rel, &encryption_key));
+        let key = format!(
+            "{}files/{}.enc",
+            s3_prefix,
+            path_to_s3_key_internal(rel, &encryption_key)
+        );
         let response = bucket
             .get_object(&key)
             .await
             .map_err(|e| format!("Download failed for {rel}: {e}"))?;
         let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key.clone())?;
 
-        let dest = base.join(rel);
+        let dest = vault_file_path(base, rel)?;
         if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent)
-                .map_err(|e| format!("Failed to create directory: {e}"))?;
+            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
         }
-        fs::write(&dest, &dec)
-            .map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
+        fs::write(&dest, &dec).map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
     }
 
     Ok(())

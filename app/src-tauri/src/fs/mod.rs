@@ -1,14 +1,14 @@
-mod walk;
+mod export;
 mod search;
 mod tags;
+mod walk;
 mod watch;
-mod export;
 
-pub use walk::*;
+pub use export::*;
 pub use search::*;
 pub use tags::*;
+pub use walk::*;
 pub use watch::*;
-pub use export::*;
 
 use rayon::prelude::*;
 use serde::Serialize;
@@ -25,11 +25,18 @@ static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
 /// so the JS frontend gets consistent separators on every platform.
 #[inline]
 pub(crate) fn path_to_string(p: std::path::PathBuf) -> String {
-    let s = p.into_os_string().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+    let s = p
+        .into_os_string()
+        .into_string()
+        .unwrap_or_else(|s| s.to_string_lossy().into_owned());
     #[cfg(target_os = "windows")]
-    { s.replace('\\', "/") }
+    {
+        s.replace('\\', "/")
+    }
     #[cfg(not(target_os = "windows"))]
-    { s }
+    {
+        s
+    }
 }
 
 /// Write `content` to `dest` atomically by writing to a sibling temp file
@@ -114,10 +121,8 @@ pub fn write_file_bytes(request: Request) -> Result<(), String> {
         .ok_or_else(|| "Missing x-path header".to_string())?;
     let data = match request.body() {
         InvokeBody::Raw(bytes) => bytes.clone(),
-        InvokeBody::Json(val) => {
-            serde_json::from_value::<Vec<u8>>(val.clone())
-                .map_err(|e| format!("Invalid body: {e}"))?
-        }
+        InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
+            .map_err(|e| format!("Invalid body: {e}"))?,
     };
     let p = Path::new(path);
     if let Some(parent) = p.parent() {
@@ -136,7 +141,10 @@ pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
     let mut entries = Vec::new();
     let dir = fs::read_dir(p).map_err(|e| format!("Failed to read directory: {e}"))?;
     for entry in dir.flatten() {
-        let name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+        let name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
         if name.starts_with('.') {
             continue;
         }
@@ -229,13 +237,11 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
         }
     }
 
-    files_to_copy
-        .par_iter()
-        .try_for_each(|(s, d)| {
-            fs::copy(s, d)
-                .map(|_| ())
-                .map_err(|e| format!("Failed to copy file: {e}"))
-        })?;
+    files_to_copy.par_iter().try_for_each(|(s, d)| {
+        fs::copy(s, d)
+            .map(|_| ())
+            .map_err(|e| format!("Failed to copy file: {e}"))
+    })?;
 
     for (src_child, dst_child) in dirs {
         copy_dir_recursive(&src_child, &dst_child)?;

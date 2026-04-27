@@ -1,4 +1,4 @@
-use super::{FsEntry, TreeEntry, path_to_string};
+use super::{path_to_string, FsEntry, TreeEntry};
 use std::collections::HashSet;
 use std::fs;
 use std::path::Path;
@@ -19,7 +19,10 @@ fn walk_dir_impl(dir: &Path, include_hidden: bool, result: &mut Vec<FsEntry>) {
         Err(_) => return,
     };
     for entry in read.flatten() {
-        let name = entry.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+        let name = entry
+            .file_name()
+            .into_string()
+            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
         if !include_hidden && name.starts_with('.') {
             continue;
         }
@@ -88,7 +91,10 @@ fn build_tree_impl(
     let mut entries: Vec<Raw> = read
         .flatten()
         .filter_map(|e| {
-            let name = e.file_name().into_string().unwrap_or_else(|s| s.to_string_lossy().into_owned());
+            let name = e
+                .file_name()
+                .into_string()
+                .unwrap_or_else(|s| s.to_string_lossy().into_owned());
             if name.starts_with('.') {
                 return None;
             }
@@ -152,6 +158,12 @@ pub fn build_subtree(
 ) -> Result<Vec<TreeEntry>, String> {
     let expanded_set: HashSet<String> = expanded.into_iter().collect();
     let mut results = Vec::new();
-    build_tree_impl(Path::new(folder), depth_offset, &expanded_set, sort_by, &mut results);
+    build_tree_impl(
+        Path::new(folder),
+        depth_offset,
+        &expanded_set,
+        sort_by,
+        &mut results,
+    );
     Ok(results)
 }
