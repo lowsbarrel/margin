@@ -79,6 +79,7 @@ export function tryNativeDrag(
 
   nativeDragState.started = true;
   drag.end();
+  drag.startNativeDrag();
 
   const paths =
     files.selectedEntries.size > 1 && files.isSelected(item.path)
@@ -93,7 +94,7 @@ export function tryNativeDrag(
   startNativeDrag(
     { item: paths, icon: dragIconPath },
     ({ result }) => {
-      if (result === "Dropped") {
+      if (result === "Dropped" && !drag.droppedBackInApp) {
         for (const entry of dragEntries) {
           ondeleteentry(entry.path, entry.isDir).catch(() => {});
         }
@@ -103,6 +104,7 @@ export function tryNativeDrag(
     .catch(() => {})
     .finally(() => {
       nativeDragState.started = false;
+      drag.endNativeDrag();
     });
 }
 

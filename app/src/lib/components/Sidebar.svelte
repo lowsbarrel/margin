@@ -20,6 +20,7 @@
   import { toast } from "$lib/stores/toast.svelte";
   import { vault } from "$lib/stores/vault.svelte";
   import { clipboard } from "$lib/stores/clipboard.svelte";
+  import { drag } from "$lib/stores/drag.svelte";
   import { getCurrentWebview } from "@tauri-apps/api/webview";
   import { IconButton } from "$lib/ui";
   import {
@@ -351,6 +352,11 @@
   // External file drop (OS file manager)
   async function handleExternalDrop(paths: string[], position: { x: number; y: number }) {
     if (!vault.vaultPath || !sidebarPanelEl) return;
+    // If this drop originated from our own native drag, flag it and skip import
+    if (drag.nativeDragActive) {
+      drag.markDroppedBackInApp();
+      return;
+    }
     const rect = sidebarPanelEl.getBoundingClientRect();
     if (position.x < rect.left || position.x > rect.right ||
         position.y < rect.top || position.y > rect.bottom) return;

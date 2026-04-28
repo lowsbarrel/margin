@@ -249,6 +249,11 @@
     paths: string[],
     position?: { x: number; y: number },
   ) {
+    // If this drop originated from our own native drag, flag it and skip
+    if (drag.nativeDragActive) {
+      drag.markDroppedBackInApp();
+      return;
+    }
     if (!vault.vaultPath || !tiptap) return;
     await handleTauriFileDrop(
       paths,
