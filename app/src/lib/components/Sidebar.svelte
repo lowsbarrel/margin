@@ -116,6 +116,11 @@
     return files.selectedFolder ?? vault.vaultPath ?? "";
   }
 
+  async function ensureFolderExpanded(path: string) {
+    if (!vault.vaultPath || path === vault.vaultPath || files.expandedFolders.has(path)) return;
+    await files.expandFolder(path);
+  }
+
   // Context menu
   function closeContextMenu() {
     menuTarget = null;
@@ -154,9 +159,10 @@
     const encoder = new TextEncoder();
     await writeFileBytes(path, encoder.encode(""));
 
-    if (base !== vault.vaultPath) files.expandFolder(base);
+    await ensureFolderExpanded(base);
     await files.refresh(vault.vaultPath);
     editor.markLocalChange();
+    files.requestTreeReveal(path);
     onfileselect(path);
     activeView = "files";
   }
@@ -169,16 +175,20 @@
     const encoder = new TextEncoder();
     await writeFileBytes(path, encoder.encode(""));
 
-    if (base !== vault.vaultPath) files.expandFolder(base);
+    await ensureFolderExpanded(base);
     await files.refresh(vault.vaultPath);
     editor.markLocalChange();
+    files.requestTreeReveal(path);
     onfileselect(path);
     activeView = "files";
   }
 
-  function handleStartNewFolder(base = getBasePath()) {
-    if (base !== vault.vaultPath) files.expandFolder(base);
+  async function handleStartNewFolder(base = getBasePath()) {
+    if (!vault.vaultPath) return;
+    await ensureFolderExpanded(base);
     files.startNewFolder(base);
+    files.requestPendingNewFolderReveal(base);
+    activeView = "files";
   }
 
   // Rename/delete/duplicate

@@ -3,7 +3,7 @@
   import type { TreeEntry } from "$lib/fs/bridge";
   import { createDirectory } from "$lib/fs/bridge";
   import { editor } from "$lib/stores/editor.svelte";
-  import { files } from "$lib/stores/files.svelte";
+  import { files, type TreeRevealTarget } from "$lib/stores/files.svelte";
   import { vault } from "$lib/stores/vault.svelte";
   import { favourites } from "$lib/stores/favourites.svelte";
   import { drag } from "$lib/stores/drag.svelte";
@@ -105,6 +105,57 @@
     return items;
   });
 
+  let handledTreeRevealVersion = $state(0);
+
+  function getVirtualIndex(target: TreeRevealTarget) {
+    const insertIdx = newFolderInsertIdx;
+    if (target.kind === "pending-new-folder") {
+      return files.pendingNewFolder === target.parentPath ? insertIdx : -1;
+    }
+
+    const rowIndex = rows.findIndex((row) => row.path === target.path);
+    if (rowIndex < 0) return -1;
+    return insertIdx >= 0 && rowIndex >= insertIdx ? rowIndex + 1 : rowIndex;
+  }
+
+  function scrollVirtualIndexIntoView(index: number) {
+    if (!viewport) return false;
+    const visibleHeight = viewport.clientHeight || viewportHeight;
+    if (visibleHeight <= 0) return false;
+
+    const rowTop = index * ROW_HEIGHT;
+    const rowBottom = rowTop + ROW_HEIGHT;
+    const currentTop = viewport.scrollTop;
+    const currentBottom = currentTop + visibleHeight;
+    let nextTop = currentTop;
+
+    if (rowTop < currentTop) {
+      nextTop = rowTop;
+    } else if (rowBottom > currentBottom) {
+      nextTop = rowBottom - visibleHeight;
+    } else {
+      return true;
+    }
+
+    const maxTop = Math.max(0, totalHeight - visibleHeight);
+    const boundedTop = Math.max(0, Math.min(maxTop, nextTop));
+    viewport.scrollTop = boundedTop;
+    scrollTop = boundedTop;
+    return true;
+  }
+
+  $effect(() => {
+    const target = files.treeRevealTarget;
+    const version = files.treeRevealVersion;
+    if (!target || !viewport || version === handledTreeRevealVersion) return;
+
+    const targetIndex = getVirtualIndex(target);
+    if (targetIndex < 0) return;
+    if (scrollVirtualIndexIntoView(targetIndex)) {
+      handledTreeRevealVersion = version;
+    }
+  });
+
   // Drag support
   let suppressNextClick = false;
   const nativeDragState = { started: false };
@@ -167,6 +218,7 @@
     await files.expandFolder(folderPath);
     files.setSelectedFolder(folderPath);
     await files.refresh();
+    files.requestTreeReveal(folderPath);
     editor.markLocalChange();
   }
 </script>

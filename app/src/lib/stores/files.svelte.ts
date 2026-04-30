@@ -1,6 +1,9 @@
 import { buildVisibleTree, buildSubtree, type TreeEntry } from "$lib/fs/bridge";
 
 export type SortOrder = "name" | "date";
+export type TreeRevealTarget =
+  | { kind: "entry"; path: string }
+  | { kind: "pending-new-folder"; parentPath: string };
 export type { TreeEntry };
 
 export interface SelectedEntry {
@@ -20,6 +23,8 @@ interface FilesState {
   expandedFolders: Set<string>;
   pendingNewFolder: string | null;
   renamingPath: string | null;
+  treeRevealTarget: TreeRevealTarget | null;
+  treeRevealVersion: number;
   sortOrder: SortOrder;
 }
 
@@ -34,6 +39,8 @@ let state = $state<FilesState>({
   expandedFolders: new Set(),
   pendingNewFolder: null,
   renamingPath: null,
+  treeRevealTarget: null,
+  treeRevealVersion: 0,
   sortOrder: "name",
 });
 
@@ -50,6 +57,11 @@ async function _rebuild(): Promise<void> {
 }
 
 let _pathIndex = new Map<string, number>();
+
+function _requestTreeReveal(target: TreeRevealTarget) {
+  state.treeRevealTarget = target;
+  state.treeRevealVersion += 1;
+}
 
 export const files = {
   get flatTree() {
@@ -82,6 +94,23 @@ export const files = {
     }
     state.expandedFolders = new Set(state.expandedFolders);
     await _rebuild();
+    _requestTreeReveal({ kind: "entry", path: filePath });
+  },
+
+  requestTreeReveal(path: string) {
+    _requestTreeReveal({ kind: "entry", path });
+  },
+
+  requestPendingNewFolderReveal(parentPath: string) {
+    _requestTreeReveal({ kind: "pending-new-folder", parentPath });
+  },
+
+  get treeRevealTarget() {
+    return state.treeRevealTarget;
+  },
+
+  get treeRevealVersion() {
+    return state.treeRevealVersion;
   },
 
   setSelectedFolder(path: string | null) {
@@ -251,6 +280,8 @@ export const files = {
     state.expandedFolders = new Set();
     state.pendingNewFolder = null;
     state.renamingPath = null;
+    state.treeRevealTarget = null;
+    state.treeRevealVersion = 0;
   },
 
   get pendingNewFolder() {

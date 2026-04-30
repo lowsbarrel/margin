@@ -2,7 +2,13 @@ import { drag } from "$lib/stores/drag.svelte";
 import { files } from "$lib/stores/files.svelte";
 import { startPointerDrag } from "$lib/utils/drag-handler";
 import { startDrag as startNativeDrag } from "@crabnebula/tauri-plugin-drag";
+import type { CallbackPayload } from "@crabnebula/tauri-plugin-drag";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import type { TreeEntry } from "$lib/fs/bridge";
+
+const NATIVE_DRAG_WINDOW_MARGIN = 4;
+const NATIVE_DRAG_DROP_SETTLE_MS = 50;
+const NATIVE_DRAG_END_SETTLE_MS = 100;
 
 export function isDescendantOrSelf(source: string, target: string): boolean {
   return target === source || target.startsWith(source + "/");
@@ -57,6 +63,41 @@ export function handleRootDrop(
   }
 }
 
+async function isCursorOutsideCurrentWindow(
+  cursorPos: CallbackPayload["cursorPos"],
+): Promise<boolean> {
+  const x = Number(cursorPos.x);
+  const y = Number(cursorPos.y);
+  if (!Number.isFinite(x) || !Number.isFinite(y)) return false;
+
+  try {
+    const currentWindow = getCurrentWindow();
+    const [position, size] = await Promise.all([
+      currentWindow.outerPosition(),
+      currentWindow.outerSize(),
+    ]);
+
+    return (
+      x < position.x - NATIVE_DRAG_WINDOW_MARGIN ||
+      x > position.x + size.width + NATIVE_DRAG_WINDOW_MARGIN ||
+      y < position.y - NATIVE_DRAG_WINDOW_MARGIN ||
+      y > position.y + size.height + NATIVE_DRAG_WINDOW_MARGIN
+    );
+  } catch {
+    return false;
+  }
+}
+
+async function shouldDeleteAfterNativeDrop(
+  cursorPos: CallbackPayload["cursorPos"],
+): Promise<boolean> {
+  await new Promise<void>((resolve) =>
+    window.setTimeout(resolve, NATIVE_DRAG_DROP_SETTLE_MS),
+  );
+  if (drag.droppedBackInApp) return false;
+  return isCursorOutsideCurrentWindow(cursorPos);
+}
+
 /** Start native OS drag when cursor exits the window. */
 export function tryNativeDrag(
   clientX: number,
@@ -65,7 +106,7 @@ export function tryNativeDrag(
   ondeleteentry: (path: string, isDir: boolean) => Promise<void>,
   nativeDragState: { started: boolean },
 ) {
-  if (!drag.active || nativeDragState.started) return;
+  if (!drag.active || drag.nativeDragActive || nativeDragState.started) return;
   const item = drag.item;
   if (!item || item.kind !== "file") return;
 
@@ -91,20 +132,35 @@ export function tryNativeDrag(
       ? files.getSelectedAsList()
       : [{ path: item.path, isDir: item.isDir }];
 
+  let finished = false;
+  function finishNativeDrag() {
+    if (finished) return;
+    finished = true;
+    nativeDragState.started = false;
+    window.setTimeout(() => {
+      drag.endNativeDrag();
+    }, NATIVE_DRAG_END_SETTLE_MS);
+  }
+
   startNativeDrag(
     { item: paths, icon: dragIconPath },
-    ({ result }) => {
-      if (result === "Dropped" && !drag.droppedBackInApp) {
+    ({ result, cursorPos }) => {
+      if (result !== "Dropped") {
+        finishNativeDrag();
+        return;
+      }
+
+      void shouldDeleteAfterNativeDrop(cursorPos).then((shouldDelete) => {
+        if (!shouldDelete) return;
         for (const entry of dragEntries) {
           ondeleteentry(entry.path, entry.isDir).catch(() => {});
         }
-      }
+      });
+      finishNativeDrag();
     },
   )
-    .catch(() => {})
-    .finally(() => {
-      nativeDragState.started = false;
-      drag.endNativeDrag();
+    .catch(() => {
+      finishNativeDrag();
     });
 }
 
