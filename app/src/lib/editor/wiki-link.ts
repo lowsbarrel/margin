@@ -1,7 +1,40 @@
-import { Node, mergeAttributes, InputRule } from "@tiptap/core";
+import { Editor, Node, mergeAttributes, InputRule } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
-import type { NodeType } from "@tiptap/pm/model";
+import type { Node as PMNode, NodeType } from "@tiptap/pm/model";
 import { extractWikiLinks, type TextNode } from "$lib/fs/bridge";
+
+/**
+ * Minimal structural types for the tiptap-markdown serializer state and the
+ * markdown-it inline plugin surface we touch. markdown-it@14 ships no bundled
+ * .d.ts and @types/markdown-it is not a dependency, so we declare just the
+ * members used here instead of falling back to `any`.
+ */
+interface MarkdownSerializerState {
+  write(content: string): void;
+}
+
+interface MdToken {
+  content: string;
+  attrPush(attr: [string, string]): void;
+  attrGet(name: string): string | null;
+}
+
+interface MdInlineState {
+  src: string;
+  pos: number;
+  posMax: number;
+  push(type: string, tag: string, nesting: number): MdToken;
+}
+
+type MdInlineRule = (state: MdInlineState, silent: boolean) => boolean;
+
+type MdRenderRule = (tokens: MdToken[], idx: number) => string;
+
+interface MarkdownIt {
+  utils: { escapeHtml(str: string): string };
+  inline: { ruler: { push(name: string, rule: MdInlineRule): void } };
+  renderer: { rules: Record<string, MdRenderRule> };
+}
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -110,11 +143,11 @@ const WikiLink = Node.create({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: any) {
+        serialize(state: MarkdownSerializerState, node: PMNode) {
           state.write(`[[${node.attrs.title}]]`);
         },
         parse: {
-          setup(md: any) {
+          setup(md: MarkdownIt) {
             wikiLinkPlugin(md);
           },
         },
@@ -123,10 +156,21 @@ const WikiLink = Node.create({
   },
 });
 
+/**
+ * Monotonic token used to coalesce overlapping conversions. Both onCreate and
+ * appendTransaction can fire in quick succession (e.g. on file reload); without
+ * this, two overlapping extractWikiLinks IPC calls could resolve against a doc
+ * that changed in between, applying stale from/to positions.
+ */
+let convertVersion = 0;
+
 /** Collect text nodes from the PM doc and send them to Rust for wiki-link extraction. */
-async function convertWikiLinksAsync(editor: any, nodeType: NodeType) {
+async function convertWikiLinksAsync(editor: Editor, nodeType: NodeType) {
+  const version = ++convertVersion;
+  const capturedDoc = editor.state.doc;
+
   const nodes: TextNode[] = [];
-  editor.state.doc.descendants((node: any, pos: number) => {
+  capturedDoc.descendants((node, pos) => {
     if (!node.isText || !node.text) return;
     if (node.text.indexOf("[[") === -1) return;
     nodes.push({ text: node.text, pos });
@@ -136,8 +180,12 @@ async function convertWikiLinksAsync(editor: any, nodeType: NodeType) {
   try {
     const replacements = await extractWikiLinks(nodes);
     if (replacements.length === 0) return;
-    // Verify the editor is still alive and doc hasn't changed
+    // Verify the editor is still alive.
     if (!editor.view || editor.isDestroyed) return;
+    // Bail if a newer conversion was started, or the doc changed between
+    // dispatch and resolution (positions would now be stale).
+    if (version !== convertVersion) return;
+    if (editor.state.doc !== capturedDoc) return;
     const tr = editor.state.tr;
     // Apply end→start so earlier positions aren't shifted
     for (let i = replacements.length - 1; i >= 0; i--) {
@@ -151,8 +199,8 @@ async function convertWikiLinksAsync(editor: any, nodeType: NodeType) {
   }
 }
 
-function wikiLinkPlugin(md: any) {
-  md.inline.ruler.push("wiki_link", function (state: any, silent: boolean) {
+function wikiLinkPlugin(md: MarkdownIt) {
+  md.inline.ruler.push("wiki_link", function (state, silent) {
     const src = state.src;
     const pos = state.pos;
     const max = state.posMax;
@@ -179,7 +227,7 @@ function wikiLinkPlugin(md: any) {
     return true;
   });
 
-  md.renderer.rules["wiki_link"] = function (tokens: any[], idx: number) {
+  md.renderer.rules["wiki_link"] = function (tokens, idx) {
     const token = tokens[idx];
     const title = token.attrGet("data-title") ?? "";
     const escaped = md.utils.escapeHtml(title);

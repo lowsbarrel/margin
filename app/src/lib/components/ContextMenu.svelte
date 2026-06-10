@@ -78,7 +78,7 @@
   tabindex={-1}
   role="menu"
 >
-  {#each items as item}
+  {#each items as item (item.label)}
     <button
       class="menu-item"
       class:destructive={item.destructive}

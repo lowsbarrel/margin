@@ -13,23 +13,34 @@ struct LegacySession {
     vault_path: String,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct VaultProfile {
     pub name: String,
     pub mnemonic: String,
     pub vault_path: String,
 }
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, specta::Type)]
 pub struct VaultProfiles {
     pub profiles: Vec<VaultProfile>,
     pub last_used: Option<String>,
 }
 
+/// Process-wide lock guarding the get-or-create-or-validate device key
+/// sequence. Tauri commands run on a threadpool, so two concurrent callers
+/// (e.g. save_vault_profile + load_session at startup) could otherwise both
+/// observe a missing/corrupt key and generate different keys, with the last
+/// rename winning — orphaning data encrypted under the discarded key.
+static DEVICE_KEY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 /// Get or create a random 32-byte device key stored at {app_data}/device.key.
 /// This key never leaves the filesystem and is used to encrypt session data,
 /// keeping the mnemonic out of plaintext contexts like localStorage.
 fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    // Serialize the whole read/validate/generate/rename sequence so concurrent
+    // callers observe a single key rather than racing to create one.
+    let _guard = DEVICE_KEY_LOCK.lock().map_err(|e| e.to_string())?;
+
     let data_dir = app
         .path()
         .app_data_dir()
@@ -189,12 +200,14 @@ fn save_profiles_internal(app: &tauri::AppHandle, profiles: &VaultProfiles) -> R
 
 /// Load all saved vault profiles
 #[tauri::command]
+#[specta::specta]
 pub fn load_vault_profiles(app: tauri::AppHandle) -> Result<VaultProfiles, String> {
     load_profiles_internal(&app)
 }
 
 /// Save or update a vault profile. If a profile with the same vault_path exists, update it.
 #[tauri::command]
+#[specta::specta]
 pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
     let norm = normalise_vault_path(&profile.vault_path);
@@ -217,6 +230,7 @@ pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Resul
 
 /// Delete a vault profile by vault_path
 #[tauri::command]
+#[specta::specta]
 pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
     let norm = normalise_vault_path(&vault_path);
@@ -230,6 +244,7 @@ pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result
 
 /// Legacy compatibility: save_session now saves/updates a profile
 #[tauri::command]
+#[specta::specta]
 pub fn save_session(
     app: tauri::AppHandle,
     mnemonic: String,
@@ -262,6 +277,7 @@ pub fn save_session(
 
 /// Legacy compatibility: load_session returns the last-used profile
 #[tauri::command]
+#[specta::specta]
 pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, String> {
     let data = load_profiles_internal(&app)?;
     if let Some(last) = &data.last_used {
@@ -279,6 +295,7 @@ pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, Strin
 
 /// Legacy compatibility: clear_session removes the last-used flag but keeps profiles
 #[tauri::command]
+#[specta::specta]
 pub fn clear_session(app: tauri::AppHandle) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
     data.last_used = None;

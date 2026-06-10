@@ -42,6 +42,7 @@
 	"sidebar_cut": "Cut",
 	"sidebar_paste": "Paste",
 	"sidebar_favourites": "Favourites",
+	"sidebar_no_favourites": "No favourites yet",
 	"sidebar_add_favourite": "Add to Favourites",
 	"sidebar_remove_favourite": "Remove from Favourites",
 	"sidebar_graph": "Graph",

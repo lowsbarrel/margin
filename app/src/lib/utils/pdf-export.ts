@@ -138,7 +138,9 @@ export async function exportPdf(
     const images = container.querySelectorAll("img");
     await Promise.all(Array.from(images).map(inlineLocalImage));
 
-    const { default: html2canvas } = await import("html2canvas");
+    // html2canvas-pro is a maintained fork with the same API that supports
+    // modern CSS (oklch colors, flex/grid) which upstream html2canvas breaks on.
+    const { default: html2canvas } = await import("html2canvas-pro");
     const { jsPDF } = await import("jspdf");
 
     const canvas = await html2canvas(container, {
@@ -149,34 +151,48 @@ export async function exportPdf(
 
     const imgWidth = 210; // A4 width in mm
     const pageHeight = 297; // A4 height in mm
-    const imgHeight = (canvas.height * imgWidth) / canvas.width;
 
     const pdf = new jsPDF("p", "mm", "a4");
-    let heightLeft = imgHeight;
-    let position = 0;
 
-    pdf.addImage(
-      canvas.toDataURL("image/png"),
-      "PNG",
-      0,
-      position,
-      imgWidth,
-      imgHeight,
-    );
-    heightLeft -= pageHeight;
+    // Pixel height of one A4 page in the source canvas, so each PDF page gets a
+    // freshly sliced canvas instead of one tall bitmap shifted by a negative
+    // offset (which can leave seams and slice content mid-line).
+    const pxPerPage = Math.floor((pageHeight * canvas.width) / imgWidth);
+    const totalPages = Math.max(1, Math.ceil(canvas.height / pxPerPage));
 
-    while (heightLeft > 0) {
-      position -= pageHeight;
-      pdf.addPage();
+    for (let page = 0; page < totalPages; page++) {
+      const sliceY = page * pxPerPage;
+      const sliceHeight = Math.min(pxPerPage, canvas.height - sliceY);
+
+      const pageCanvas = document.createElement("canvas");
+      pageCanvas.width = canvas.width;
+      pageCanvas.height = sliceHeight;
+      const ctx = pageCanvas.getContext("2d");
+      if (!ctx) continue;
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, pageCanvas.width, pageCanvas.height);
+      ctx.drawImage(
+        canvas,
+        0,
+        sliceY,
+        canvas.width,
+        sliceHeight,
+        0,
+        0,
+        canvas.width,
+        sliceHeight,
+      );
+
+      const sliceImgHeight = (sliceHeight * imgWidth) / canvas.width;
+      if (page > 0) pdf.addPage();
       pdf.addImage(
-        canvas.toDataURL("image/png"),
+        pageCanvas.toDataURL("image/png"),
         "PNG",
         0,
-        position,
+        0,
         imgWidth,
-        imgHeight,
+        sliceImgHeight,
       );
-      heightLeft -= pageHeight;
     }
 
     const arrayBuf = pdf.output("arraybuffer");

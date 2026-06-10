@@ -1,5 +1,11 @@
 import { IMAGE_EXTS_ARRAY } from "$lib/utils/mime";
-import { LOCALFILE_URL_PREFIX, stripLocalfilePrefix } from "$lib/editor/image-url";
+import {
+  LOCALFILE_URL_PREFIX,
+  LOCALFILE_IMAGE_HOST_RE,
+  encodeLocalfileSpaces,
+  encodeLocalfileImageSpaces,
+  stripLocalfilePrefix,
+} from "$lib/editor/image-url";
 
 /** Convert wiki image embeds ![[file.ext]] to standard markdown syntax. */
 export function resolveWikiEmbeds(
@@ -12,7 +18,7 @@ export function resolveWikiEmbeds(
     const ext = filename.split(".").pop()?.toLowerCase() ?? "";
     if (!IMAGE_EXTS_ARRAY.includes(ext)) return match; // handled by FileEmbed plugin
     const relPath = filename.includes("/") ? filename : `${folder}/${filename}`;
-    const safePath = relPath.replace(/ /g, "%20");
+    const safePath = encodeLocalfileSpaces(relPath);
     return `![${filename}](${safePath})`;
   });
 }
@@ -31,16 +37,13 @@ export function resolveImagePaths(
   }
   // Encode spaces inside any existing localfile image URLs (both scheme forms)
   // so tiptap-markdown and the WebView can parse them.
-  fixed = fixed.replace(
-    /!\[([^\]]*)\]\(((?:localfile:\/\/|http:\/\/localfile\.localhost)[^)]+)\)/g,
-    (_m, alt, url: string) => `![${alt}](${url.replace(/ /g, "%20")})`,
-  );
+  fixed = encodeLocalfileImageSpaces(fixed);
   return fixed.replace(
     /!\[([^\]]*)\]\((?!https?:\/\/|data:|localfile:\/\/)([^)]+)\)/g,
     (_match, alt, relPath) => {
       const absPath = `${vaultPath}/${relPath}`;
       const prefix = absPath.startsWith("/") ? "" : "/";
-      const encoded = absPath.replace(/ /g, "%20");
+      const encoded = encodeLocalfileSpaces(absPath);
       return `![${alt}](${LOCALFILE_URL_PREFIX}${prefix}${encoded})`;
     },
   );
@@ -53,7 +56,7 @@ export function unresolveImagePaths(
 ): string {
   if (!vaultPath) return md;
   return md.replace(
-    /!\[([^\]]*)\]\(((?:localfile:\/\/localhost|http:\/\/localfile\.localhost)\/?[^)]+)\)/g,
+    LOCALFILE_IMAGE_HOST_RE,
     (_match, alt: string, fullUrl: string) => {
       const stripped = stripLocalfilePrefix(fullUrl) ?? fullUrl;
       const noLead = stripped.startsWith("/") ? stripped.slice(1) : stripped;

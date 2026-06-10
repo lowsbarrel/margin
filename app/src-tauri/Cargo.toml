@@ -37,8 +37,12 @@ base64 = "0.22"
 percent-encoding = "2"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
 rayon = "1"
+nucleo-matcher = "0.3"
 memchr = "2"
 filetime = "0.2"
 zip = { version = "2", default-features = false, features = ["deflate"] }
 tauri-plugin-drag = "2.1.0"
+specta = { version = "2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "2.0.0-rc.25", features = ["derive", "typescript"] }
 

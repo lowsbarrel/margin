@@ -8,6 +8,7 @@ import { files } from "$lib/stores/files.svelte";
 import { editor } from "$lib/stores/editor.svelte";
 import { vault } from "$lib/stores/vault.svelte";
 import { toast } from "$lib/stores/toast.svelte";
+import type { WorkspacePane } from "$lib/settings/workspace";
 import * as m from "$lib/paraglide/messages.js";
 
 
@@ -522,19 +523,43 @@ export const panes = {
   },
 
 
+  /**
+   * Replace the content of the active tab when an external change is detected
+   * for `path`. Returns true if a matching tab was updated. Keeps the mutation
+   * (including the `externalContentVersion` bump that forces the editor to
+   * reload) inside the store instead of reaching into nested `$state`.
+   */
+  applyExternalContent(path: string, content: string): boolean {
+    const pi = _activePaneIndex;
+    const pane = _panes[pi];
+    if (!pane) return false;
+    const ti = pane.activeTabIndex;
+    if (ti < 0 || ti >= pane.tabs.length) return false;
+    if (pane.tabs[ti].path !== path) return false;
+    if (pane.tabs[ti].content === content) return false;
+    _panes[pi].tabs[ti] = { ..._panes[pi].tabs[ti], content };
+    _panes[pi].externalContentVersion++;
+    return true;
+  },
+
   broadcastContent(
     sourcePaneIndex: number,
     filePath: string,
     content: string,
   ) {
+    // Only relevant when the same file is open in another pane.
+    if (_panes.length < 2) return;
     for (let pi = 0; pi < _panes.length; pi++) {
       if (pi === sourcePaneIndex) continue;
-      for (let ti = 0; ti < _panes[pi].tabs.length; ti++) {
-        if (_panes[pi].tabs[ti].path === filePath) {
-          _panes[pi].tabs[ti] = { ..._panes[pi].tabs[ti], content };
-          _panes[pi].externalContentVersion++;
-        }
-      }
+      const pane = _panes[pi];
+      if (!pane.tabs.some((t) => t.path === filePath)) continue;
+      _panes[pi] = {
+        ...pane,
+        tabs: pane.tabs.map((t) =>
+          t.path === filePath ? { ...t, content } : t,
+        ),
+        externalContentVersion: pane.externalContentVersion + 1,
+      };
     }
   },
 
@@ -548,42 +573,43 @@ export const panes = {
 
 
   async restoreFromWorkspace(
-    wsPanes: { tabs: { path: string; type: string }[]; active_tab_index: number }[],
+    wsPanes: WorkspacePane[],
     wsFlexes: number[],
     wsActivePaneIndex: number,
   ) {
+    // Build each tab independently; the file reads are mutually independent, so
+    // run them concurrently (per pane) instead of blocking on a serial chain at
+    // startup. A failed read or unsupported type yields null and is dropped.
+    const buildTab = async (path: string): Promise<Tab | null> => {
+      const tabType = getTabType(path);
+      if (tabType === "unknown" && path !== "__graph__") return null;
+      const type = path === "__graph__" ? ("graph" as TabType) : tabType;
+
+      let content = "";
+      let blobUrl: string | undefined;
+      let pdfData: Uint8Array | undefined;
+      try {
+        if (path !== "__graph__") {
+          const bytes = await readFileBytes(path);
+          if (type === "markdown" || type === "canvas") {
+            content = new TextDecoder().decode(bytes);
+          } else if (type === "pdf") {
+            pdfData = new Uint8Array(bytes);
+          } else {
+            const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
+            blobUrl = URL.createObjectURL(blob);
+          }
+        }
+      } catch {
+        return null;
+      }
+      return { id: nextTabId(), path, content, type, blobUrl, pdfData };
+    };
+
     const restoredPanes: Pane[] = [];
     for (const wsPane of wsPanes) {
-      const tabs: Tab[] = [];
-      for (const wsTab of wsPane.tabs) {
-        const tabType = getTabType(wsTab.path);
-        if (tabType === "unknown" && wsTab.path !== "__graph__") continue;
-
-        let content = "";
-        let blobUrl: string | undefined;
-        let pdfData: Uint8Array | undefined;
-        const type = wsTab.path === "__graph__" ? "graph" as TabType : tabType;
-
-        try {
-          if (wsTab.path !== "__graph__") {
-            const bytes = await readFileBytes(wsTab.path);
-            if (type === "markdown" || type === "canvas") {
-              content = new TextDecoder().decode(bytes);
-            } else if (type === "pdf") {
-              pdfData = new Uint8Array(bytes);
-            } else {
-              const blob = new Blob([bytes.buffer as ArrayBuffer], {
-                type: mimeForPath(wsTab.path),
-              });
-              blobUrl = URL.createObjectURL(blob);
-            }
-          }
-        } catch {
-          continue;
-        }
-
-        tabs.push({ id: nextTabId(), path: wsTab.path, content, type, blobUrl, pdfData });
-      }
+      const built = await Promise.all(wsPane.tabs.map((t) => buildTab(t.path)));
+      const tabs = built.filter((t): t is Tab => t !== null);
 
       if (tabs.length > 0) {
         const activeIdx = Math.min(Math.max(wsPane.active_tab_index, 0), tabs.length - 1);

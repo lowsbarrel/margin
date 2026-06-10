@@ -20,6 +20,8 @@
   } from "$lib/fs/bridge";
   import { loadSettings } from "$lib/settings/bridge";
   import { s3Configure } from "$lib/s3/bridge";
+  import { flushWriteQueue } from "$lib/fs/writeQueue";
+  import { getCurrentWindow } from "@tauri-apps/api/window";
   import {
     startAutoSync,
     stopAutoSync,
@@ -39,7 +41,7 @@
     loadWorkspaceState,
     type WorkspaceState,
   } from "$lib/settings/workspace";
-  import type { SidebarView } from "$lib/components/Sidebar.svelte";
+  import { toSidebarView, type SidebarView } from "$lib/components/Sidebar.svelte";
   import { panes, fileTitle } from "$lib/stores/panes.svelte";
   import { handleRename, handleDelete, handleWikiLink, handleLogout } from "$lib/utils/page-actions";
   import { handleTabMouseDown, executeDrop, startDividerDrag } from "$lib/utils/tab-drag";
@@ -58,6 +60,9 @@
   let lastSaveTime = 0;
   let unlistenFileChange: (() => void) | null = null;
   let unlistenVaultChange: (() => void) | null = null;
+  let unlistenCloseRequested: (() => void) | null = null;
+  let vaultRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+  let destroyed = false;
   let updateInterval: ReturnType<typeof setInterval> | null = null;
   let panesContainerEl = $state<HTMLElement | null>(null);
   let dividerResizing = $state(false);
@@ -203,11 +208,14 @@
       }
 
       sidebarOpen = ws.sidebar_open;
-      sidebarWidth = ws.sidebar_width;
-      sidebarActiveView = (ws.sidebar_view as SidebarView) || "files";
+      sidebarWidth = ws.sidebar_width ?? sidebarWidth;
+      sidebarActiveView = toSidebarView(ws.sidebar_view);
 
-      if (ws.sort_order && ws.sort_order !== files.sortOrder) {
-        files.setSortOrder(ws.sort_order as "name" | "date");
+      if (
+        (ws.sort_order === "name" || ws.sort_order === "date") &&
+        ws.sort_order !== files.sortOrder
+      ) {
+        files.setSortOrder(ws.sort_order);
       }
 
       for (const folder of ws.expanded_folders) {
@@ -217,7 +225,7 @@
 
       await panes.restoreFromWorkspace(
         ws.panes,
-        ws.pane_flexes,
+        ws.pane_flexes.map((f) => f ?? 1),
         ws.active_pane_index,
       );
     } catch (err) {
@@ -254,21 +262,19 @@
       try {
         const bytes = await readFileBytes(tab.path);
         const newContent = new TextDecoder().decode(bytes);
-        if (newContent !== tab.content) {
-          const pi = panes.activePaneIndex;
-          const ti = panes.list[pi].activeTabIndex;
-          panes.list[pi].tabs[ti] = { ...panes.list[pi].tabs[ti], content: newContent };
-          panes.list[pi].externalContentVersion++;
+        if (panes.applyExternalContent(tab.path, newContent)) {
           editor.markLocalChange();
         }
       } catch (err) {
         console.warn("File may have been deleted:", err);
       }
     }).then((unlisten) => {
-      unlistenFileChange = unlisten;
+      // If the component unmounted before this promise resolved, the onDestroy
+      // ref was still null — detach immediately so the listener doesn't leak.
+      if (destroyed) unlisten();
+      else unlistenFileChange = unlisten;
     });
 
-    let vaultRefreshTimer: ReturnType<typeof setTimeout> | null = null;
     onVaultFsChanged(() => {
       editor.markLocalChange();
       if (vaultRefreshTimer) clearTimeout(vaultRefreshTimer);
@@ -277,21 +283,45 @@
         files.refresh();
       }, 300);
     }).then((unlisten) => {
-      unlistenVaultChange = unlisten;
+      if (destroyed) unlisten();
+      else unlistenVaultChange = unlisten;
     });
+
+    // Flush pending debounced editor saves and the write queue before the
+    // window closes so no in-flight edit is lost on quit.
+    getCurrentWindow()
+      .onCloseRequested(async (event) => {
+        event.preventDefault();
+        window.dispatchEvent(new Event("margin:flush"));
+        await flushWriteQueue();
+        await getCurrentWindow().destroy();
+      })
+      .then((unlisten) => {
+        if (destroyed) unlisten();
+        else unlistenCloseRequested = unlisten;
+      });
   });
 
   onDestroy(() => {
+    destroyed = true;
     if (workspaceSaveTimer) clearTimeout(workspaceSaveTimer);
+    if (vaultRefreshTimer) clearTimeout(vaultRefreshTimer);
     doSaveWorkspaceState();
     if (updateInterval) clearInterval(updateInterval);
     stopAutoSync();
     unwatchFile();
     unlistenFileChange?.();
     unlistenVaultChange?.();
+    unlistenCloseRequested?.();
   });
 
   // Vault setup
+
+  // Narrow a persisted/IPC string to a known ConflictStrategy instead of an
+  // unchecked cast, so a corrupted settings file falls back to the default.
+  function parseConflictStrategy(value: unknown): ConflictStrategy {
+    return value === "keep_newer" ? "keep_newer" : "local_wins";
+  }
 
   $effect(() => {
     if (vault.isUnlocked && vault.vaultPath) {
@@ -310,12 +340,12 @@
               if (vault.vaultPath !== currentVaultPath) return;
               if (settings?.s3) {
                 s3Configure(settings.s3);
+                const syncOpts = {
+                  conflictStrategy: parseConflictStrategy(
+                    settings?.conflict_strategy,
+                  ),
+                };
                 if (vault.vaultId && vault.encryptionKey) {
-                  const syncOpts = {
-                    conflictStrategy:
-                      (settings?.conflict_strategy as ConflictStrategy) ??
-                      "local_wins",
-                  };
                   setSyncCredentials(
                     currentVaultPath,
                     vault.vaultId,
@@ -337,11 +367,6 @@
                     });
                 }
                 if (settings.auto_sync && vault.vaultId && vault.encryptionKey) {
-                  const syncOpts = {
-                    conflictStrategy:
-                      (settings?.conflict_strategy as ConflictStrategy) ??
-                      "local_wins",
-                  };
                   startAutoSync(
                     currentVaultPath,
                     vault.vaultId,

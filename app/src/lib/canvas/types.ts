@@ -8,8 +8,13 @@ export type Tool =
   | "arrow"
   | "text";
 
+export interface Point {
+  x: number;
+  y: number;
+}
+
 export interface Stroke {
-  points: { x: number; y: number }[];
+  points: Point[];
   color: string;
   size: number;
   tool: "pen" | "eraser";

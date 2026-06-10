@@ -1,29 +1,26 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
+import { toBytes, fromBytes } from "$lib/ipc";
 
-export interface Snapshot {
-  filename: string;
-  /** Unix timestamp (seconds) */
-  timestamp: number;
-  size: number;
-}
+export type { Snapshot } from "$lib/bindings";
+import type { Snapshot } from "$lib/bindings";
 
 export async function saveSnapshot(
   vaultPath: string,
   filePath: string,
   content: Uint8Array,
 ): Promise<string> {
-  return invoke<string>("save_snapshot", {
-    vaultPath,
-    filePath,
-    content: Array.from(content),
-  });
+  const r = await commands.saveSnapshot(vaultPath, filePath, toBytes(content));
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function listSnapshots(
   vaultPath: string,
   filePath: string,
 ): Promise<Snapshot[]> {
-  return invoke<Snapshot[]>("list_snapshots", { vaultPath, filePath });
+  const r = await commands.listSnapshots(vaultPath, filePath);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function readSnapshot(
@@ -31,12 +28,9 @@ export async function readSnapshot(
   filePath: string,
   snapshotFilename: string,
 ): Promise<Uint8Array> {
-  const result = await invoke<number[]>("read_snapshot", {
-    vaultPath,
-    filePath,
-    snapshotFilename,
-  });
-  return new Uint8Array(result);
+  const r = await commands.readSnapshot(vaultPath, filePath, snapshotFilename);
+  if (r.status === "error") throw r.error;
+  return fromBytes(r.data);
 }
 
 export async function deleteSnapshot(
@@ -44,21 +38,29 @@ export async function deleteSnapshot(
   filePath: string,
   snapshotFilename: string,
 ): Promise<void> {
-  return invoke("delete_snapshot", { vaultPath, filePath, snapshotFilename });
+  const r = await commands.deleteSnapshot(
+    vaultPath,
+    filePath,
+    snapshotFilename,
+  );
+  if (r.status === "error") throw r.error;
 }
 
 export async function clearSnapshots(
   vaultPath: string,
   filePath: string,
 ): Promise<number> {
-  return invoke<number>("clear_snapshots", { vaultPath, filePath });
+  const r = await commands.clearSnapshots(vaultPath, filePath);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function clearHistoryTree(
   vaultPath: string,
   entryPath: string,
 ): Promise<void> {
-  return invoke("clear_history_tree", { vaultPath, entryPath });
+  const r = await commands.clearHistoryTree(vaultPath, entryPath);
+  if (r.status === "error") throw r.error;
 }
 
 export async function renameHistory(
@@ -66,5 +68,6 @@ export async function renameHistory(
   oldPath: string,
   newPath: string,
 ): Promise<void> {
-  return invoke("rename_history", { vaultPath, oldPath, newPath });
+  const r = await commands.renameHistory(vaultPath, oldPath, newPath);
+  if (r.status === "error") throw r.error;
 }

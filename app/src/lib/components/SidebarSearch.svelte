@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import {
     searchFiles,
     searchFileContents,
@@ -76,15 +77,27 @@
     }
   });
 
-  let groupedResults = $derived.by(() => {
-    const groups = new Map<string, { name: string; matches: ContentMatch[] }>();
+  // Cap the number of match rows rendered per file to keep the DOM bounded on
+  // broad searches (the Rust backend already caps total matches at 500).
+  const MAX_MATCHES_PER_FILE = 50;
+
+  interface ResultGroup {
+    path: string;
+    name: string;
+    matches: ContentMatch[];
+  }
+
+  let groupedResults = $derived.by<ResultGroup[]>(() => {
+    const groups = new Map<string, ResultGroup>();
     for (const match of contentResults) {
-      if (!groups.has(match.path)) {
-        groups.set(match.path, { name: match.name, matches: [] });
+      let group = groups.get(match.path);
+      if (!group) {
+        group = { path: match.path, name: match.name, matches: [] };
+        groups.set(match.path, group);
       }
-      groups.get(match.path)!.matches.push(match);
+      group.matches.push(match);
     }
-    return groups;
+    return [...groups.values()];
   });
 
   $effect(() => {
@@ -163,13 +176,15 @@
 
   async function handleReplaceAll() {
     if (!vault.vaultPath) return;
-    const paths = [...groupedResults.keys()];
+    const paths = groupedResults.map((g) => g.path);
     let total = 0;
+    let failed = 0;
     for (const path of paths) {
       try {
         const count = await replaceInFile(path, searchQuery, replaceQuery, caseSensitive);
         total += count;
       } catch (err) {
+        failed += 1;
         console.warn(`Replace in ${path} failed:`, err);
       }
     }
@@ -177,12 +192,19 @@
       toast.success(m.toast_replaced_in_files({ count: String(total), files: String(paths.length) }));
       handleSearchInput();
     }
+    if (failed > 0) {
+      toast.error(m.toast_replace_failed({ error: String(failed) }));
+    }
   }
 
   function toggleCaseSensitive() {
     caseSensitive = !caseSensitive;
     if (searchQuery.trim()) handleSearchInput();
   }
+
+  onDestroy(() => {
+    if (searchTimer) clearTimeout(searchTimer);
+  });
 </script>
 
 <div class="panel-header">
@@ -307,14 +329,14 @@
 
     {#if contentResults.length > 0}
       <div class="search-summary">
-        {m.sidebar_results_summary({ count: String(contentResults.length), files: String(groupedResults.size) })}
+        {m.sidebar_results_summary({ count: String(contentResults.length), files: String(groupedResults.length) })}
       </div>
     {/if}
 
-    {#each [...groupedResults] as [filePath, group] (filePath)}
+    {#each groupedResults as group (group.path)}
       <div class="search-file-group">
-        <button class="search-file-header" onclick={() => toggleFileCollapse(filePath)}>
-          {#if collapsedFiles.has(filePath)}
+        <button class="search-file-header" onclick={() => toggleFileCollapse(group.path)}>
+          {#if collapsedFiles.has(group.path)}
             <ChevronRight size={12} />
           {:else}
             <ChevronDown size={12} />
@@ -327,20 +349,25 @@
             <!-- svelte-ignore a11y_no_static_element_interactions -->
             <span
               class="search-file-replace"
-              onclick={(e) => { e.stopPropagation(); handleReplaceInFile(filePath); }}
+              onclick={(e) => { e.stopPropagation(); handleReplaceInFile(group.path); }}
               title={m.sidebar_replace_all_in_file()}
             >
               <Replace size={12} />
             </span>
           {/if}
         </button>
-        {#if !collapsedFiles.has(filePath)}
-          {#each group.matches as match}
+        {#if !collapsedFiles.has(group.path)}
+          {#each group.matches.slice(0, MAX_MATCHES_PER_FILE) as match (match.path + ":" + match.line)}
             <button class="search-match-item" onclick={() => onfileselect(match.path, searchQuery)}>
               <span class="search-match-line">L{match.line}</span>
               <span class="search-match-context">{@html highlightMatch(match.context, searchQuery, caseSensitive)}</span>
             </button>
           {/each}
+          {#if group.matches.length > MAX_MATCHES_PER_FILE}
+            <button class="search-match-more" onclick={() => onfileselect(group.path, searchQuery)}>
+              +{group.matches.length - MAX_MATCHES_PER_FILE}
+            </button>
+          {/if}
         {/if}
       </div>
     {/each}
@@ -609,6 +636,25 @@
   }
 
   .search-match-item:hover {
+    background: var(--bg-hover);
+    color: var(--text-primary);
+  }
+
+  .search-match-more {
+    display: block;
+    width: 100%;
+    padding: 3px 8px 3px 26px;
+    background: none;
+    border: none;
+    border-radius: var(--radius-xs);
+    color: var(--text-muted);
+    font-size: 0.75rem;
+    font-family: var(--font-mono);
+    cursor: pointer;
+    text-align: left;
+  }
+
+  .search-match-more:hover {
     background: var(--bg-hover);
     color: var(--text-primary);
   }

@@ -1,11 +1,12 @@
+import { SvelteSet } from "svelte/reactivity";
 import { vault } from "$lib/stores/vault.svelte";
 
 interface FavouritesState {
-  paths: Set<string>;
+  paths: SvelteSet<string>;
 }
 
 let state = $state<FavouritesState>({
-  paths: new Set(),
+  paths: new SvelteSet(),
 });
 
 function storageKey(): string | null {
@@ -35,10 +36,23 @@ function toAbsolute(relPath: string): string {
   return relPath;
 }
 
+// Absolute-path list/Set are recomputed only when state.paths (or the vault
+// path they depend on) changes — SvelteSet mutations (add/delete/clear) are
+// reactive, so reading state.paths inside these $derived re-runs them. Repeated
+// reads in a render return a stable identity instead of allocating + remapping
+// a fresh container every access.
+const absoluteList = $derived([...state.paths].map(toAbsolute));
+const absolutePaths = $derived(new Set(absoluteList));
+
 export const favourites = {
   /** Absolute paths for display/use by components */
   get paths(): Set<string> {
-    return new Set([...state.paths].map(toAbsolute));
+    return absolutePaths;
+  },
+
+  /** Stable derived array of absolute paths for template iteration. */
+  get list(): string[] {
+    return absoluteList;
   },
 
   isFavourite(path: string): boolean {
@@ -52,19 +66,16 @@ export const favourites = {
     } else {
       state.paths.add(rel);
     }
-    state.paths = new Set(state.paths);
     persist();
   },
 
   add(path: string) {
     state.paths.add(toRelative(path));
-    state.paths = new Set(state.paths);
     persist();
   },
 
   remove(path: string) {
     state.paths.delete(toRelative(path));
-    state.paths = new Set(state.paths);
     persist();
   },
 
@@ -73,7 +84,6 @@ export const favourites = {
     if (!state.paths.has(oldRel)) return;
     state.paths.delete(oldRel);
     state.paths.add(toRelative(newPath));
-    state.paths = new Set(state.paths);
     persist();
   },
 
@@ -81,7 +91,6 @@ export const favourites = {
     const rel = toRelative(path);
     if (!state.paths.has(rel)) return;
     state.paths.delete(rel);
-    state.paths = new Set(state.paths);
     persist();
   },
 
@@ -95,20 +104,21 @@ export const favourites = {
         if (Array.isArray(arr)) {
           const items = arr.filter((p): p is string => typeof p === "string");
           const vp = vault.vaultPath;
-          state.paths = new Set(
-            items.map((p) => {
-              const norm = p.replaceAll("\\", "/");
-              return vp && norm.startsWith(vp + "/") ? norm.slice(vp.length + 1) : norm;
-            }),
-          );
+          state.paths.clear();
+          for (const p of items) {
+            const norm = p.replaceAll("\\", "/");
+            state.paths.add(
+              vp && norm.startsWith(vp + "/") ? norm.slice(vp.length + 1) : norm,
+            );
+          }
           return;
         }
       }
     } catch { /* ignore */ }
-    state.paths = new Set();
+    state.paths.clear();
   },
 
   clear() {
-    state.paths = new Set();
+    state.paths.clear();
   },
 };

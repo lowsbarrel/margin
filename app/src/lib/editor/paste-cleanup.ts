@@ -4,15 +4,12 @@
 import { Extension } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { Fragment, Slice } from "@tiptap/pm/model";
+import { encodeLocalfileImageSpaces } from "$lib/editor/image-url";
 
 const YAML_FRONT_MATTER_REGEX = /^\s*---[\s\S]*?---\s*/;
-const IMAGE_WITH_LOCALFILE_URL =
-  /!\[([^\]]*)\]\(((?:localfile:\/\/|http:\/\/localfile\.localhost)[^)]+)\)/g;
 
 function normalizePastedMarkdown(text: string): string {
-  return text.replace(IMAGE_WITH_LOCALFILE_URL, (_m, alt, url) =>
-    `![${alt}](${(url as string).replace(/ /g, "%20")})`,
-  );
+  return encodeLocalfileImageSpaces(text);
 }
 
 export const PasteCleanup = Extension.create({

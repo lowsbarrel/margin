@@ -24,6 +24,14 @@
   import { handleEditorClick, buildEditorContextMenu } from "$lib/editor/handlers/clicks";
   import { setCursorAtCoords, insertFileAtCursor, handleTauriFileDrop } from "$lib/editor/handlers/drag-drop";
   import { positionBubbleMenu, updateBubbleButtons } from "$lib/editor/handlers/bubble-menu";
+  // SearchReplace augments TipTap's Storage interface with both `searchReplace`
+  // and the tiptap-markdown `markdown` storage, so `editor.storage.markdown` is typed.
+  import "$lib/editor/search-replace";
+
+  /** Read serialized Markdown from the editor's tiptap-markdown storage. */
+  function getEditorMarkdown(e: Editor): string {
+    return e.storage.markdown?.getMarkdown?.() ?? "";
+  }
 
   interface Props {
     filePath: string;
@@ -65,6 +73,8 @@
 
   let renameTimer: ReturnType<typeof setTimeout> | null = null;
   let blurTimer: ReturnType<typeof setTimeout> | null = null;
+  let saveTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingSaveText: string | null = null;
   let alive = true;
   let currentPath = $state(untrack(() => filePath));
   let unlistenDragDrop: (() => void) | null = null;
@@ -81,24 +91,39 @@
   const lowlight = createLowlight(common);
 
   const RENAME_DELAY = 150;
+  const SAVE_DEBOUNCE_MS = 400;
   const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between snapshots
   let lastSnapshotTime = 0;
   let lastSnapshotMd: string | null = null;
 
   // Reload content on external update
   let lastSeenVersion = untrack(() => externalContentVersion);
+  let externalUpdateToken = 0;
   $effect(() => {
     const v = externalContentVersion;
     if (v !== lastSeenVersion) {
       lastSeenVersion = v;
       if (tiptap && initialContent != null) {
+        // Flush any in-flight local edit before swapping content so it isn't lost.
+        flushPendingSave();
+        // Guard against out-of-order async resolution (mirror bubblePositionToken).
+        const token = ++externalUpdateToken;
         transformImagePaths(
           initialContent,
           vault.vaultPath,
           attachmentFolder,
           "resolve",
         ).then((resolved) => {
-          tiptap!.commands.setContent(resolved, { emitUpdate: false });
+          if (token !== externalUpdateToken || !tiptap) return;
+          // Preserve selection across the full-document replacement.
+          const prev = tiptap.state.selection;
+          const prevFrom = prev.from;
+          const prevTo = prev.to;
+          tiptap.commands.setContent(resolved, { emitUpdate: false });
+          const size = tiptap.state.doc.content.size;
+          const from = Math.min(prevFrom, size);
+          const to = Math.min(prevTo, size);
+          tiptap.commands.setTextSelection({ from, to });
         });
       }
     }
@@ -126,6 +151,29 @@
         console.error("Save failed:", err);
         toast.error(m.toast_save_file_failed());
       });
+  }
+
+  /** Schedule a debounced save; coalesces bursts of typing into one write. */
+  function scheduleSave(text: string) {
+    pendingSaveText = text;
+    if (saveTimer) clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => {
+      saveTimer = null;
+      const text = pendingSaveText;
+      pendingSaveText = null;
+      if (text != null) saveNow(text);
+    }, SAVE_DEBOUNCE_MS);
+  }
+
+  /** Flush any pending debounced save immediately (enqueues to the write queue). */
+  function flushPendingSave() {
+    if (saveTimer) {
+      clearTimeout(saveTimer);
+      saveTimer = null;
+    }
+    const text = pendingSaveText;
+    pendingSaveText = null;
+    if (text != null) saveNow(text);
   }
 
   function handleTitleInput() {
@@ -179,6 +227,35 @@
     if (!bubbleMenuEl) return;
     bubbleMenuEl.style.left = "-9999px";
     bubbleMenuEl.style.top = "-9999px";
+  }
+
+  /**
+   * Compute the status-bar Ln/Col cheaply from the resolved cursor position,
+   * reading only the current top-level block instead of slicing the whole doc.
+   */
+  function updateCursorStatus() {
+    if (!tiptap) return;
+    const { doc, selection } = tiptap.state;
+    const from = selection.from;
+    const resolvedPos = doc.resolve(from);
+    // Line = top-level block index (+1); for top-level node selections (depth 0)
+    // there is no inner block to inspect.
+    let line = resolvedPos.index(0) + 1;
+    let col = 1;
+    if (resolvedPos.depth >= 1) {
+      const blockStart = resolvedPos.start(1);
+      col = from - blockStart + 1;
+      // Account for hard breaks / newlines within the current textblock.
+      if (from > blockStart) {
+        const blockText = doc.textBetween(blockStart, from, "\n");
+        const nl = blockText.lastIndexOf("\n");
+        if (nl !== -1) {
+          line += blockText.split("\n").length - 1;
+          col = blockText.length - nl;
+        }
+      }
+    }
+    editorStore.setCursor(line, col);
   }
 
   function updateBubbleMenu() {
@@ -301,36 +378,30 @@
         },
       },
       onCreate: ({ editor: e }) => {
-        const md =
-          (e.storage as Record<string, any>).markdown?.getMarkdown?.() ?? "";
-        lastSavedMd = unresolveImagePaths(md, vault.vaultPath);
+        lastSavedMd = unresolveImagePaths(getEditorMarkdown(e), vault.vaultPath);
       },
       onUpdate: ({ editor: e }) => {
-        const md =
-          (e.storage as Record<string, any>).markdown?.getMarkdown?.() ?? "";
-        const text = unresolveImagePaths(md, vault.vaultPath);
+        const text = unresolveImagePaths(getEditorMarkdown(e), vault.vaultPath);
         if (text === lastSavedMd) return;
         lastSavedMd = text;
+        // Immediate UI feedback; debounce the actual write to coalesce typing.
         editorStore.setDirty(true);
-        saveNow(text);
+        scheduleSave(text);
       },
       onSelectionUpdate: () => {
-        if (!tiptap) return;
-        const { from } = tiptap.state.selection;
-        const text = tiptap.state.doc.textBetween(0, from, "\n");
-        const lines = text.split("\n");
-        editorStore.setCursor(
-          lines.length,
-          (lines[lines.length - 1]?.length ?? 0) + 1,
-        );
+        // Throttle the (potentially O(n)) cursor read + bubble update to one
+        // per frame to avoid work on every keystroke.
         if (!bubbleUpdateRaf) {
           bubbleUpdateRaf = requestAnimationFrame(() => {
             bubbleUpdateRaf = 0;
+            updateCursorStatus();
             updateBubbleMenu();
           });
         }
       },
       onBlur: () => {
+        // Flush the pending debounced save so leaving the editor never loses an edit.
+        flushPendingSave();
         blurTimer = setTimeout(() => {
           blurTimer = null;
           if (!bubbleMenuEl?.contains(document.activeElement)) {
@@ -359,7 +430,6 @@
       createEditor(resolved);
     });
     container.addEventListener("paste", handlePaste as EventListener, true);
-    document.addEventListener("click", handleLinkClick as EventListener, true);
     container.addEventListener(
       "contextmenu",
       handleEditorContextMenu as EventListener,
@@ -380,6 +450,19 @@
     handleFindHotkeyRef = handleFindHotkey as EventListener;
     container.addEventListener("keydown", handleFindHotkeyRef);
 
+    // Flush the pending save when the app requests it (e.g. before window close).
+    window.addEventListener("margin:flush", flushPendingSave);
+  });
+
+  // Global document click + webview drag-drop are gated on `active` so hidden
+  // (cached) editors don't register O(tabs) redundant global handlers.
+  $effect(() => {
+    if (!active) return;
+
+    document.addEventListener("click", handleLinkClick as EventListener, true);
+
+    let unlisten: (() => void) | null = null;
+    let disposed = false;
     getCurrentWebview()
       .onDragDropEvent((event) => {
         if (event.payload.type === "drop") {
@@ -388,21 +471,37 @@
           handleTauriDragOver(event.payload.position);
         }
       })
-      .then((unlisten) => {
-        unlistenDragDrop = unlisten;
+      .then((fn) => {
+        if (disposed) {
+          fn();
+        } else {
+          unlisten = fn;
+          unlistenDragDrop = fn;
+        }
       });
+
+    return () => {
+      disposed = true;
+      document.removeEventListener(
+        "click",
+        handleLinkClick as EventListener,
+        true,
+      );
+      unlisten?.();
+      if (unlistenDragDrop === unlisten) unlistenDragDrop = null;
+    };
   });
 
   onDestroy(() => {
+    // Final safety net: persist any pending edit before tearing down.
+    flushPendingSave();
     alive = false;
     if (renameTimer) clearTimeout(renameTimer);
     if (blurTimer) clearTimeout(blurTimer);
+    if (saveTimer) clearTimeout(saveTimer);
+    if (bubbleUpdateRaf) cancelAnimationFrame(bubbleUpdateRaf);
+    window.removeEventListener("margin:flush", flushPendingSave);
     container?.removeEventListener("paste", handlePaste as EventListener, true);
-    document.removeEventListener(
-      "click",
-      handleLinkClick as EventListener,
-      true,
-    );
     container?.removeEventListener(
       "contextmenu",
       handleEditorContextMenu as EventListener,
@@ -413,7 +512,7 @@
     }
     unlistenDragDrop?.();
     if (showFindReplace && tiptap) {
-      (tiptap.commands as any).clearSearch();
+      tiptap.commands.clearSearch();
     }
     if (editorStore.tiptap === tiptap) {
       editorStore.setTiptap(null);

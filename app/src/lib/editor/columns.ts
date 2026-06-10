@@ -1,5 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import { NodeView } from "@tiptap/core";
+import { Fragment, type Node as PMNode } from "@tiptap/pm/model";
 
 declare module "@tiptap/core" {
   interface Commands<ReturnType> {
@@ -95,13 +96,12 @@ export const Column = Node.create({
           // Unwrap: replace columns with content of all columns
           const { tr } = editor.state;
           const columnsPos = $anchor.before(-2);
-          const content: any[] = [];
+          const content: PMNode[] = [];
           columns.forEach((col) => {
             col.forEach((child) => {
               content.push(child);
             });
           });
-          const { Fragment } = require("@tiptap/pm/model");
           tr.replaceWith(
             columnsPos,
             columnsPos + columns.nodeSize,

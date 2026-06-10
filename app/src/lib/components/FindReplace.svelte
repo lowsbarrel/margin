@@ -1,4 +1,5 @@
 <script lang="ts">
+  import { onDestroy } from "svelte";
   import type { Editor } from "@tiptap/core";
   import {
     ChevronDown,
@@ -27,7 +28,7 @@
   let currentIndex = $state(0);
 
   function syncMatchState() {
-    const storage = (editor?.storage as any)?.searchReplace;
+    const storage = editor?.storage.searchReplace;
     if (storage) {
       totalMatches = storage.totalMatches ?? 0;
       currentIndex = storage.currentIndex ?? 0;
@@ -54,56 +55,60 @@
     clearTimeout(searchDebounceTimer);
     searchDebounceTimer = setTimeout(() => {
       if (!editor) return;
-      (editor.commands as any).setSearchTerm(searchValue);
+      editor.commands.setSearchTerm(searchValue);
       syncMatchState();
     }, 100);
   }
 
   function handleReplaceInput() {
     if (!editor) return;
-    (editor.commands as any).setReplaceTerm(replaceValue);
+    editor.commands.setReplaceTerm(replaceValue);
   }
 
   function toggleCaseSensitive() {
     caseSensitive = !caseSensitive;
     if (!editor) return;
-    (editor.commands as any).setCaseSensitive(caseSensitive);
+    editor.commands.setCaseSensitive(caseSensitive);
     syncMatchState();
   }
 
   function findNext() {
     if (!editor) return;
-    (editor.commands as any).findNext();
+    editor.commands.findNext();
     syncMatchState();
   }
 
   function findPrev() {
     if (!editor) return;
-    (editor.commands as any).findPrev();
+    editor.commands.findPrev();
     syncMatchState();
   }
 
   function replaceCurrent() {
     if (!editor) return;
-    (editor.commands as any).setReplaceTerm(replaceValue);
-    (editor.commands as any).replaceCurrent();
+    editor.commands.setReplaceTerm(replaceValue);
+    editor.commands.replaceCurrent();
     syncMatchState();
   }
 
   function replaceAll() {
     if (!editor) return;
-    (editor.commands as any).setReplaceTerm(replaceValue);
-    (editor.commands as any).replaceAll();
+    editor.commands.setReplaceTerm(replaceValue);
+    editor.commands.replaceAll();
     syncMatchState();
   }
 
   function close() {
     clearTimeout(searchDebounceTimer);
     if (editor) {
-      (editor.commands as any).clearSearch();
+      editor.commands.clearSearch();
     }
     onclose();
   }
+
+  onDestroy(() => {
+    clearTimeout(searchDebounceTimer);
+  });
 
   function handleKeydown(e: KeyboardEvent) {
     if (e.key === "Escape") {

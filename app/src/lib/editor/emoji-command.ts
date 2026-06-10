@@ -1,6 +1,5 @@
-import { Extension } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
-import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+import { createSuggestionExtension } from "$lib/editor/suggestion-extension";
 
 export interface EmojiItem {
   emoji: string;
@@ -290,40 +289,17 @@ export function getEmojiItems({ query }: { query: string }): EmojiItem[] {
 
 export const emojiCommandPluginKey = new PluginKey("emoji-command");
 
-const EmojiCommand = Extension.create({
+const EmojiCommand = createSuggestionExtension<EmojiItem>({
   name: "emojiCommand",
-
-  addOptions() {
-    return {
-      suggestion: {
-        char: ":",
-        command: ({ editor, range, props }: any) => {
-          editor
-            .chain()
-            .focus()
-            .deleteRange(range)
-            .insertContent(props.emoji)
-            .run();
-        },
-        allow: ({ state, range }: any) => {
-          const $from = state.doc.resolve(range.from);
-          if ($from.parent.type.name === "codeBlock") {
-            return false;
-          }
-          return true;
-        },
-      } as Partial<SuggestionOptions>,
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      Suggestion({
-        pluginKey: emojiCommandPluginKey,
-        ...this.options.suggestion,
-        editor: this.editor,
-      }),
-    ];
+  char: ":",
+  pluginKey: emojiCommandPluginKey,
+  command: ({ editor, range, props }) => {
+    editor
+      .chain()
+      .focus()
+      .deleteRange(range)
+      .insertContent(props.emoji)
+      .run();
   },
 });
 

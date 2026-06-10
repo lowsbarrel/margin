@@ -8,7 +8,10 @@ export async function withToast<T>(
   try {
     return await fn();
   } catch (err) {
-    toast.error(errorMsg ?? String(err));
+    // Always log the raw error for diagnostics; surface a clean user-facing
+    // message instead of String(err) (which can render "[object Object]").
+    console.error(err);
+    toast.error(errorMsg ?? "Something went wrong. Please try again.");
     return null;
   }
 }

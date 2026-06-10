@@ -1,17 +1,33 @@
 use s3::creds::Credentials;
 use s3::{Bucket, Region};
 use serde::{Deserialize, Serialize};
+use std::fmt;
 use std::sync::Mutex;
 use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::State;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct S3Config {
     pub endpoint: String,
     pub bucket: String,
     pub region: String,
     pub access_key: String,
     pub secret_key: String,
+}
+
+/// Hand-written Debug that redacts credential material so that any
+/// `{:?}`/log of an S3Config (or anything embedding it, e.g. AppSettings)
+/// never prints the access/secret keys in plaintext.
+impl fmt::Debug for S3Config {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("S3Config")
+            .field("endpoint", &self.endpoint)
+            .field("bucket", &self.bucket)
+            .field("region", &self.region)
+            .field("access_key", &"<redacted>")
+            .field("secret_key", &"<redacted>")
+            .finish()
+    }
 }
 
 pub struct S3State(pub Mutex<Option<CachedS3>>);
@@ -29,6 +45,9 @@ fn make_bucket(config: &S3Config) -> Result<Box<Bucket>, String> {
         endpoint: config.endpoint.clone(),
     };
 
+    // Do not interpolate the underlying error: it is constructed from the
+    // access/secret key inputs and could echo credential material into a
+    // user-visible / logged error string.
     let credentials = Credentials::new(
         Some(&config.access_key),
         Some(&config.secret_key),
@@ -36,7 +55,7 @@ fn make_bucket(config: &S3Config) -> Result<Box<Bucket>, String> {
         None,
         None,
     )
-    .map_err(|e| format!("Invalid credentials: {e}"))?;
+    .map_err(|_| "Invalid S3 credentials".to_string())?;
 
     let mut bucket = Bucket::new(&config.bucket, region, credentials)
         .map_err(|e| format!("Bucket error: {e}"))?;
@@ -52,6 +71,7 @@ fn get_bucket(state: &State<'_, S3State>) -> Result<Box<Bucket>, String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn s3_configure(config: S3Config, state: State<'_, S3State>) -> Result<(), String> {
     let bucket = make_bucket(&config)?;
     let mut s3 = state.0.lock().map_err(|e| e.to_string())?;
@@ -60,12 +80,14 @@ pub fn s3_configure(config: S3Config, state: State<'_, S3State>) -> Result<(), S
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn s3_get_config(state: State<'_, S3State>) -> Result<Option<S3Config>, String> {
     let s3 = state.0.lock().map_err(|e| e.to_string())?;
     Ok(s3.as_ref().map(|c| c.config.clone()))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn s3_test_connection(state: State<'_, S3State>) -> Result<String, String> {
     let bucket = get_bucket(&state)?;
     let results = bucket
@@ -82,6 +104,9 @@ const PART_SIZE: usize = 5 * 1024 * 1024;
 /// Maximum retries per multipart chunk upload
 const MULTIPART_MAX_RETRIES: u32 = 3;
 
+// NOTE: raw-byte command — takes a tauri `Request` (not representable in specta),
+// so it is intentionally NOT annotated with `#[specta::specta]` and is excluded
+// from the specta builder.
 #[tauri::command]
 pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Result<(), String> {
     let key: String = request
@@ -179,6 +204,9 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
     Ok(())
 }
 
+// NOTE: raw-byte command — returns a tauri `Response` (not representable in
+// specta), so it is intentionally NOT annotated with `#[specta::specta]` and is
+// excluded from the specta builder.
 #[tauri::command]
 pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Response, String> {
     let bucket = get_bucket(&state)?;
@@ -191,6 +219,7 @@ pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Respo
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn s3_list(prefix: String, state: State<'_, S3State>) -> Result<Vec<String>, String> {
     let bucket = get_bucket(&state)?;
     let results = bucket
@@ -208,6 +237,7 @@ pub async fn s3_list(prefix: String, state: State<'_, S3State>) -> Result<Vec<St
 }
 
 #[tauri::command]
+#[specta::specta]
 pub async fn s3_delete(key: String, state: State<'_, S3State>) -> Result<(), String> {
     let bucket = get_bucket(&state)?;
     bucket

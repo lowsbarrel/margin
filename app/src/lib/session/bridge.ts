@@ -1,44 +1,39 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
 
-export interface SavedSession {
-  mnemonic: string;
-  vault_path: string;
-}
-
-export interface VaultProfile {
-  name: string;
-  mnemonic: string;
-  vault_path: string;
-}
-
-export interface VaultProfiles {
-  profiles: VaultProfile[];
-  last_used: string | null;
-}
+export type { VaultProfile, VaultProfiles } from "$lib/bindings";
+import type { VaultProfile, VaultProfiles } from "$lib/bindings";
 
 export async function saveSession(
   mnemonic: string,
   vaultPath: string,
 ): Promise<void> {
-  return invoke("save_session", { mnemonic, vaultPath });
+  const r = await commands.saveSession(mnemonic, vaultPath);
+  if (r.status === "error") throw r.error;
 }
 
 export async function loadSession(): Promise<VaultProfile | null> {
-  return invoke<VaultProfile | null>("load_session");
+  const r = await commands.loadSession();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function clearSession(): Promise<void> {
-  return invoke("clear_session");
+  const r = await commands.clearSession();
+  if (r.status === "error") throw r.error;
 }
 
 export async function loadVaultProfiles(): Promise<VaultProfiles> {
-  return invoke<VaultProfiles>("load_vault_profiles");
+  const r = await commands.loadVaultProfiles();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function saveVaultProfile(profile: VaultProfile): Promise<void> {
-  return invoke("save_vault_profile", { profile });
+  const r = await commands.saveVaultProfile(profile);
+  if (r.status === "error") throw r.error;
 }
 
 export async function deleteVaultProfile(vaultPath: string): Promise<void> {
-  return invoke("delete_vault_profile", { vaultPath });
+  const r = await commands.deleteVaultProfile(vaultPath);
+  if (r.status === "error") throw r.error;
 }

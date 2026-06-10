@@ -57,6 +57,10 @@ pub(super) fn resolve_wiki_embeds(md: &str, folder: &str) -> String {
 /// spaces). Without this step, the image stays permanently broken because
 /// the escape makes markdown-it treat it as plain text.
 fn unescape_image_markdown(md: &str) -> String {
+    // Fast path: no escaped image syntax present — skip the allocation + scan.
+    if !md.contains("!\\[") {
+        return md.to_string();
+    }
     let mut result = String::with_capacity(md.len());
     let bytes = md.as_bytes();
     let mut pos = 0;
@@ -125,6 +129,10 @@ fn unescape_image_markdown(md: &str) -> String {
 }
 
 fn encode_spaces_in_localfile_urls(md: &str) -> String {
+    // Fast path: no localfile image URL present — skip the allocation + scan.
+    if !md.contains("](localfile://") && !md.contains("](http://localfile.localhost") {
+        return md.to_string();
+    }
     let mut result = String::with_capacity(md.len());
     let mut pos = 0;
     while pos < md.len() {

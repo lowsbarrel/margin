@@ -31,10 +31,18 @@
 
   let { filePath, onclose, onrestore }: Props = $props();
 
+  // Cap the in-DOM snapshot preview so very large notes don't lay out hundreds
+  // of KB into a single text node on every preview toggle.
+  const PREVIEW_MAX_CHARS = 20_000;
+
   let snapshots = $state<Snapshot[]>([]);
   let loading = $state(true);
   let previewContent = $state<string | null>(null);
   let previewFilename = $state<string | null>(null);
+
+  // Generation token to discard stale async results when filePath changes
+  // rapidly (e.g. fast tab switching with the history panel open).
+  let loadGeneration = 0;
 
   $effect(() => {
     if (filePath && vault.vaultPath) {
@@ -44,14 +52,19 @@
 
   async function loadSnapshots() {
     if (!vault.vaultPath) return;
+    const generation = ++loadGeneration;
+    const requestedPath = filePath;
     loading = true;
     try {
-      snapshots = await listSnapshots(vault.vaultPath, filePath);
+      const result = await listSnapshots(vault.vaultPath, requestedPath);
+      if (generation !== loadGeneration) return;
+      snapshots = result;
     } catch (err) {
+      if (generation !== loadGeneration) return;
       console.error("Failed to list snapshots:", err);
       toast.error(`${m.history_load_failed()}`);
     } finally {
-      loading = false;
+      if (generation === loadGeneration) loading = false;
     }
   }
 
@@ -68,7 +81,11 @@
         filePath,
         snapshot.filename,
       );
-      previewContent = new TextDecoder().decode(bytes);
+      const decoded = new TextDecoder().decode(bytes);
+      previewContent =
+        decoded.length > PREVIEW_MAX_CHARS
+          ? `${decoded.slice(0, PREVIEW_MAX_CHARS)}\n\n… (preview truncated)`
+          : decoded;
       previewFilename = snapshot.filename;
     } catch (err) {
       console.error("Failed to read snapshot:", err);

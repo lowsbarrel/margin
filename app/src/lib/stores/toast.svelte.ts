@@ -14,6 +14,7 @@ interface Toast {
 
 let nextId = 0;
 let toasts = $state<Toast[]>([]);
+const timers = new Map<number, ReturnType<typeof setTimeout>>();
 
 export const toast = {
   get items() {
@@ -24,9 +25,11 @@ export const toast = {
     const id = nextId++;
     toasts = [...toasts, { id, message, type, action }];
     if (duration > 0) {
-      setTimeout(() => {
+      const handle = setTimeout(() => {
+        timers.delete(id);
         toasts = toasts.filter((t) => t.id !== id);
       }, duration);
+      timers.set(id, handle);
     }
   },
 
@@ -43,6 +46,11 @@ export const toast = {
   },
 
   dismiss(id: number) {
+    const handle = timers.get(id);
+    if (handle !== undefined) {
+      clearTimeout(handle);
+      timers.delete(id);
+    }
     toasts = toasts.filter((t) => t.id !== id);
   },
 };

@@ -1,16 +1,20 @@
 import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
+import { fromBytes } from "$lib/ipc";
 
-export interface VaultKeys {
-  vault_id: string;
-  encryption_key: number[];
-}
+export type { VaultKeys } from "$lib/bindings";
+import type { VaultKeys } from "$lib/bindings";
 
 export async function generateMnemonic(): Promise<string> {
-  return invoke<string>("generate_mnemonic");
+  const r = await commands.generateMnemonic();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function deriveVaultKeys(mnemonic: string): Promise<VaultKeys> {
-  return invoke<VaultKeys>("derive_vault_keys", { mnemonic });
+  const r = await commands.deriveVaultKeys(mnemonic);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function encryptBlob(
@@ -20,7 +24,7 @@ export async function encryptBlob(
   const buffer = await invoke<ArrayBuffer>("encrypt_blob_cmd", plaintext, {
     headers: { "x-key": key.join(",") },
   });
-  return new Uint8Array(buffer);
+  return fromBytes(buffer);
 }
 
 export async function decryptBlob(
@@ -30,5 +34,5 @@ export async function decryptBlob(
   const buffer = await invoke<ArrayBuffer>("decrypt_blob_cmd", ciphertext, {
     headers: { "x-key": key.join(",") },
   });
-  return new Uint8Array(buffer);
+  return fromBytes(buffer);
 }

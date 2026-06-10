@@ -31,6 +31,7 @@ import {
   syncUploadManifest,
   syncDeleteFiles,
   pathToS3Key,
+  type SyncAction,
 } from "./bridge";
 
 // ── Types ──
@@ -303,166 +304,181 @@ async function doSyncToS3(
 
     for (const entry of localManifest.files) mergedFiles.set(entry.path, entry);
 
+    // ── Partition actions by kind so each batch-capable command is
+    //    invoked ONCE with all its paths, instead of one IPC per file. ──
+    const uploadPaths: string[] = []; // 'upload' + 'conflict-delete-remote'
+    const downloadPaths: string[] = []; // 'download' + 'conflict-delete-local'
+    const downloadMtimes: number[] = []; // parallel to downloadPaths
+    const deleteRemotePaths: string[] = []; // 'delete-remote'
+    const deleteLocalPaths: string[] = []; // 'delete-local'
+    const conflictActions: SyncAction[] = []; // 'conflict' (read-modify-write)
+
     for (const action of actions) {
-      checkAbort(signal);
-
       switch (action.kind) {
-        // ── Local add / modify → push to S3 (native batch) ──────
-        case "upload": {
-          await syncUploadFiles(
-            vaultPath,
-            s3Prefix,
-            [action.path],
-            encryptionKey,
-          );
-          tombstones.delete(action.path);
+        case "upload":
+        case "conflict-delete-remote":
+          uploadPaths.push(action.path);
           break;
-        }
-
-        // ── Remote add / modify → pull from S3 (native batch) ───
-        case "download": {
-          await syncDownloadFiles(
-            vaultPath,
-            s3Prefix,
-            [action.path],
-            encryptionKey,
-          );
-          const remoteEntry = remoteMap.get(action.path)!;
-          await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
-          mergedFiles.set(action.path, {
-            path: remoteEntry.path,
-            hash: remoteEntry.hash,
-            modified: remoteEntry.modified,
-          });
-          tombstones.delete(action.path);
-          break;
-        }
-
-        // ── Locally deleted → delete from S3 ─────────────────────
-        case "delete-remote": {
-          try {
-            await syncDeleteFiles(s3Prefix, [action.path], encryptionKey);
-          } catch {
-            /* already gone */
-          }
-          markTombstone(action.path, tombstones, mergedFiles, [baseMap]);
-          break;
-        }
-
-        // ── Remotely deleted → delete locally ────────────────────
-        case "delete-local": {
-          try {
-            await deleteEntry(`${vaultPath}/${action.path}`);
-          } catch {
-            /* already gone */
-          }
-          markTombstone(action.path, tombstones, mergedFiles, [remoteMap]);
-          break;
-        }
-
-        // ── Conflict: both sides modified ────────────────────────
-        case "conflict": {
-          const localEntry = localMap.get(action.path)!;
-          const remoteEntry = remoteMap.get(action.path)!;
-
-          const remoteWins =
-            conflictStrategy === "keep_newer" &&
-            remoteEntry.modified > localEntry.modified;
-
-          if (remoteWins) {
-            // Remote is newer → keep remote, save local as conflict copy
-            const localData = await readFileBytes(
-              `${vaultPath}/${action.path}`,
-            );
-            await writeConflictCopy(
-              vaultPath,
-              action.path,
-              localData,
-              localEntry.hash,
-              mergedFiles,
-              s3Prefix,
-              encryptionKey,
-            );
-
-            await syncDownloadFiles(
-              vaultPath,
-              s3Prefix,
-              [action.path],
-              encryptionKey,
-            );
-            await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
-
-            mergedFiles.set(action.path, {
-              path: remoteEntry.path,
-              hash: remoteEntry.hash,
-              modified: remoteEntry.modified,
-            });
-          } else {
-            // Local wins (default) → save remote as conflict copy
-            const s3Key = await pathToS3Key(action.path, encryptionKey);
-            const encrypted = await s3Download(
-              `${s3Prefix}files/${s3Key}.enc`,
-            );
-            const decrypted = await decryptBlob(encrypted, encryptionKey);
-            await writeConflictCopy(
-              vaultPath,
-              action.path,
-              decrypted,
-              remoteEntry.hash,
-              mergedFiles,
-              s3Prefix,
-              encryptionKey,
-            );
-
-            await syncUploadFiles(
-              vaultPath,
-              s3Prefix,
-              [action.path],
-              encryptionKey,
-            );
-          }
-
-          tombstones.delete(action.path);
-          conflicts.push(action.path);
-          break;
-        }
-
-        // ── Deleted locally, modified remotely → re-download ─────
+        case "download":
         case "conflict-delete-local": {
-          await syncDownloadFiles(
-            vaultPath,
-            s3Prefix,
-            [action.path],
-            encryptionKey,
-          );
           const remoteEntry = remoteMap.get(action.path)!;
-          await setMtime(`${vaultPath}/${action.path}`, remoteEntry.modified);
-          mergedFiles.set(action.path, {
-            path: remoteEntry.path,
-            hash: remoteEntry.hash,
-            modified: remoteEntry.modified,
-          });
-          tombstones.delete(action.path);
-          conflicts.push(action.path);
+          downloadPaths.push(action.path);
+          downloadMtimes.push(remoteEntry.modified);
           break;
         }
-
-        // ── Modified locally, deleted remotely → re-upload ───────
-        case "conflict-delete-remote": {
-          await syncUploadFiles(
-            vaultPath,
-            s3Prefix,
-            [action.path],
-            encryptionKey,
-          );
-          tombstones.delete(action.path);
-          conflicts.push(action.path);
+        case "delete-remote":
+          deleteRemotePaths.push(action.path);
           break;
+        case "delete-local":
+          deleteLocalPaths.push(action.path);
+          break;
+        case "conflict":
+          conflictActions.push(action);
+          break;
+        default: {
+          // Compile-time exhaustiveness: if a new SyncActionKind is added on
+          // the Rust side without a branch here, this fails to type-check.
+          const _exhaustive: never = action.kind;
+          console.error("[s3sync] Unhandled sync action kind:", _exhaustive);
         }
       }
+    }
 
-      actionsDone++;
+    const reportProgress = (advance: number): void => {
+      actionsDone += advance;
       editor.setSyncProgress({ total: actionsTotal, done: actionsDone });
+    };
+
+    // ── Local add / modify (+ modified-locally / deleted-remotely) → push ──
+    if (uploadPaths.length > 0) {
+      checkAbort(signal);
+      await syncUploadFiles(vaultPath, s3Prefix, uploadPaths, encryptionKey);
+      for (const path of uploadPaths) tombstones.delete(path);
+      reportProgress(uploadPaths.length);
+    }
+
+    // ── Remote add / modify (+ deleted-locally / modified-remotely) → pull ─
+    //    The Rust side stamps mtime from `downloadMtimes`, so no per-file
+    //    setMtime follow-up is needed here.
+    if (downloadPaths.length > 0) {
+      checkAbort(signal);
+      await syncDownloadFiles(
+        vaultPath,
+        s3Prefix,
+        downloadPaths,
+        downloadMtimes,
+        encryptionKey,
+      );
+      for (let i = 0; i < downloadPaths.length; i++) {
+        const path = downloadPaths[i];
+        const remoteEntry = remoteMap.get(path)!;
+        mergedFiles.set(path, {
+          path: remoteEntry.path,
+          hash: remoteEntry.hash,
+          modified: remoteEntry.modified,
+        });
+        tombstones.delete(path);
+      }
+      reportProgress(downloadPaths.length);
+    }
+
+    // ── Locally deleted → delete from S3 (one batch) ──────────────────────
+    if (deleteRemotePaths.length > 0) {
+      checkAbort(signal);
+      try {
+        await syncDeleteFiles(s3Prefix, deleteRemotePaths, encryptionKey);
+      } catch {
+        /* already gone */
+      }
+      for (const path of deleteRemotePaths) {
+        markTombstone(path, tombstones, mergedFiles, [baseMap]);
+      }
+      reportProgress(deleteRemotePaths.length);
+    }
+
+    // ── Remotely deleted → delete locally (per-file local fs) ─────────────
+    for (const path of deleteLocalPaths) {
+      checkAbort(signal);
+      try {
+        await deleteEntry(`${vaultPath}/${path}`);
+      } catch {
+        /* already gone */
+      }
+      markTombstone(path, tombstones, mergedFiles, [remoteMap]);
+      reportProgress(1);
+    }
+
+    // ── Conflict: both sides modified → read-modify-write per item ────────
+    for (const action of conflictActions) {
+      checkAbort(signal);
+      const localEntry = localMap.get(action.path)!;
+      const remoteEntry = remoteMap.get(action.path)!;
+
+      const remoteWins =
+        conflictStrategy === "keep_newer" &&
+        remoteEntry.modified > localEntry.modified;
+
+      if (remoteWins) {
+        // Remote is newer → keep remote, save local as conflict copy
+        const localData = await readFileBytes(`${vaultPath}/${action.path}`);
+        await writeConflictCopy(
+          vaultPath,
+          action.path,
+          localData,
+          localEntry.hash,
+          mergedFiles,
+          s3Prefix,
+          encryptionKey,
+        );
+
+        await syncDownloadFiles(
+          vaultPath,
+          s3Prefix,
+          [action.path],
+          [remoteEntry.modified],
+          encryptionKey,
+        );
+
+        mergedFiles.set(action.path, {
+          path: remoteEntry.path,
+          hash: remoteEntry.hash,
+          modified: remoteEntry.modified,
+        });
+      } else {
+        // Local wins (default) → save remote as conflict copy
+        const s3Key = await pathToS3Key(action.path, encryptionKey);
+        const encrypted = await s3Download(`${s3Prefix}files/${s3Key}.enc`);
+        const decrypted = await decryptBlob(encrypted, encryptionKey);
+        await writeConflictCopy(
+          vaultPath,
+          action.path,
+          decrypted,
+          remoteEntry.hash,
+          mergedFiles,
+          s3Prefix,
+          encryptionKey,
+        );
+
+        await syncUploadFiles(vaultPath, s3Prefix, [action.path], encryptionKey);
+      }
+
+      tombstones.delete(action.path);
+      conflicts.push(action.path);
+      reportProgress(1);
+    }
+
+    // Preserve the original behaviour of also counting the
+    // deleted-locally/modified-remotely ('conflict-delete-local') and
+    // modified-locally/deleted-remotely ('conflict-delete-remote') cases as
+    // conflicts. Their file I/O was already batched above; here we only
+    // record them in the conflicts list (used for the completion toast).
+    for (const action of actions) {
+      if (
+        action.kind === "conflict-delete-local" ||
+        action.kind === "conflict-delete-remote"
+      ) {
+        conflicts.push(action.path);
+      }
     }
 
     checkAbort(signal);

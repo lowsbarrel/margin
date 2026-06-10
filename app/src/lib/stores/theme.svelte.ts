@@ -143,7 +143,8 @@ $effect.root(() => {
       }
       themesLoaded = true;
     })
-    .catch(() => {
+    .catch((err) => {
+      console.warn("Failed to load themes:", err);
       themesLoaded = true;
     });
 });

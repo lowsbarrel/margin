@@ -13,7 +13,8 @@ pub use watch::*;
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::io::Write;
+use std::path::{Component, Path, PathBuf};
 use std::process::Command;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -39,16 +40,120 @@ pub(crate) fn path_to_string(p: std::path::PathBuf) -> String {
     }
 }
 
-/// Write `content` to `dest` atomically by writing to a sibling temp file
-/// and then renaming it into place.
+/// Write `content` to `dest` atomically AND durably by writing to a sibling
+/// temp file, fsyncing the file's data to disk, renaming it into place, and
+/// finally fsyncing the parent directory so the rename itself survives a
+/// crash/power loss.
+///
+/// Plain `rename` is atomic with respect to *visibility* but not *durability*:
+/// after a power loss the rename can be persisted while the file's data blocks
+/// are not, yielding a zero-length/partial file. Every encrypted state file
+/// (sync base manifest, settings.enc, profiles.enc, snapshots, themes.json)
+/// goes through this path, so a torn write here can silently corrupt sync state.
 pub(crate) fn atomic_write(dest: &Path, content: &[u8]) -> Result<(), String> {
     let n = TMP_COUNTER.fetch_add(1, Ordering::Relaxed);
     let tmp = dest.with_file_name(format!(".margin-write-{}.tmp", n));
-    fs::write(&tmp, content).map_err(|e| format!("Failed to write temp file: {e}"))?;
+
+    // Write + fsync the temp file's data before it is renamed into place.
+    let write_result = (|| -> std::io::Result<()> {
+        let mut f = fs::File::create(&tmp)?;
+        f.write_all(content)?;
+        f.sync_all()?;
+        Ok(())
+    })();
+    if let Err(e) = write_result {
+        let _ = fs::remove_file(&tmp);
+        return Err(format!("Failed to write temp file: {e}"));
+    }
+
     fs::rename(&tmp, dest).map_err(|e| {
         let _ = fs::remove_file(&tmp);
         format!("Failed to finalize write: {e}")
-    })
+    })?;
+
+    // Best-effort fsync of the parent directory so the rename entry is durable.
+    // On Windows opening/fsyncing a directory is not supported and is a no-op;
+    // ignore any error here — the file's own sync_all already covers its data.
+    if let Some(parent) = dest.parent() {
+        if let Ok(dir) = fs::File::open(parent) {
+            let _ = dir.sync_all();
+        }
+    }
+
+    Ok(())
+}
+
+/// Validate that `path` stays inside the active vault. Rejects any `..`
+/// component outright, then verifies the target resolves under the canonical
+/// vault root.
+///
+/// For paths that already exist (reads/deletes/renames-from) the canonical form
+/// is checked directly. For paths that may not yet exist (writes/creates) the
+/// nearest existing ancestor is canonicalized (resolving symlinks) and the
+/// remaining tail components are re-appended before the containment check.
+///
+/// Mirrors the containment check in the `localfile://` URI scheme handler in
+/// `lib.rs`. Returns the validated path to operate on.
+fn ensure_in_vault(path: &str, vault: &VaultPathState) -> Result<PathBuf, String> {
+    let vault_root = vault
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .trim()
+        .to_string();
+
+    // Before a vault is opened (e.g. the login flow writes `.margin/vault.id`
+    // and creates `.margin/` *before* calling set_vault_directory), no
+    // containment boundary exists yet. Preserve the prior behavior — and avoid
+    // breaking startup — by allowing the operation in that window. Once a vault
+    // is set, containment is enforced strictly below. We still reject `..`
+    // components unconditionally as a baseline guard.
+    let mut had_parent_dir = false;
+    let target = Path::new(path);
+    for component in target.components() {
+        if matches!(component, Component::ParentDir) {
+            had_parent_dir = true;
+            break;
+        }
+    }
+    if had_parent_dir {
+        return Err("Path escapes the vault".into());
+    }
+    if vault_root.is_empty() {
+        return Ok(target.to_path_buf());
+    }
+
+    let canonical_vault = Path::new(&vault_root)
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve vault root: {e}"))?;
+
+    // Resolve as far as the filesystem allows: canonicalize the deepest existing
+    // ancestor and re-attach the not-yet-existing tail. This handles writes to
+    // new files inside the vault while still resolving symlinks on the ancestor.
+    let mut ancestor = target;
+    let mut tail: Vec<&std::ffi::OsStr> = Vec::new();
+    let mut resolved = loop {
+        match ancestor.canonicalize() {
+            Ok(c) => break c,
+            Err(_) => match ancestor.parent() {
+                Some(parent) => {
+                    if let Some(name) = ancestor.file_name() {
+                        tail.push(name);
+                    }
+                    ancestor = parent;
+                }
+                None => return Err("Failed to resolve path".into()),
+            },
+        }
+    };
+    for name in tail.into_iter().rev() {
+        resolved.push(name);
+    }
+
+    if !resolved.starts_with(&canonical_vault) {
+        return Err("Path escapes the vault".into());
+    }
+    Ok(resolved)
 }
 
 pub struct WatcherState(pub Mutex<Option<notify::RecommendedWatcher>>);
@@ -62,34 +167,38 @@ pub struct VaultWatcherState(pub Mutex<Option<notify::RecommendedWatcher>>);
 /// stays within the vault.
 pub struct VaultPathState(pub Mutex<String>);
 
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 pub struct FsEntry {
     pub name: String,
     pub is_dir: bool,
     pub path: String,
     /// Seconds since UNIX epoch (file modification time). 0 if unavailable.
+    #[specta(type = u32)]
     pub modified: u64,
 }
 
 /// A single row in the file tree, pre-sorted and depth-annotated.
-#[derive(Serialize, Clone)]
+#[derive(Serialize, Clone, specta::Type)]
 pub struct TreeEntry {
     pub name: String,
     pub path: String,
     pub is_dir: bool,
+    #[specta(type = u32)]
     pub modified: u64,
     /// Nesting depth (0 = vault root level).
+    #[specta(type = u32)]
     pub depth: usize,
 }
 
 /// Returned by `read_link_batch`.
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct LinkEntry {
     pub path: String,
     pub links: Vec<String>,
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn set_vault_directory(
     path: &str,
     vault_path_state: tauri::State<'_, VaultPathState>,
@@ -107,13 +216,20 @@ pub fn set_vault_directory(
 }
 
 #[tauri::command]
-pub fn read_file_bytes(path: &str) -> Result<Response, String> {
-    let bytes = fs::read(path).map_err(|e| format!("Failed to read file: {e}"))?;
+pub fn read_file_bytes(
+    path: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<Response, String> {
+    let p = ensure_in_vault(path, &vault_path_state)?;
+    let bytes = fs::read(&p).map_err(|e| format!("Failed to read file: {e}"))?;
     Ok(Response::new(bytes))
 }
 
 #[tauri::command]
-pub fn write_file_bytes(request: Request) -> Result<(), String> {
+pub fn write_file_bytes(
+    request: Request,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
     let path = request
         .headers()
         .get("x-path")
@@ -124,15 +240,16 @@ pub fn write_file_bytes(request: Request) -> Result<(), String> {
         InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
             .map_err(|e| format!("Invalid body: {e}"))?,
     };
-    let p = Path::new(path);
+    let p = ensure_in_vault(path, &vault_path_state)?;
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
-    atomic_write(p, &data)
+    atomic_write(&p, &data)
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
     let p = Path::new(path);
     if !p.is_dir() {
@@ -171,52 +288,79 @@ pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
 }
 
 #[tauri::command]
-pub fn delete_entry(path: &str) -> Result<(), String> {
-    let p = Path::new(path);
+#[specta::specta]
+pub fn delete_entry(
+    path: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let p = ensure_in_vault(path, &vault_path_state)?;
     if p.is_dir() {
-        fs::remove_dir_all(p).map_err(|e| format!("Failed to delete directory: {e}"))?;
+        fs::remove_dir_all(&p).map_err(|e| format!("Failed to delete directory: {e}"))?;
     } else {
-        fs::remove_file(p).map_err(|e| format!("Failed to delete file: {e}"))?;
+        fs::remove_file(&p).map_err(|e| format!("Failed to delete file: {e}"))?;
     }
     Ok(())
 }
 
 #[tauri::command]
-pub fn rename_entry(from: &str, to: &str) -> Result<(), String> {
-    let to_path = Path::new(to);
+#[specta::specta]
+pub fn rename_entry(
+    from: &str,
+    to: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let from_path = ensure_in_vault(from, &vault_path_state)?;
+    let to_path = ensure_in_vault(to, &vault_path_state)?;
     if let Some(parent) = to_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
-    fs::rename(from, to).map_err(|e| format!("Failed to rename: {e}"))
+    fs::rename(&from_path, &to_path).map_err(|e| format!("Failed to rename: {e}"))
 }
 
 #[tauri::command]
-pub fn create_directory(path: &str) -> Result<(), String> {
-    fs::create_dir_all(path).map_err(|e| format!("Failed to create directory: {e}"))
+#[specta::specta]
+pub fn create_directory(
+    path: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let p = ensure_in_vault(path, &vault_path_state)?;
+    fs::create_dir_all(&p).map_err(|e| format!("Failed to create directory: {e}"))
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn file_exists(path: &str) -> bool {
     Path::new(path).exists()
 }
 
 #[tauri::command]
-pub fn copy_file(from: &str, to: &str) -> Result<(), String> {
-    let to_path = Path::new(to);
+#[specta::specta]
+pub fn copy_file(
+    from: &str,
+    to: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let from_path = ensure_in_vault(from, &vault_path_state)?;
+    let to_path = ensure_in_vault(to, &vault_path_state)?;
     if let Some(parent) = to_path.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
-    fs::copy(from, to).map_err(|e| format!("Failed to copy file: {e}"))?;
+    fs::copy(&from_path, &to_path).map_err(|e| format!("Failed to copy file: {e}"))?;
     Ok(())
 }
 
 #[tauri::command]
-pub fn copy_directory(from: &str, to: &str) -> Result<(), String> {
-    let src = Path::new(from);
-    let dst = Path::new(to);
-    copy_dir_recursive(src, dst)
+#[specta::specta]
+pub fn copy_directory(
+    from: &str,
+    to: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let src = ensure_in_vault(from, &vault_path_state)?;
+    let dst = ensure_in_vault(to, &vault_path_state)?;
+    copy_dir_recursive(&src, &dst)
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
@@ -250,8 +394,13 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
 }
 
 /// Set the modification time of a file to a specific unix timestamp (seconds).
+///
+/// `mtime` is a u32 (unix seconds) because specta forbids exporting u64 across
+/// the IPC boundary. Unix-second timestamps fit in u32 until 2106; the value is
+/// widened to i64 for `filetime` below.
 #[tauri::command]
-pub fn set_mtime(path: &str, mtime: u64) -> Result<(), String> {
+#[specta::specta]
+pub fn set_mtime(path: &str, mtime: u32) -> Result<(), String> {
     let p = Path::new(path);
     if !p.exists() {
         return Err("File does not exist".into());
@@ -261,6 +410,7 @@ pub fn set_mtime(path: &str, mtime: u64) -> Result<(), String> {
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
     let target = Path::new(path);
     if !target.exists() {
@@ -315,6 +465,7 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
 /// Read multiple Markdown files and extract `[[wiki-links]]` from each — all
 /// in native Rust using a single IPC call.
 #[tauri::command]
+#[specta::specta]
 pub fn read_link_batch(paths: Vec<String>) -> Vec<LinkEntry> {
     paths
         .into_par_iter()
@@ -325,40 +476,16 @@ pub fn read_link_batch(paths: Vec<String>) -> Vec<LinkEntry> {
         .collect()
 }
 
-/// Parse `[[wiki-links]]` (but not `![[image embeds]]`) from a file.
+/// Parse `[[wiki-links]]` (but not `![[image embeds]]`) from a file, reusing
+/// the single shared parser in `text::wiki_links` so the file-based and
+/// PM-node-based extractors can never drift on parsing rules.
 fn extract_wiki_links(path: &Path) -> Vec<String> {
     let content = match fs::read_to_string(path) {
         Ok(c) => c,
         Err(_) => return vec![],
     };
-    let bytes = content.as_bytes();
-    let mut links: Vec<String> = Vec::new();
-    let mut i = 0usize;
-    while i + 1 < bytes.len() {
-        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
-            if i > 0 && bytes[i - 1] == b'!' {
-                i += 2;
-                continue;
-            }
-            i += 2;
-            let start = i;
-            while i + 1 < bytes.len() {
-                if bytes[i] == b'\n' {
-                    break;
-                }
-                if bytes[i] == b']' && bytes[i + 1] == b']' {
-                    let link = content[start..i].trim();
-                    if !link.is_empty() {
-                        links.push(link.to_string());
-                    }
-                    i += 2;
-                    break;
-                }
-                i += 1;
-            }
-        } else {
-            i += 1;
-        }
-    }
-    links
+    crate::text::parse_wiki_links(&content)
+        .into_iter()
+        .map(|link| link.title)
+        .collect()
 }

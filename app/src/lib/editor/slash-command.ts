@@ -1,46 +1,23 @@
-import { Extension } from "@tiptap/core";
+import type { Editor, Range } from "@tiptap/core";
 import { PluginKey } from "@tiptap/pm/state";
-import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+import { createSuggestionExtension } from "$lib/editor/suggestion-extension";
 
 export interface SlashMenuItem {
   title: string;
   description: string;
   icon: string;
   searchTerms: string[];
-  command: (props: { editor: any; range: any }) => void;
+  command: (props: { editor: Editor; range: Range }) => void;
 }
 
 export const slashMenuPluginKey = new PluginKey("slash-command");
 
-const SlashCommand = Extension.create({
+const SlashCommand = createSuggestionExtension<SlashMenuItem>({
   name: "slash-command",
-
-  addOptions() {
-    return {
-      suggestion: {
-        char: "/",
-        command: ({ editor, range, props }: any) => {
-          props.command({ editor, range });
-        },
-        allow: ({ state, range }: any) => {
-          const $from = state.doc.resolve(range.from);
-          if ($from.parent.type.name === "codeBlock") {
-            return false;
-          }
-          return true;
-        },
-      } as Partial<SuggestionOptions>,
-    };
-  },
-
-  addProseMirrorPlugins() {
-    return [
-      Suggestion({
-        pluginKey: slashMenuPluginKey,
-        ...this.options.suggestion,
-        editor: this.editor,
-      }),
-    ];
+  char: "/",
+  pluginKey: slashMenuPluginKey,
+  command: ({ editor, range, props }) => {
+    props.command({ editor, range });
   },
 });
 

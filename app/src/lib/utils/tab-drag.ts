@@ -1,5 +1,6 @@
 import { panes, fileTitle } from "$lib/stores/panes.svelte";
 import { drag } from "$lib/stores/drag.svelte";
+import { startPointerDrag } from "$lib/utils/drag-handler";
 
 export function handleTabMouseDown(
   e: MouseEvent,
@@ -9,32 +10,14 @@ export function handleTabMouseDown(
   if (e.button !== 0) return;
   if (panes.list.length === 1 && panes.list[0].tabs.length === 1) return;
   e.preventDefault();
-  const startX = e.clientX,
-    startY = e.clientY;
-  let didDrag = false;
   const label = fileTitle(panes.list[paneIndex].tabs[tabIndex].path);
 
-  function onMove(ev: MouseEvent) {
-    if (
-      !didDrag &&
-      (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4)
-    ) {
-      didDrag = true;
-      drag.start(
-        { kind: "tab", paneIndex, tabIndex, label },
-        ev.clientX,
-        ev.clientY,
-      );
-      window.removeEventListener("mousemove", onMove);
-    }
-  }
-  function onUp() {
-    window.removeEventListener("mousemove", onMove);
-    window.removeEventListener("mouseup", onUp);
-    if (!didDrag) panes.switchTab(paneIndex, tabIndex);
-  }
-  window.addEventListener("mousemove", onMove);
-  window.addEventListener("mouseup", onUp);
+  startPointerDrag(
+    e,
+    { kind: "tab", paneIndex, tabIndex, label },
+    undefined,
+    () => panes.switchTab(paneIndex, tabIndex),
+  );
 }
 
 export async function executeDrop(target: {

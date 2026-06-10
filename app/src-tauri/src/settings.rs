@@ -5,7 +5,7 @@ use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct AppSettings {
     pub s3: Option<S3Config>,
     #[serde(default)]
@@ -18,6 +18,7 @@ pub struct AppSettings {
 
 /// Save settings encrypted to disk at {vault_path}/.margin/settings.enc
 #[tauri::command]
+#[specta::specta]
 pub fn save_settings(
     vault_path: String,
     encryption_key: Vec<u8>,
@@ -37,6 +38,7 @@ pub fn save_settings(
 
 /// Load settings from disk and decrypt
 #[tauri::command]
+#[specta::specta]
 pub fn load_settings(
     vault_path: String,
     encryption_key: Vec<u8>,
@@ -56,6 +58,7 @@ pub fn load_settings(
 
 /// Export all settings as an encrypted base64 string (portable)
 #[tauri::command]
+#[specta::specta]
 pub fn export_settings_string(
     encryption_key: Vec<u8>,
     settings: AppSettings,
@@ -94,6 +97,7 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
 
 /// Import settings from an encrypted base64 string
 #[tauri::command]
+#[specta::specta]
 pub fn import_settings_string(
     encryption_key: Vec<u8>,
     encoded: String,
@@ -110,23 +114,24 @@ pub fn import_settings_string(
 
 // ─── Workspace state persistence ─────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct WorkspaceTab {
     pub path: String,
     #[serde(rename = "type")]
     pub tab_type: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct WorkspacePane {
     pub tabs: Vec<WorkspaceTab>,
     pub active_tab_index: i32,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct WorkspaceState {
     pub panes: Vec<WorkspacePane>,
     pub pane_flexes: Vec<f64>,
+    #[specta(type = u32)]
     pub active_pane_index: usize,
     pub expanded_folders: Vec<String>,
     pub sidebar_open: bool,
@@ -137,6 +142,7 @@ pub struct WorkspaceState {
 
 /// Save workspace state encrypted to disk at {vault_path}/.margin/workspace.enc
 #[tauri::command]
+#[specta::specta]
 pub fn save_workspace_state(
     vault_path: String,
     encryption_key: Vec<u8>,
@@ -156,6 +162,7 @@ pub fn save_workspace_state(
 
 /// Load workspace state from disk and decrypt
 #[tauri::command]
+#[specta::specta]
 pub fn load_workspace_state(
     vault_path: String,
     encryption_key: Vec<u8>,

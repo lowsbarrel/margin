@@ -1,3 +1,4 @@
+/** Single source of truth for recognized image extensions (no leading dot). */
 export const IMAGE_EXTS_ARRAY = [
   "png",
   "jpg",
@@ -6,18 +7,11 @@ export const IMAGE_EXTS_ARRAY = [
   "webp",
   "svg",
   "bmp",
+  "ico",
 ];
 
-export const IMAGE_EXTS = new Set([
-  ".png",
-  ".jpg",
-  ".jpeg",
-  ".gif",
-  ".webp",
-  ".svg",
-  ".bmp",
-  ".ico",
-]);
+/** Dotted form of {@link IMAGE_EXTS_ARRAY}; kept in sync from the same source. */
+export const IMAGE_EXTS = new Set(IMAGE_EXTS_ARRAY.map((ext) => `.${ext}`));
 
 export function isImagePath(nameOrPath: string): boolean {
   const ext = nameOrPath.split(".").pop()?.toLowerCase() ?? "";

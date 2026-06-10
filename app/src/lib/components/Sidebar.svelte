@@ -1,3 +1,17 @@
+<script module lang="ts">
+  export type SidebarView = "files" | "search" | "favourites";
+
+  const SIDEBAR_VIEWS = ["files", "search", "favourites"] as const;
+
+  /** Narrow an arbitrary (persisted/IPC) string to a known SidebarView,
+   * falling back to "files" when the value is not a member of the union. */
+  export function toSidebarView(value: unknown): SidebarView {
+    return (SIDEBAR_VIEWS as readonly string[]).includes(value as string)
+      ? (value as SidebarView)
+      : "files";
+  }
+</script>
+
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
   import ContextMenu, { type ContextMenuItem } from "./ContextMenu.svelte";
@@ -48,8 +62,6 @@
     type MenuTarget,
   } from "$lib/utils/sidebar-menu";
 
-  export type SidebarView = "files" | "search" | "favourites";
-
   interface Props {
     onfileselect: (path: string, searchText?: string) => void;
     onrenameentry: (from: string, to: string, isDir: boolean) => Promise<void>;
@@ -78,6 +90,7 @@
   let menuY = $state(0);
   let sidebarPanelEl = $state<HTMLElement | null>(null);
   let unlistenDragDrop: (() => void) | null = null;
+  let dragDropDisposed = false;
 
   const PANEL_MIN = 180;
   const PANEL_MAX = 480;
@@ -411,11 +424,17 @@
           handleExternalDrop(event.payload.paths, event.payload.position);
         }
       })
-      .then((unlisten) => { unlistenDragDrop = unlisten; });
+      .then((unlisten) => {
+        // The component may have been destroyed before this resolved; if so,
+        // unlisten immediately to avoid leaking the listener.
+        if (dragDropDisposed) unlisten();
+        else unlistenDragDrop = unlisten;
+      });
   });
 
   onDestroy(() => {
     window.removeEventListener("keydown", handleSidebarKeydown);
+    dragDropDisposed = true;
     unlistenDragDrop?.();
   });
 

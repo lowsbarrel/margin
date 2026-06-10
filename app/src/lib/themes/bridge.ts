@@ -1,27 +1,26 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
 
-export interface Theme {
-  name: string;
-  colors: Record<string, string>;
-}
-
-export interface ThemeData {
-  themes: Theme[];
-  active_theme: string | null;
-}
+export type { Theme, ThemeData } from "$lib/bindings";
+import type { Theme, ThemeData } from "$lib/bindings";
 
 export async function loadThemes(): Promise<ThemeData> {
-  return invoke<ThemeData>("load_themes");
+  const r = await commands.loadThemes();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function saveThemes(data: ThemeData): Promise<void> {
-  return invoke("save_themes", { data });
+  const r = await commands.saveThemes(data);
+  if (r.status === "error") throw r.error;
 }
 
 export async function exportTheme(theme: Theme, dest: string): Promise<void> {
-  return invoke("export_theme", { theme, dest });
+  const r = await commands.exportTheme(theme, dest);
+  if (r.status === "error") throw r.error;
 }
 
 export async function importTheme(path: string): Promise<Theme> {
-  return invoke<Theme>("import_theme", { path });
+  const r = await commands.importTheme(path);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }

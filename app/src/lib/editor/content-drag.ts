@@ -401,8 +401,17 @@ export const ContentDrag = Extension.create({
           hoveredDom = null;
         }
 
-        // Editor mouse tracking
-        const onEditorMouseMove = (e: MouseEvent) => {
+        // Editor mouse tracking — rAF-coalesced so the expensive
+        // findBlock hit-test runs at most once per animation frame.
+        let hoverRafScheduled = false;
+        let hoverRafId = 0;
+        let latestHoverEvent: MouseEvent | null = null;
+
+        const flushHover = () => {
+          hoverRafScheduled = false;
+          const e = latestHoverEvent;
+          if (!e) return;
+
           if (document.body.classList.contains("content-dragging")) return;
 
           const result = findBlock(editorView, e.clientX, e.clientY);
@@ -417,6 +426,14 @@ export const ContentDrag = Extension.create({
           activeNodePos = result.pos;
           activeNodeEnd = result.pos + result.node.nodeSize;
           positionHandle(result.dom);
+        };
+
+        const onEditorMouseMove = (e: MouseEvent) => {
+          latestHoverEvent = e;
+          if (!hoverRafScheduled) {
+            hoverRafScheduled = true;
+            hoverRafId = requestAnimationFrame(flushHover);
+          }
         };
 
         const onEditorMouseLeave = () => {
@@ -489,6 +506,10 @@ export const ContentDrag = Extension.create({
             }
           },
           destroy() {
+            if (hoverRafScheduled) {
+              cancelAnimationFrame(hoverRafId);
+              hoverRafScheduled = false;
+            }
             editorDom.removeEventListener("mousemove", onEditorMouseMove);
             editorDom.removeEventListener("mouseleave", onEditorMouseLeave);
             editorDom.removeEventListener("keydown", onKeyDown);

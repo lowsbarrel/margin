@@ -48,6 +48,10 @@ interface LinkCache {
 
 const CACHE_VERSION = 1;
 
+// Set when build() is called while a build is already in flight, so the request
+// isn't lost (e.g. a vault-fs-changed during a build) — it re-runs once after.
+let rebuildRequested = false;
+
 async function loadLinkCache(vaultPath: string): Promise<LinkCache> {
   const path = `${vaultPath}/.margin/graph-cache.json`;
   try {
@@ -71,7 +75,11 @@ async function saveLinkCache(
   try {
     const bytes = new TextEncoder().encode(JSON.stringify(cache));
     await writeFileBytes(path, bytes);
-  } catch { /* non-fatal */ }
+  } catch (err) {
+    // Non-fatal: the next build just re-reads all files instead of using the
+    // cache. Log so a persistently failing cache write is diagnosable.
+    console.warn("Failed to save graph link cache:", err);
+  }
 }
 
 function fileNameToId(name: string): string {
@@ -92,7 +100,13 @@ export const graph = {
   async build() {
     const vaultPath = vault.vaultPath;
     if (!vaultPath) return;
-    if (state.loading) return;
+    // Coalesce: if a build is already running, remember that another rebuild was
+    // requested and re-run it once the current one finishes, so an fs change
+    // during a build isn't silently dropped.
+    if (state.loading) {
+      rebuildRequested = true;
+      return;
+    }
 
     state.loading = true;
     try {
@@ -129,9 +143,10 @@ export const graph = {
 
       if (stale.length > 0) {
         const stalePaths = stale.map((f) => f.path);
+        const staleByPath = new Map(stale.map((f) => [f.path, f]));
         const freshEntries = await readLinkBatch(stalePaths);
         for (const { path, links } of freshEntries) {
-          const f = stale.find((sf) => sf.path === path);
+          const f = staleByPath.get(path);
           const sourceId = f
             ? fileNameToId(f.name)
             : fileNameToId(path.split("/").pop() ?? path);
@@ -162,9 +177,16 @@ export const graph = {
     } finally {
       state.loading = false;
     }
+
+    // A rebuild was requested while this build was running — run it now.
+    if (rebuildRequested) {
+      rebuildRequested = false;
+      await this.build();
+    }
   },
 
   clear() {
+    rebuildRequested = false;
     state.data = { nodes: [], edges: [] };
     state.nodeToPath = new Map();
   },

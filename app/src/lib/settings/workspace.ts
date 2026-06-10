@@ -1,44 +1,26 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
 
-export interface WorkspaceTab {
-  path: string;
-  type: string;
-}
-
-export interface WorkspacePane {
-  tabs: WorkspaceTab[];
-  active_tab_index: number;
-}
-
-export interface WorkspaceState {
-  panes: WorkspacePane[];
-  pane_flexes: number[];
-  active_pane_index: number;
-  expanded_folders: string[];
-  sidebar_open: boolean;
-  sidebar_width: number;
-  sidebar_view: string;
-  sort_order: string;
-}
+export type {
+  WorkspaceTab,
+  WorkspacePane,
+  WorkspaceState,
+} from "$lib/bindings";
+import type { WorkspaceState } from "$lib/bindings";
 
 export async function saveWorkspaceState(
   vaultPath: string,
   encryptionKey: number[],
   state: WorkspaceState,
 ): Promise<void> {
-  return invoke("save_workspace_state", {
-    vaultPath,
-    encryptionKey,
-    state,
-  });
+  const r = await commands.saveWorkspaceState(vaultPath, encryptionKey, state);
+  if (r.status === "error") throw r.error;
 }
 
 export async function loadWorkspaceState(
   vaultPath: string,
   encryptionKey: number[],
 ): Promise<WorkspaceState | null> {
-  return invoke<WorkspaceState | null>("load_workspace_state", {
-    vaultPath,
-    encryptionKey,
-  });
+  const r = await commands.loadWorkspaceState(vaultPath, encryptionKey);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }

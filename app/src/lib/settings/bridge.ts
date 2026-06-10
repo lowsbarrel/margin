@@ -1,53 +1,40 @@
-import { invoke } from "@tauri-apps/api/core";
-import type { S3Config } from "$lib/s3/bridge";
+import { commands } from "$lib/bindings";
 
-import type { ConflictStrategy } from "$lib/sync/s3sync";
-
-export interface AppSettings {
-  s3: S3Config | null;
-  attachment_folder: string | null;
-  auto_sync: boolean | null;
-  conflict_strategy: ConflictStrategy | null;
-}
+export type { AppSettings } from "$lib/bindings";
+import type { AppSettings } from "$lib/bindings";
 
 export async function saveSettings(
   vaultPath: string,
   encryptionKey: number[],
   settings: AppSettings,
 ): Promise<void> {
-  return invoke("save_settings", {
-    vaultPath,
-    encryptionKey,
-    settings,
-  });
+  const r = await commands.saveSettings(vaultPath, encryptionKey, settings);
+  if (r.status === "error") throw r.error;
 }
 
 export async function loadSettings(
   vaultPath: string,
   encryptionKey: number[],
 ): Promise<AppSettings | null> {
-  return invoke<AppSettings | null>("load_settings", {
-    vaultPath,
-    encryptionKey,
-  });
+  const r = await commands.loadSettings(vaultPath, encryptionKey);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function exportSettingsString(
   encryptionKey: number[],
   settings: AppSettings,
 ): Promise<string> {
-  return invoke<string>("export_settings_string", {
-    encryptionKey,
-    settings,
-  });
+  const r = await commands.exportSettingsString(encryptionKey, settings);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function importSettingsString(
   encryptionKey: number[],
   encoded: string,
 ): Promise<AppSettings> {
-  return invoke<AppSettings>("import_settings_string", {
-    encryptionKey,
-    encoded,
-  });
+  const r = await commands.importSettingsString(encryptionKey, encoded);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }

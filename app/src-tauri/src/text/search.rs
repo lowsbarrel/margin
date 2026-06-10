@@ -1,6 +1,6 @@
 use serde::Serialize;
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct TextMatch {
     pub from: u32,
     pub to: u32,
@@ -18,6 +18,7 @@ pub struct TextMatch {
 ///
 /// Returns `(from, to)` pairs in ProseMirror position space.
 #[tauri::command]
+#[specta::specta]
 pub fn search_in_text(
     text: String,
     pm_offsets: Vec<u32>,
@@ -35,8 +36,13 @@ pub fn search_in_text(
         haystack = text;
         pattern = needle;
     } else {
-        haystack = text.to_lowercase();
-        pattern = needle.to_lowercase();
+        // ASCII-fold (length-preserving) rather than full Unicode `to_lowercase`:
+        // the byte index `idx` found in the lowered haystack is used to index
+        // `pm_offsets` (which is parallel to the ORIGINAL `text`). A Unicode fold
+        // can change byte length and desync those positions. Limitation: only
+        // ASCII letters are matched case-insensitively.
+        haystack = text.to_ascii_lowercase();
+        pattern = needle.to_ascii_lowercase();
     };
 
     let hay = haystack.as_bytes();

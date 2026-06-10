@@ -1,13 +1,15 @@
-use super::{path_to_string, search::collect_md_paths};
+use super::path_to_string;
+use super::search::{collect_md_paths, MAX_WALK_DEPTH};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::Path;
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct TagInfo {
     pub tag: String,
+    #[specta(type = u32)]
     pub count: usize,
     pub files: Vec<String>,
 }
@@ -74,9 +76,10 @@ fn extract_tags_from_content(content: &str) -> Vec<String> {
 
 /// Scan all `.md` files under `root` and collect unique `#tag` tokens.
 #[tauri::command]
+#[specta::specta]
 pub fn list_all_tags(root: &str) -> Result<Vec<TagInfo>, String> {
     let mut md_paths = Vec::new();
-    collect_md_paths(Path::new(root), &mut md_paths, 0, 10);
+    collect_md_paths(Path::new(root), &mut md_paths, 0, MAX_WALK_DEPTH);
 
     let per_file: Vec<(String, Vec<String>)> = md_paths
         .into_par_iter()

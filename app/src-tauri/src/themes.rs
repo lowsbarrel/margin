@@ -4,13 +4,13 @@ use std::fs;
 use std::path::PathBuf;
 use tauri::Manager;
 
-#[derive(Serialize, Deserialize, Clone, Debug)]
+#[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct Theme {
     pub name: String,
     pub colors: HashMap<String, String>,
 }
 
-#[derive(Serialize, Deserialize, Clone, Debug, Default)]
+#[derive(Serialize, Deserialize, Clone, Debug, Default, specta::Type)]
 pub struct ThemeData {
     pub themes: Vec<Theme>,
     pub active_theme: Option<String>,
@@ -27,6 +27,7 @@ fn themes_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
 
 /// Load all saved themes from the app data directory
 #[tauri::command]
+#[specta::specta]
 pub fn load_themes(app: tauri::AppHandle) -> Result<ThemeData, String> {
     let path = themes_path(&app)?;
     if !path.exists() {
@@ -40,6 +41,7 @@ pub fn load_themes(app: tauri::AppHandle) -> Result<ThemeData, String> {
 
 /// Save all themes to the app data directory
 #[tauri::command]
+#[specta::specta]
 pub fn save_themes(app: tauri::AppHandle, data: ThemeData) -> Result<(), String> {
     let path = themes_path(&app)?;
     let json = serde_json::to_string_pretty(&data).map_err(|e| format!("Serialize failed: {e}"))?;
@@ -49,6 +51,7 @@ pub fn save_themes(app: tauri::AppHandle, data: ThemeData) -> Result<(), String>
 
 /// Export a single theme to a user-chosen path
 #[tauri::command]
+#[specta::specta]
 pub fn export_theme(theme: Theme, dest: String) -> Result<(), String> {
     let json =
         serde_json::to_string_pretty(&theme).map_err(|e| format!("Serialize failed: {e}"))?;
@@ -58,6 +61,7 @@ pub fn export_theme(theme: Theme, dest: String) -> Result<(), String> {
 
 /// Import a theme from a user-chosen JSON file
 #[tauri::command]
+#[specta::specta]
 pub fn import_theme(path: String) -> Result<Theme, String> {
     let content = fs::read_to_string(&path).map_err(|e| format!("Read failed: {e}"))?;
     let theme: Theme =

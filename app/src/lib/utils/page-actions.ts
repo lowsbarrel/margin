@@ -41,21 +41,31 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
       throw err;
     }
 
-    panes.remapPaths(oldPath, newPath, isDir);
+    // Ordering invariant: the filesystem rename (and its history counterpart)
+    // has already succeeded above, so the entry IS renamed on disk. The
+    // following steps only reconcile in-memory stores and watchers; a failure
+    // in any of them must not abort the rest (which would leave stores stale)
+    // and must not re-throw (which would surface a "rename failed" error to the
+    // caller even though the rename itself succeeded).
+    try {
+      panes.remapPaths(oldPath, newPath, isDir);
 
-    if (files.activeFile) {
-      files.setActiveFile(
-        remapPath(files.activeFile, oldPath, newPath, isDir),
-      );
+      if (files.activeFile) {
+        files.setActiveFile(
+          remapPath(files.activeFile, oldPath, newPath, isDir),
+        );
+      }
+      if (files.selectedFolder) {
+        files.setSelectedFolder(
+          remapPath(files.selectedFolder, oldPath, newPath, isDir),
+        );
+      }
+      favourites.renamePath(oldPath, newPath);
+      await files.refresh(vault.vaultPath);
+      await panes.restoreWatchingForPane(panes.activePaneIndex);
+    } catch (postErr) {
+      console.error("Rename succeeded but post-rename reconciliation failed:", postErr);
     }
-    if (files.selectedFolder) {
-      files.setSelectedFolder(
-        remapPath(files.selectedFolder, oldPath, newPath, isDir),
-      );
-    }
-    favourites.renamePath(oldPath, newPath);
-    await files.refresh(vault.vaultPath);
-    await panes.restoreWatchingForPane(panes.activePaneIndex);
   } catch (err) {
     console.error("Rename failed:", err);
     throw err;

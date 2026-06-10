@@ -1,12 +1,19 @@
 <script lang="ts">
   import { Section } from "$lib/ui";
   import { Globe } from "lucide-svelte";
-  import { getLocale, setLocale, locales } from "$lib/paraglide/runtime.js";
+  import {
+    getLocale,
+    setLocale,
+    locales,
+    type Locale,
+  } from "$lib/paraglide/runtime.js";
   import * as m from "$lib/paraglide/messages.js";
 
   function handleLocaleChange(e: Event) {
     const target = e.target as HTMLSelectElement;
-    setLocale(target.value as any);
+    if ((locales as readonly string[]).includes(target.value)) {
+      setLocale(target.value as Locale);
+    }
   }
 </script>
 

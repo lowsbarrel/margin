@@ -1,40 +1,45 @@
 import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
+import { fromBytes } from "$lib/ipc";
 
-export interface S3Config {
-  endpoint: string;
-  bucket: string;
-  region: string;
-  access_key: string;
-  secret_key: string;
-}
+export type { S3Config } from "$lib/bindings";
+import type { S3Config } from "$lib/bindings";
 
 export async function s3Configure(config: S3Config): Promise<void> {
-  return invoke("s3_configure", { config });
+  const r = await commands.s3Configure(config);
+  if (r.status === "error") throw r.error;
 }
 
 export async function s3GetConfig(): Promise<S3Config | null> {
-  return invoke<S3Config | null>("s3_get_config");
+  const r = await commands.s3GetConfig();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function s3TestConnection(): Promise<string> {
-  return invoke<string>("s3_test_connection");
+  const r = await commands.s3TestConnection();
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function s3Upload(key: string, data: Uint8Array): Promise<void> {
-  return invoke("s3_upload", data, {
+  return invoke<void>("s3_upload", data, {
     headers: { "x-key": key },
   });
 }
 
 export async function s3Download(key: string): Promise<Uint8Array> {
   const buffer = await invoke<ArrayBuffer>("s3_download", { key });
-  return new Uint8Array(buffer);
+  return fromBytes(buffer);
 }
 
 export async function s3List(prefix: string): Promise<string[]> {
-  return invoke<string[]>("s3_list", { prefix });
+  const r = await commands.s3List(prefix);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function s3Delete(key: string): Promise<void> {
-  return invoke("s3_delete", { key });
+  const r = await commands.s3Delete(key);
+  if (r.status === "error") throw r.error;
 }

@@ -94,11 +94,19 @@ export const TableDndExtension = Extension.create({
       Object.assign(rowHandle.style, h);
     }
 
+    // Handle dimensions are fixed by CSS, so parse them once (lazily) instead
+    // of calling getComputedStyle on every hover.
+    let colHandleHeight: number | undefined;
+    let rowHandleWidth: number | undefined;
+
     function showHandles(cell: HoveringCellInfo) {
       // Column handle above
       const colRef = editor.view.nodeDOM(cell.colFirstCellPos);
       if (colRef) {
-        const yOff = -parseInt(getComputedStyle(colHandle).height || "18") / 2;
+        if (colHandleHeight === undefined) {
+          colHandleHeight = parseInt(getComputedStyle(colHandle).height || "18");
+        }
+        const yOff = -colHandleHeight / 2;
         computePosition(colRef as HTMLElement, colHandle, {
           placement: "top",
           middleware: [offset(yOff)],
@@ -109,7 +117,10 @@ export const TableDndExtension = Extension.create({
       // Row handle to the left
       const rowRef = editor.view.nodeDOM(cell.rowFirstCellPos);
       if (rowRef) {
-        const xOff = -parseInt(getComputedStyle(rowHandle).width || "18") / 2;
+        if (rowHandleWidth === undefined) {
+          rowHandleWidth = parseInt(getComputedStyle(rowHandle).width || "18");
+        }
+        const xOff = -rowHandleWidth / 2;
         computePosition(rowRef as HTMLElement, rowHandle, {
           placement: "left",
           middleware: [offset(xOff)],
@@ -393,10 +404,17 @@ export const TableDndExtension = Extension.create({
           pointerover(view: EditorView, event: PointerEvent) {
             if (dragging) return;
             if (!editor.isEditable) {
+              hoveringCell = undefined;
               hideHandles();
               return;
             }
             const cell = getHoveringCell(view, event);
+            // Skip re-positioning the handles when we are still over the same
+            // cell — re-entering an already-hovered cell would otherwise redo
+            // the getComputedStyle reads + two floating-ui passes for nothing.
+            if (cell && hoveringCell && cell.cellPos === hoveringCell.cellPos) {
+              return;
+            }
             hoveringCell = cell;
             if (!cell) hideHandles();
             else showHandles(cell);

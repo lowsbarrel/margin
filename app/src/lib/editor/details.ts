@@ -1,6 +1,7 @@
 // Collapsible details/toggle block (details + detailsSummary + detailsContent).
 
 import { Node, mergeAttributes, wrappingInputRule } from "@tiptap/core";
+import { Selection } from "@tiptap/pm/state";
 import type { Node as PMNode } from "@tiptap/pm/model";
 
 declare module "@tiptap/core" {
@@ -11,6 +12,51 @@ declare module "@tiptap/core" {
       toggleDetails: () => ReturnType;
     };
   }
+}
+
+/**
+ * Minimal structural types for the tiptap-markdown serializer state and the
+ * markdown-it block plugin surface we touch. markdown-it@14 ships no bundled
+ * .d.ts and @types/markdown-it is not a dependency, so we declare just the
+ * members used here instead of falling back to `any`.
+ */
+interface MarkdownSerializerState {
+  write(content: string): void;
+  renderContent(node: PMNode): void;
+  closeBlock(node: PMNode): void;
+}
+
+interface MdToken {
+  content: string;
+  children: MdToken[];
+  attrPush(attr: [string, string]): void;
+  map: [number, number] | null;
+}
+
+interface MdBlockState {
+  src: string;
+  bMarks: number[];
+  eMarks: number[];
+  tShift: number[];
+  line: number;
+  lineMax: number;
+  parentType: string;
+  md: MarkdownIt;
+  push(type: string, tag: string, nesting: number): MdToken;
+}
+
+type MdBlockRule = (
+  state: MdBlockState,
+  startLine: number,
+  endLine: number,
+  silent: boolean,
+) => boolean;
+
+interface MarkdownIt {
+  block: {
+    ruler: { before(beforeName: string, name: string, rule: MdBlockRule): void };
+    tokenize(state: MdBlockState, startLine: number, endLine: number): void;
+  };
 }
 
 export const Details = Node.create({
@@ -136,21 +182,32 @@ export const Details = Node.create({
         }
       });
 
-      return { dom, contentDOM: contentDom };
+      return {
+        dom,
+        contentDOM: contentDom,
+        update(updatedNode: PMNode) {
+          if (updatedNode.type.name !== "details") return false;
+          // Re-sync the visual toggle when the `open` attr changes from
+          // outside this node view (paste, programmatic setDetails, etc.).
+          isOpen = updatedNode.attrs.open !== false;
+          updateOpen();
+          return true;
+        },
+      };
     };
   },
 
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: PMNode) {
+        serialize(state: MarkdownSerializerState, node: PMNode) {
           state.write(":::details\n");
           state.renderContent(node);
           state.write(":::\n");
           state.closeBlock(node);
         },
         parse: {
-          setup(md: any) {
+          setup(md: MarkdownIt) {
             detailsMarkdownPlugin(md);
           },
         },
@@ -263,8 +320,7 @@ export const DetailsContent = Node.create({
                   );
                 const newPos = tr.mapping.map(afterDetails);
                 tr.setSelection(
-                  // @ts-ignore
-                  state.selection.constructor.near(tr.doc.resolve(newPos)),
+                  Selection.near(tr.doc.resolve(newPos)),
                 );
                 editor.view.dispatch(tr);
                 return true;
@@ -279,11 +335,11 @@ export const DetailsContent = Node.create({
 });
 
 /** markdown-it plugin for :::details ... ::: fences */
-function detailsMarkdownPlugin(md: any) {
+function detailsMarkdownPlugin(md: MarkdownIt) {
   md.block.ruler.before(
     "fence",
     "details",
-    function (state: any, startLine: number, endLine: number, silent: boolean) {
+    function (state, startLine, endLine, silent) {
       const pos = state.bMarks[startLine] + state.tShift[startLine];
       const max = state.eMarks[startLine];
       const src = state.src;

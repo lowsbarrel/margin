@@ -1,5 +1,7 @@
 mod image_paths;
 
+use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
+use nucleo_matcher::{Config, Matcher, Utf32Str};
 use serde::{Deserialize, Serialize};
 
 const IMAGE_EXTS: &[&str] = &[
@@ -20,68 +22,74 @@ const LOCALFILE_URL_PREFIX: &str = "localfile://localhost";
 // it so old notes keep working.
 const LEGACY_LOCALFILE_PREFIX: &str = "localfile://localhost";
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct FuzzyEntry {
     pub name: String,
     pub path: String,
 }
 
 #[tauri::command]
-pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: usize) -> Vec<FuzzyEntry> {
-    let q = query.to_lowercase();
-    let mut scored: Vec<(FuzzyEntry, f64)> = Vec::new();
+#[specta::specta]
+// `limit` is u32 (not usize) so specta can export it; a result cap never
+// approaches u32::MAX.
+//
+// Fuzzy matching/ranking is delegated to the maintained `nucleo-matcher`
+// crate (the engine behind helix/nucleo) instead of a hand-rolled scorer.
+// The display `name` has its `.md` suffix stripped before matching so the
+// extension never skews scores.
+pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: u32) -> Vec<FuzzyEntry> {
+    let limit = limit as usize;
 
-    for entry in files {
-        let name = entry
-            .name
-            .strip_suffix(".md")
-            .unwrap_or(&entry.name)
-            .to_string();
-        let name_lower = name.to_lowercase();
-        let score: f64;
-
-        if q.is_empty() {
-            score = 0.0;
-        } else if let Some(idx) = name_lower.find(&q) {
-            score = 1000.0 - idx as f64 + (q.len() as f64 / name_lower.len() as f64) * 500.0;
-        } else {
-            let q_chars: Vec<char> = q.chars().collect();
-            let mut qi = 0;
-            let mut s = 0.0;
-            let mut last_match: Option<usize> = None;
-            for (ti, tc) in name_lower.chars().enumerate() {
-                if qi < q_chars.len() && tc == q_chars[qi] {
-                    s += 10.0;
-                    if let Some(lm) = last_match {
-                        if lm + 1 == ti {
-                            s += 15.0;
-                        }
-                    }
-                    last_match = Some(ti);
-                    qi += 1;
-                }
-            }
-            if qi == q_chars.len() {
-                score = s;
-            } else {
-                continue;
-            }
-        }
-
-        scored.push((
-            FuzzyEntry {
-                name,
+    // Empty query: nothing to rank, so preserve the previous behaviour of
+    // returning entries (with `.md` stripped) sorted by name, capped at `limit`.
+    if query.trim().is_empty() {
+        let mut names: Vec<FuzzyEntry> = files
+            .into_iter()
+            .map(|entry| FuzzyEntry {
+                name: entry
+                    .name
+                    .strip_suffix(".md")
+                    .unwrap_or(&entry.name)
+                    .to_string(),
                 path: entry.path,
-            },
-            score,
-        ));
+            })
+            .collect();
+        names.sort_by(|a, b| a.name.cmp(&b.name));
+        names.truncate(limit);
+        return names;
     }
 
-    scored.sort_by(|a, b| {
-        b.1.partial_cmp(&a.1)
-            .unwrap_or(std::cmp::Ordering::Equal)
-            .then_with(|| a.0.name.cmp(&b.0.name))
-    });
+    let mut matcher = Matcher::new(Config::DEFAULT);
+    let pattern = Pattern::parse(&query, CaseMatching::Ignore, Normalization::Smart);
+
+    // Reusable scratch buffer for the `Utf32Str` conversion the matcher needs.
+    let mut haystack_buf: Vec<char> = Vec::new();
+
+    let mut scored: Vec<(FuzzyEntry, u32)> = files
+        .into_iter()
+        .filter_map(|entry| {
+            let name = entry
+                .name
+                .strip_suffix(".md")
+                .unwrap_or(&entry.name)
+                .to_string();
+
+            haystack_buf.clear();
+            let haystack = Utf32Str::new(&name, &mut haystack_buf);
+            let score = pattern.score(haystack, &mut matcher)?;
+
+            Some((
+                FuzzyEntry {
+                    name,
+                    path: entry.path,
+                },
+                score,
+            ))
+        })
+        .collect();
+
+    // Best matches first; ties broken by name for a stable, deterministic order.
+    scored.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.name.cmp(&b.0.name)));
 
     scored
         .into_iter()
@@ -91,6 +99,7 @@ pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: usize) -
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn transform_image_paths(
     markdown: String,
     vault_path: Option<String>,

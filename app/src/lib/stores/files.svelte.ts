@@ -1,3 +1,4 @@
+import { SvelteSet } from "svelte/reactivity";
 import { buildVisibleTree, buildSubtree, type TreeEntry } from "$lib/fs/bridge";
 
 export type SortOrder = "name" | "date";
@@ -17,10 +18,9 @@ interface FilesState {
   vaultRoot: string | null;
   activeFile: string | null;
   selectedFolder: string | null;
-  selectedEntries: Map<string, SelectedEntry>;
   lastSelectedPath: string | null;
   loading: boolean;
-  expandedFolders: Set<string>;
+  expandedFolders: SvelteSet<string>;
   pendingNewFolder: string | null;
   renamingPath: string | null;
   treeRevealTarget: TreeRevealTarget | null;
@@ -33,16 +33,23 @@ let state = $state<FilesState>({
   vaultRoot: null,
   activeFile: null,
   selectedFolder: null,
-  selectedEntries: new Map(),
   lastSelectedPath: null,
   loading: false,
-  expandedFolders: new Set(),
+  expandedFolders: new SvelteSet(),
   pendingNewFolder: null,
   renamingPath: null,
   treeRevealTarget: null,
   treeRevealVersion: 0,
   sortOrder: "name",
 });
+
+/**
+ * Selection lives in a separate $state.raw Map so it is NOT deeply proxied by
+ * Svelte. Mutations reassign the container (`selectedEntries = ...`) to notify
+ * dependents. Because the container identity changes (not every nested entry),
+ * rows that read `isSelected(path)` only re-evaluate the cheap `.has` lookup.
+ */
+let selectedEntries = $state.raw<Map<string, SelectedEntry>>(new Map());
 
 async function _rebuild(): Promise<void> {
   if (!state.vaultRoot) return;
@@ -53,10 +60,22 @@ async function _rebuild(): Promise<void> {
     state.sortOrder,
   );
   state.flatTree = flatTree;
-  _pathIndex = new Map(flatTree.map((r, i) => [r.path, i]));
+  _pathIndexDirty = true;
 }
 
 let _pathIndex = new Map<string, number>();
+// _pathIndex is only consumed by selectRange. Rebuild it lazily on demand so
+// user-paced expand/collapse/rebuild operations don't pay an O(n) Map rebuild
+// each time when no range selection ever follows.
+let _pathIndexDirty = true;
+
+function pathIndex(): Map<string, number> {
+  if (_pathIndexDirty) {
+    _pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
+    _pathIndexDirty = false;
+  }
+  return _pathIndex;
+}
 
 function _requestTreeReveal(target: TreeRevealTarget) {
   state.treeRevealTarget = target;
@@ -87,13 +106,19 @@ export const files = {
   async revealFile(filePath: string, vaultPath: string) {
     const rel = filePath.slice(vaultPath.length + 1);
     const parts = rel.split("/");
+    const before = state.expandedFolders.size;
     let current = vaultPath;
     for (let i = 0; i < parts.length - 1; i++) {
       current += "/" + parts[i];
       state.expandedFolders.add(current);
     }
-    state.expandedFolders = new Set(state.expandedFolders);
-    await _rebuild();
+    // Only re-walk the tree when an ancestor was actually newly expanded. On the
+    // common path (tab switch / opening a file whose ancestors are already
+    // expanded) nothing was added, so skip the build_visible_tree IPC walk and
+    // just fire a scroll request.
+    if (state.expandedFolders.size !== before) {
+      await _rebuild();
+    }
     _requestTreeReveal({ kind: "entry", path: filePath });
   },
 
@@ -120,15 +145,15 @@ export const files = {
   // ─── Multi-selection ───
 
   get selectedEntries() {
-    return state.selectedEntries;
+    return selectedEntries;
   },
 
   get selectedEntry(): SelectedEntry | null {
-    if (state.selectedEntries.size === 1) {
-      return state.selectedEntries.values().next().value!;
+    if (selectedEntries.size === 1) {
+      return selectedEntries.values().next().value!;
     }
-    return state.selectedEntries.size > 0
-      ? { path: state.lastSelectedPath!, isDir: state.selectedEntries.get(state.lastSelectedPath!)?.isDir ?? false }
+    return selectedEntries.size > 0
+      ? { path: state.lastSelectedPath!, isDir: selectedEntries.get(state.lastSelectedPath!)?.isDir ?? false }
       : null;
   },
 
@@ -137,18 +162,18 @@ export const files = {
   },
 
   selectSingle(path: string, isDir: boolean) {
-    state.selectedEntries = new Map([[path, { path, isDir }]]);
+    selectedEntries = new Map([[path, { path, isDir }]]);
     state.lastSelectedPath = path;
   },
 
   selectToggle(path: string, isDir: boolean) {
-    const next = new Map(state.selectedEntries);
+    const next = new Map(selectedEntries);
     if (next.has(path)) {
       next.delete(path);
     } else {
       next.set(path, { path, isDir });
     }
-    state.selectedEntries = next;
+    selectedEntries = next;
     state.lastSelectedPath = path;
   },
 
@@ -157,14 +182,15 @@ export const files = {
     if (!anchor) {
       const row = state.flatTree.find((r) => r.path === path);
       if (row) {
-        state.selectedEntries = new Map([[path, { path, isDir: row.is_dir }]]);
+        selectedEntries = new Map([[path, { path, isDir: row.is_dir }]]);
         state.lastSelectedPath = path;
       }
       return;
     }
     const flat = state.flatTree;
-    const anchorIdx = _pathIndex.get(anchor);
-    const targetIdx = _pathIndex.get(path);
+    const idx = pathIndex();
+    const anchorIdx = idx.get(anchor);
+    const targetIdx = idx.get(path);
     if (anchorIdx === undefined || targetIdx === undefined) return;
     const lo = Math.min(anchorIdx, targetIdx);
     const hi = Math.max(anchorIdx, targetIdx);
@@ -172,23 +198,23 @@ export const files = {
     for (let i = lo; i <= hi; i++) {
       next.set(flat[i].path, { path: flat[i].path, isDir: flat[i].is_dir });
     }
-    state.selectedEntries = next;
+    selectedEntries = next;
   },
 
   isSelected(path: string) {
-    return state.selectedEntries.has(path);
+    return selectedEntries.has(path);
   },
 
   getSelectedPaths(): string[] {
-    return [...state.selectedEntries.keys()];
+    return [...selectedEntries.keys()];
   },
 
   getSelectedAsList(): SelectedEntry[] {
-    return [...state.selectedEntries.values()];
+    return [...selectedEntries.values()];
   },
 
   clearSelection() {
-    state.selectedEntries = new Map();
+    selectedEntries = new Map();
     state.lastSelectedPath = null;
   },
 
@@ -197,7 +223,7 @@ export const files = {
     for (const row of state.flatTree) {
       next.set(row.path, { path: row.path, isDir: row.is_dir });
     }
-    state.selectedEntries = next;
+    selectedEntries = next;
   },
 
   setSelectedEntry(path: string, isDir: boolean) {
@@ -206,7 +232,6 @@ export const files = {
 
   async expandFolder(path: string) {
     state.expandedFolders.add(path);
-    state.expandedFolders = new Set(state.expandedFolders);
     const idx = state.flatTree.findIndex((r) => r.path === path);
     if (idx !== -1 && state.vaultRoot) {
       const parentDepth = state.flatTree[idx].depth;
@@ -219,20 +244,23 @@ export const files = {
       const next = [...state.flatTree];
       next.splice(idx + 1, 0, ...children);
       state.flatTree = next;
-      _pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
+      _pathIndexDirty = true;
     } else {
       await _rebuild();
     }
   },
 
-  collapseAll() {
-    state.expandedFolders = new Set();
-    _rebuild();
+  async collapseAll() {
+    state.expandedFolders.clear();
+    try {
+      await _rebuild();
+    } catch (err) {
+      console.warn("Failed to rebuild tree after collapseAll:", err);
+    }
   },
 
   async collapseFolder(path: string) {
     state.expandedFolders.delete(path);
-    state.expandedFolders = new Set(state.expandedFolders);
     const idx = state.flatTree.findIndex((r) => r.path === path);
     if (idx !== -1) {
       const parentDepth = state.flatTree[idx].depth;
@@ -244,7 +272,7 @@ export const files = {
         const next = [...state.flatTree];
         next.splice(idx + 1, end - idx - 1);
         state.flatTree = next;
-        _pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
+        _pathIndexDirty = true;
       }
     } else {
       await _rebuild();
@@ -275,13 +303,15 @@ export const files = {
     state.vaultRoot = null;
     state.activeFile = null;
     state.selectedFolder = null;
-    state.selectedEntries = new Map();
+    selectedEntries = new Map();
     state.lastSelectedPath = null;
-    state.expandedFolders = new Set();
+    state.expandedFolders.clear();
     state.pendingNewFolder = null;
     state.renamingPath = null;
     state.treeRevealTarget = null;
     state.treeRevealVersion = 0;
+    _pathIndex = new Map();
+    _pathIndexDirty = false;
   },
 
   get pendingNewFolder() {

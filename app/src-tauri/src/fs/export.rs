@@ -1,3 +1,4 @@
+use crate::fs::{walk_dir, WalkAction};
 use crate::sync::Manifest;
 use std::collections::HashMap;
 use std::fs;
@@ -6,6 +7,7 @@ use std::sync::Mutex;
 use std::time::Instant;
 
 #[tauri::command]
+#[specta::specta]
 pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String> {
     use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
@@ -73,35 +75,21 @@ fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
 }
 
 fn walk_vault_impl(base: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
-    let read = match fs::read_dir(dir) {
-        Ok(r) => r,
-        Err(_) => return,
-    };
-    for entry in read.flatten() {
-        let name = entry.file_name();
-        let name_str = name.to_string_lossy();
-        if name_str.starts_with('.') {
-            continue;
+    walk_dir(dir, &mut |item| {
+        if item.name.starts_with('.') {
+            return WalkAction::Skip;
         }
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-        if is_dir {
-            walk_vault_impl(base, &entry.path(), out);
-        } else {
-            let mtime = entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            if let Ok(rel) = entry.path().strip_prefix(base) {
-                let rel_str = rel.to_string_lossy().into_owned();
-                #[cfg(target_os = "windows")]
-                let rel_str = rel_str.replace('\\', "/");
-                out.push((rel_str, mtime));
-            }
+        if item.is_dir {
+            return WalkAction::Recurse;
         }
-    }
+        if let Ok(rel) = item.path.strip_prefix(base) {
+            let rel_str = rel.to_string_lossy().into_owned();
+            #[cfg(target_os = "windows")]
+            let rel_str = rel_str.replace('\\', "/");
+            out.push((rel_str, item.modified));
+        }
+        WalkAction::Skip
+    });
 }
 
 /// Check whether the vault has local changes compared to the last-synced
@@ -110,8 +98,13 @@ fn walk_vault_impl(base: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
 /// Caches the result for up to 2 seconds to avoid repeated full vault walks
 /// when called in quick succession (e.g. on every vault-fs-changed event).
 #[tauri::command]
+#[specta::specta]
 pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result<bool, String> {
     struct CachedResult {
+        /// Vault this result belongs to — without it, switching vaults within
+        /// the TTL window could return a stale result from the previous vault
+        /// if the two manifests happened to share an mtime (e.g. both 0/missing).
+        vault_path: String,
         result: bool,
         manifest_mtime: u64,
         checked_at: Instant,
@@ -132,7 +125,8 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
 
     if let Ok(guard) = CACHE.lock() {
         if let Some(ref cached) = *guard {
-            if cached.manifest_mtime == manifest_mtime
+            if cached.vault_path == vault_path
+                && cached.manifest_mtime == manifest_mtime
                 && cached.checked_at.elapsed().as_secs() < CACHE_TTL_SECS
             {
                 return Ok(cached.result);
@@ -174,6 +168,7 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
 
     if let Ok(mut guard) = CACHE.lock() {
         *guard = Some(CachedResult {
+            vault_path: vault_path.to_string(),
             result,
             manifest_mtime,
             checked_at: Instant::now(),

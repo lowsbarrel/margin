@@ -77,59 +77,102 @@
   const EDGE_HIGHLIGHT_COLOR = "rgba(255, 102, 51, 0.5)";
   const LABEL_COLOR = "rgba(220, 221, 222, 0.85)";
 
-  function initSimulation(data: { nodes: GraphNode[]; edges: GraphEdge[] }) {
-    totalNodeCount = data.nodes.length;
+  interface CappedGraph {
+    nodes: GraphNode[];
+    edges: GraphEdge[];
+  }
 
-    // Cap nodes: keep the most-connected ones so the O(n²) repulsion stays bounded.
-    let cappedNodes = data.nodes;
-    let cappedEdges = data.edges;
-    if (data.nodes.length > MAX_SIM_NODES) {
-      const edgeCount = new Map<string, number>();
-      for (const e of data.edges) {
-        edgeCount.set(e.source, (edgeCount.get(e.source) ?? 0) + 1);
-        edgeCount.set(e.target, (edgeCount.get(e.target) ?? 0) + 1);
-      }
-      cappedNodes = [...data.nodes]
-        .sort((a, b) => (edgeCount.get(b.id) ?? 0) - (edgeCount.get(a.id) ?? 0))
-        .slice(0, MAX_SIM_NODES);
-      const cappedIds = new Set(cappedNodes.map((n) => n.id));
-      cappedEdges = data.edges.filter(
-        (e) => cappedIds.has(e.source) && cappedIds.has(e.target),
-      );
+  /**
+   * Cap the graph to the MAX_SIM_NODES most-connected nodes so the repulsion
+   * loop stays bounded, dropping edges that reference a culled node.
+   */
+  function capGraph(data: { nodes: GraphNode[]; edges: GraphEdge[] }): CappedGraph {
+    if (data.nodes.length <= MAX_SIM_NODES) {
+      return { nodes: data.nodes, edges: data.edges };
     }
+    const edgeCount = new Map<string, number>();
+    for (const e of data.edges) {
+      edgeCount.set(e.source, (edgeCount.get(e.source) ?? 0) + 1);
+      edgeCount.set(e.target, (edgeCount.get(e.target) ?? 0) + 1);
+    }
+    const nodes = [...data.nodes]
+      .sort((a, b) => (edgeCount.get(b.id) ?? 0) - (edgeCount.get(a.id) ?? 0))
+      .slice(0, MAX_SIM_NODES);
+    const cappedIds = new Set(nodes.map((n) => n.id));
+    const edges = data.edges.filter(
+      (e) => cappedIds.has(e.source) && cappedIds.has(e.target),
+    );
+    return { nodes, edges };
+  }
 
-    const nodeIndex = new Map<string, number>();
+  /**
+   * Build the index-based simEdges array and the per-node edge counts for a
+   * capped graph, given the node→index map produced while seeding positions.
+   */
+  function buildSimEdges(
+    edges: GraphEdge[],
+    nodeIndex: Map<string, number>,
+  ): { source: number; target: number }[] {
+    const out: { source: number; target: number }[] = [];
+    for (const e of edges) {
+      const si = nodeIndex.get(e.source);
+      const ti = nodeIndex.get(e.target);
+      if (si !== undefined && ti !== undefined && si !== ti) {
+        out.push({ source: si, target: ti });
+      }
+    }
+    return out;
+  }
 
-    // Count edges per node (within capped set)
+  function edgeCountMap(edges: GraphEdge[]): Map<string, number> {
     const edgeCounts = new Map<string, number>();
-    for (const e of cappedEdges) {
+    for (const e of edges) {
       edgeCounts.set(e.source, (edgeCounts.get(e.source) ?? 0) + 1);
       edgeCounts.set(e.target, (edgeCounts.get(e.target) ?? 0) + 1);
     }
+    return edgeCounts;
+  }
+
+  /**
+   * Rebuild simNodes/simEdges from graph data. `seed` produces the initial
+   * position for each node — this is the only thing that differs between a
+   * fresh init (circle layout) and an incremental update (carry positions).
+   */
+  function rebuildSim(
+    data: { nodes: GraphNode[]; edges: GraphEdge[] },
+    seed: (node: GraphNode, index: number, count: number) => { x: number; y: number },
+  ) {
+    totalNodeCount = data.nodes.length;
+    const { nodes: cappedNodes, edges: cappedEdges } = capGraph(data);
+    const edgeCounts = edgeCountMap(cappedEdges);
+    const nodeIndex = new Map<string, number>();
 
     simNodes = cappedNodes.map((n, i) => {
       nodeIndex.set(n.id, i);
-      const angle = (i / cappedNodes.length) * Math.PI * 2;
-      const radius = Math.sqrt(cappedNodes.length) * 30;
+      const { x, y } = seed(n, i, cappedNodes.length);
       return {
         id: n.id,
         label: n.label,
-        x: Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
-        y: Math.sin(angle) * radius + (Math.random() - 0.5) * 20,
+        x,
+        y,
         vx: 0,
         vy: 0,
         edges: edgeCounts.get(n.id) ?? 0,
       };
     });
 
-    simEdges = [];
-    for (const e of cappedEdges) {
-      const si = nodeIndex.get(e.source);
-      const ti = nodeIndex.get(e.target);
-      if (si !== undefined && ti !== undefined && si !== ti) {
-        simEdges.push({ source: si, target: ti });
-      }
-    }
+    simEdges = buildSimEdges(cappedEdges, nodeIndex);
+  }
+
+  function initSimulation(data: { nodes: GraphNode[]; edges: GraphEdge[] }) {
+    rebuildSim(data, (_n, i, count) => {
+      const angle = (i / count) * Math.PI * 2;
+      const radius = Math.sqrt(count) * 30;
+      return {
+        x: Math.cos(angle) * radius + (Math.random() - 0.5) * 20,
+        y: Math.sin(angle) * radius + (Math.random() - 0.5) * 20,
+      };
+    });
 
     // Center camera
     camX = 0;
@@ -140,75 +183,20 @@
   }
 
   function updateSimulation(data: { nodes: GraphNode[]; edges: GraphEdge[] }) {
-    totalNodeCount = data.nodes.length;
-
-    // Build a map of existing positions
+    // Carry existing positions so the layout doesn't jump on incremental updates.
     const existingPositions = new Map<string, { x: number; y: number }>();
     for (const n of simNodes) {
       existingPositions.set(n.id, { x: n.x, y: n.y });
     }
 
-    // Apply same capping logic as initSimulation
-    let cappedNodes = data.nodes;
-    let cappedEdges = data.edges;
-    if (data.nodes.length > MAX_SIM_NODES) {
-      const edgeCount = new Map<string, number>();
-      for (const e of data.edges) {
-        edgeCount.set(e.source, (edgeCount.get(e.source) ?? 0) + 1);
-        edgeCount.set(e.target, (edgeCount.get(e.target) ?? 0) + 1);
-      }
-      cappedNodes = [...data.nodes]
-        .sort((a, b) => (edgeCount.get(b.id) ?? 0) - (edgeCount.get(a.id) ?? 0))
-        .slice(0, MAX_SIM_NODES);
-      const cappedIds = new Set(cappedNodes.map((n) => n.id));
-      cappedEdges = data.edges.filter(
-        (e) => cappedIds.has(e.source) && cappedIds.has(e.target),
-      );
-    }
-
-    const nodeIndex = new Map<string, number>();
-    const edgeCounts = new Map<string, number>();
-    for (const e of cappedEdges) {
-      edgeCounts.set(e.source, (edgeCounts.get(e.source) ?? 0) + 1);
-      edgeCounts.set(e.target, (edgeCounts.get(e.target) ?? 0) + 1);
-    }
-
-    simNodes = cappedNodes.map((n, i) => {
-      nodeIndex.set(n.id, i);
+    rebuildSim(data, (n) => {
       const existing = existingPositions.get(n.id);
-      if (existing) {
-        return {
-          id: n.id,
-          label: n.label,
-          x: existing.x,
-          y: existing.y,
-          vx: 0,
-          vy: 0,
-          edges: edgeCounts.get(n.id) ?? 0,
-        };
-      }
+      if (existing) return { x: existing.x, y: existing.y };
       // New node — place near center with slight randomness
       const angle = Math.random() * Math.PI * 2;
       const radius = 50 + Math.random() * 50;
-      return {
-        id: n.id,
-        label: n.label,
-        x: Math.cos(angle) * radius,
-        y: Math.sin(angle) * radius,
-        vx: 0,
-        vy: 0,
-        edges: edgeCounts.get(n.id) ?? 0,
-      };
+      return { x: Math.cos(angle) * radius, y: Math.sin(angle) * radius };
     });
-
-    simEdges = [];
-    for (const e of cappedEdges) {
-      const si = nodeIndex.get(e.source);
-      const ti = nodeIndex.get(e.target);
-      if (si !== undefined && ti !== undefined && si !== ti) {
-        simEdges.push({ source: si, target: ti });
-      }
-    }
 
     // Don't reset camera — keep user's pan/zoom
     wakeSimulation();
@@ -543,8 +531,10 @@
       if (prevHovered !== hoveredNode) {
         if (hoveredNode) {
           wakeSimulation();
-        } else {
-          // Hover cleared — draw one final frame to remove highlighting
+        } else if (simSleeping) {
+          // Hover cleared while the loop is parked — draw one final frame to
+          // remove highlighting. When the loop is still running it will repaint
+          // on its own, so inline-drawing here would double the work that frame.
           draw();
         }
       }

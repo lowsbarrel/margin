@@ -1,6 +1,8 @@
-import { fileExists } from "$lib/fs/bridge";
-import { validateName } from "$lib/utils/filename";
+import { listDirectory } from "$lib/fs/bridge";
+import { validateName, displayName } from "$lib/utils/filename";
 import { toast } from "$lib/stores/toast.svelte";
+
+export { displayName };
 
 export function normalizeFileName(input: string): string | null {
   const name = input.trim();
@@ -32,13 +34,26 @@ export async function createUniqueFilePath(
   const extIndex = name.lastIndexOf(".");
   const stem = extIndex > 0 ? name.slice(0, extIndex) : name;
   const ext = extIndex > 0 ? name.slice(extIndex) : ".md";
-  let candidate = `${base}/${name}`;
-  let i = 1;
-  while (await fileExists(candidate)) {
-    candidate = `${base}/${stem} ${i}${ext}`;
-    i++;
+
+  // List the parent directory once and resolve the free name client-side
+  // instead of issuing one fileExists IPC call per candidate.
+  let existing: Set<string>;
+  try {
+    const entries = await listDirectory(base);
+    existing = new Set(entries.map((entry) => entry.name));
+  } catch {
+    // Directory not yet listable (e.g. just created) — assume it is empty.
+    existing = new Set();
   }
-  return candidate;
+
+  if (!existing.has(name)) return `${base}/${name}`;
+  let i = 1;
+  let candidateName = `${stem} ${i}${ext}`;
+  while (existing.has(candidateName)) {
+    i++;
+    candidateName = `${stem} ${i}${ext}`;
+  }
+  return `${base}/${candidateName}`;
 }
 
 export function displayPath(fullPath: string, vaultPath: string | null): string {
@@ -47,12 +62,6 @@ export function displayPath(fullPath: string, vaultPath: string | null): string 
   const parts = rel.split("/");
   if (parts.length <= 1) return "";
   return parts.slice(0, -1).join("/");
-}
-
-export function displayName(name: string): string {
-  if (name.endsWith(".md")) return name.slice(0, -3);
-  if (name.endsWith(".canvas")) return name.slice(0, -7);
-  return name;
 }
 
 export function highlightMatch(

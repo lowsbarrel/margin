@@ -2,6 +2,7 @@ import Image from "@tiptap/extension-image";
 import { mergeAttributes } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import { NodeSelection, Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Transaction } from "@tiptap/pm/state";
 import type { EditorView } from "@tiptap/pm/view";
 
 declare module "@tiptap/core" {
@@ -281,8 +282,20 @@ export const ResizableImage = Image.extend({
         }
       };
 
+      // selectionUpdate already covers selection changes; gate the broader
+      // transaction listener on tr.selectionSet so it does not run the
+      // handler for every image on every keystroke.
+      const transactionHandler = ({
+        transaction,
+      }: {
+        transaction: Transaction;
+      }) => {
+        if (!transaction.selectionSet) return;
+        selectionHandler();
+      };
+
       editor.on("selectionUpdate", selectionHandler);
-      editor.on("transaction", selectionHandler);
+      editor.on("transaction", transactionHandler);
 
       return {
         dom: container,
@@ -338,9 +351,13 @@ export const ResizableImage = Image.extend({
         ignoreMutation: () => true,
         destroy: () => {
           editor.off("selectionUpdate", selectionHandler);
-          editor.off("transaction", selectionHandler);
+          editor.off("transaction", transactionHandler);
           document.removeEventListener("mousemove", onMouseMove);
           document.removeEventListener("mouseup", onMouseUp);
+          // Tidy up any in-flight drag state if the node view is destroyed
+          // mid-resize (e.g. an external doc change replaces the node).
+          resizing = false;
+          container.classList.remove("image-resizing");
         },
       };
     };

@@ -1,17 +1,74 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Deserialize)]
+#[derive(Deserialize, specta::Type)]
 pub struct TextNode {
     pub text: String,
     /// ProseMirror position of the first character of this text node.
     pub pos: u32,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct WikiLinkMatch {
     pub from: u32,
     pub to: u32,
     pub title: String,
+}
+
+/// A single parsed `[[title]]` wiki-link: byte offsets into the source text
+/// (`start` points at the first `[`, `end` is just past the closing `]]`) plus
+/// the trimmed title. This is the single source of truth for wiki-link parsing
+/// rules, shared by the PM-node extractor here and the file-based scan in
+/// `fs/mod.rs::read_link_batch`.
+pub struct ParsedWikiLink {
+    pub start: usize,
+    pub end: usize,
+    pub title: String,
+}
+
+/// Parse all `[[title]]` wiki-links from `text`, rejecting `![[image embeds]]`,
+/// empty titles, and titles containing `[`, `]` or a newline.
+pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
+    let bytes = text.as_bytes();
+    let len = bytes.len();
+    let mut results = Vec::new();
+    if len < 4 {
+        return results; // minimum: [[x]]
+    }
+
+    let mut i = 0;
+    while i + 3 < len {
+        // Look for [[ not preceded by !
+        if bytes[i] == b'[' && bytes[i + 1] == b'[' {
+            if i > 0 && bytes[i - 1] == b'!' {
+                i += 2;
+                continue;
+            }
+            if let Some(close) = find_close_brackets(bytes, i + 2) {
+                let title_bytes = &bytes[i + 2..close];
+                // Reject if title contains [ or ] or newline
+                if !title_bytes
+                    .iter()
+                    .any(|&b| b == b'[' || b == b']' || b == b'\n')
+                {
+                    if let Ok(title) = std::str::from_utf8(title_bytes) {
+                        let title = title.trim();
+                        if !title.is_empty() {
+                            results.push(ParsedWikiLink {
+                                start: i,
+                                end: close + 2, // past the ]]
+                                title: title.to_string(),
+                            });
+                        }
+                    }
+                }
+                i = close + 2;
+                continue;
+            }
+        }
+        i += 1;
+    }
+
+    results
 }
 
 /// Extract `[[title]]` wiki-links from a batch of ProseMirror text nodes.
@@ -22,52 +79,20 @@ pub struct WikiLinkMatch {
 /// This replaces the per-node regex scan in JS — a single IPC call handles
 /// all text nodes at once.
 #[tauri::command]
+#[specta::specta]
 pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
     let mut results = Vec::new();
 
     for node in &nodes {
-        let bytes = node.text.as_bytes();
-        let len = bytes.len();
-        if len < 4 {
-            continue; // minimum: [[x]]
-        }
-
-        let mut i = 0;
-        while i + 3 < len {
-            // Look for [[ not preceded by !
-            if bytes[i] == b'[' && bytes[i + 1] == b'[' {
-                if i > 0 && bytes[i - 1] == b'!' {
-                    i += 2;
-                    continue;
-                }
-                if let Some(close) = find_close_brackets(bytes, i + 2) {
-                    let title_bytes = &bytes[i + 2..close];
-                    // Reject if title contains [ or ] or newline
-                    if !title_bytes
-                        .iter()
-                        .any(|&b| b == b'[' || b == b']' || b == b'\n')
-                    {
-                        if let Ok(title) = std::str::from_utf8(title_bytes) {
-                            let title = title.trim();
-                            if !title.is_empty() {
-                                let match_start = i;
-                                let match_end = close + 2; // past the ]]
-                                                           // Convert byte offsets to char offsets for correct PM mapping
-                                let char_start = node.text[..match_start].chars().count();
-                                let char_end = node.text[..match_end].chars().count();
-                                results.push(WikiLinkMatch {
-                                    from: node.pos + char_start as u32,
-                                    to: node.pos + char_end as u32,
-                                    title: title.to_string(),
-                                });
-                            }
-                        }
-                    }
-                    i = close + 2;
-                    continue;
-                }
-            }
-            i += 1;
+        for link in parse_wiki_links(&node.text) {
+            // Convert byte offsets to char offsets for correct PM mapping.
+            let char_start = node.text[..link.start].chars().count();
+            let char_end = node.text[..link.end].chars().count();
+            results.push(WikiLinkMatch {
+                from: node.pos + char_start as u32,
+                to: node.pos + char_end as u32,
+                title: link.title,
+            });
         }
     }
 

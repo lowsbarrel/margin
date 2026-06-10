@@ -1,4 +1,4 @@
-import type { Shape, TextLabel } from "./types";
+import type { Point, Shape, TextLabel } from "./types";
 
 const textWidthCache = new Map<string, number>();
 
@@ -23,8 +23,8 @@ export function buildSnapPoints(
   shapes: Shape[],
   textLabels: TextLabel[],
   ctx: CanvasRenderingContext2D | null,
-): { x: number; y: number }[] {
-  const pts: { x: number; y: number }[] = [];
+): Point[] {
+  const pts: Point[] = [];
   for (const s of shapes) {
     if (s.kind === "rect") {
       const x1 = Math.min(s.x1, s.x2),
@@ -76,7 +76,7 @@ export function buildSnapPoints(
 }
 
 export class SnapCache {
-  private cache: { x: number; y: number }[] = [];
+  private cache: Point[] = [];
   private dirty = true;
   private threshold: number;
 
@@ -95,13 +95,13 @@ export class SnapCache {
     shapes: Shape[],
     textLabels: TextLabel[],
     ctx: CanvasRenderingContext2D | null,
-  ): { x: number; y: number } | null {
+  ): Point | null {
     const worldThreshold = this.threshold / zoom;
     if (this.dirty) {
       this.cache = buildSnapPoints(shapes, textLabels, ctx);
       this.dirty = false;
     }
-    let best: { x: number; y: number } | null = null;
+    let best: Point | null = null;
     let bestDist = worldThreshold;
     for (const p of this.cache) {
       const d = Math.hypot(p.x - wx, p.y - wy);

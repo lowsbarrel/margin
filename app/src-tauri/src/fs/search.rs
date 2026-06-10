@@ -1,24 +1,34 @@
-use super::{atomic_write, path_to_string, FsEntry};
+use super::{atomic_write, path_to_string, walk_dir, FsEntry, WalkAction};
 use rayon::prelude::*;
 use serde::Serialize;
 use std::fs;
 use std::path::Path;
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct ContentMatch {
     pub path: String,
     pub name: String,
+    #[specta(type = u32)]
     pub line: usize,
+    #[specta(type = u32)]
     pub column: usize,
     pub context: String,
 }
 
+/// Maximum directory nesting that file/content search and tag scanning will
+/// recurse into. Centralized here (was duplicated as a literal `10` across
+/// search.rs and tags.rs). Entries nested deeper are silently skipped — rare in
+/// a notes vault, but kept as a guard against pathological trees / symlink loops
+/// (the shared walker also refuses to follow symlinks).
+pub(crate) const MAX_WALK_DEPTH: usize = 10;
+
 #[tauri::command]
+#[specta::specta]
 pub fn search_files(root: &str, query: &str) -> Result<Vec<FsEntry>, String> {
     let query_lower = query.to_lowercase();
     let mut results = Vec::new();
     const MAX_RESULTS: usize = 200;
-    const MAX_DEPTH: usize = 10;
+    const MAX_DEPTH: usize = MAX_WALK_DEPTH;
     collect_files_recursive(
         Path::new(root),
         &query_lower,
@@ -51,44 +61,35 @@ fn collect_files_recursive(
     if depth >= max_depth || results.len() >= max_results {
         return;
     }
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
+    // Collect this level via the shared walker (it never descends — `Skip`); the
+    // depth cap and `query` filtering stay here, matching the original behavior.
+    let mut child_dirs: Vec<std::path::PathBuf> = Vec::new();
+    walk_dir(dir, &mut |item| {
+        if results.len() >= max_results || item.name.starts_with('.') {
+            return WalkAction::Skip;
+        }
+        if item.is_dir {
+            child_dirs.push(item.path.clone());
+        } else if item.name.to_lowercase().contains(query) {
+            results.push(FsEntry {
+                name: item.name.clone(),
+                is_dir: false,
+                path: path_to_string(item.path.clone()),
+                modified: item.modified,
+            });
+        }
+        WalkAction::Skip
+    });
+    for child in child_dirs {
         if results.len() >= max_results {
             return;
         }
-        let name = entry
-            .file_name()
-            .into_string()
-            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
-        if name.starts_with('.') {
-            continue;
-        }
-        let path = entry.path();
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-        if is_dir {
-            collect_files_recursive(&path, query, results, depth + 1, max_depth, max_results);
-        } else if name.to_lowercase().contains(query) {
-            let modified = entry
-                .metadata()
-                .and_then(|m| m.modified())
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map(|d| d.as_secs())
-                .unwrap_or(0);
-            results.push(FsEntry {
-                name,
-                is_dir: false,
-                path: path_to_string(path),
-                modified,
-            });
-        }
+        collect_files_recursive(&child, query, results, depth + 1, max_depth, max_results);
     }
 }
 
 #[tauri::command]
+#[specta::specta]
 pub fn search_file_contents(
     root: &str,
     query: &str,
@@ -98,7 +99,7 @@ pub fn search_file_contents(
         return Ok(vec![]);
     }
     const MAX_RESULTS: usize = 500;
-    const MAX_DEPTH: usize = 10;
+    const MAX_DEPTH: usize = MAX_WALK_DEPTH;
     const MAX_FILES: usize = 5000;
 
     // Collect .md paths
@@ -106,11 +107,18 @@ pub fn search_file_contents(
     collect_md_paths(Path::new(root), &mut md_paths, 0, MAX_DEPTH);
     md_paths.truncate(MAX_FILES);
 
-    // Pre-compute query once
+    // Pre-compute query once. For the case-insensitive path we use
+    // `to_ascii_lowercase` (length-preserving) rather than full Unicode
+    // `to_lowercase`, because the match column computed on the lowered line is
+    // used to slice the ORIGINAL line in `build_content_match`. A Unicode fold
+    // can change byte length (e.g. 'İ' → "i\u{307}'), desyncing those offsets
+    // and risking a panic on a non-char-boundary slice. The tradeoff is that
+    // only ASCII letters are case-folded; non-ASCII case-insensitivity is not
+    // supported on this path.
     let query_cmp = if case_sensitive {
         query.to_string()
     } else {
-        query.to_lowercase()
+        query.to_ascii_lowercase()
     };
 
     // Search in parallel
@@ -145,7 +153,9 @@ pub fn search_file_contents(
                     }
                 }
             } else {
-                let content_lower = content.to_lowercase();
+                // ASCII-fold (length-preserving) so byte offsets into the lowered
+                // copy stay valid when slicing the original line below.
+                let content_lower = content.to_ascii_lowercase();
                 let lines_lower: Vec<&str> = content_lower.lines().collect();
                 let lines_orig: Vec<&str> = content.lines().collect();
                 for line_idx in 0..lines_lower.len() {
@@ -197,31 +207,43 @@ fn build_content_match(
     while ctx_end < line.len() && !line.is_char_boundary(ctx_end) {
         ctx_end += 1;
     }
+    // `col` is a byte offset into `line`; convert to a 1-based CHARACTER offset
+    // so the JS editor's "jump to match" lands correctly on lines containing
+    // multibyte UTF-8 (matches the char-offset convention in text/wiki_links.rs).
+    let char_col = line[..col].chars().count() + 1;
     ContentMatch {
         path: path.to_string(),
         name: name.to_string(),
         line: line_idx + 1,
-        column: col + 1,
+        column: char_col,
         context: line[ctx_start..ctx_end].to_string(),
     }
 }
 
+// Returns the number of replacements as u32 (not usize) so specta can export it;
+// the count is bounded by the file's match count and never approaches u32::MAX.
 #[tauri::command]
+#[specta::specta]
 pub fn replace_in_file(
     path: &str,
     search: &str,
     replace: &str,
     case_sensitive: bool,
-) -> Result<usize, String> {
+) -> Result<u32, String> {
     let content = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {e}"))?;
     let (new_content, count) = if case_sensitive {
         let count = content.matches(search).count();
         (content.replace(search, replace), count)
     } else {
+        // ASCII-fold (length-preserving) both sides: the match offsets found in
+        // `content_lower` are used to slice the ORIGINAL `content`, so the lowered
+        // copy must have identical byte lengths. Full Unicode `to_lowercase` could
+        // change length and corrupt the output or panic on a non-char-boundary
+        // slice. Limitation: only ASCII letters are matched case-insensitively.
         let mut result = String::with_capacity(content.len());
-        let search_lower = search.to_lowercase();
+        let search_lower = search.to_ascii_lowercase();
         let mut last_end = 0;
-        let content_lower = content.to_lowercase();
+        let content_lower = content.to_ascii_lowercase();
         let mut count = 0usize;
         while let Some(start) = content_lower[last_end..].find(&search_lower) {
             let abs_start = last_end + start;
@@ -236,7 +258,7 @@ pub fn replace_in_file(
     if count > 0 {
         atomic_write(Path::new(path), new_content.as_bytes())?;
     }
-    Ok(count)
+    Ok(count as u32)
 }
 
 pub(crate) fn collect_md_paths(
@@ -248,24 +270,20 @@ pub(crate) fn collect_md_paths(
     if depth >= max_depth {
         return;
     }
-    let entries = match fs::read_dir(dir) {
-        Ok(e) => e,
-        Err(_) => return,
-    };
-    for entry in entries.flatten() {
-        let name = entry
-            .file_name()
-            .into_string()
-            .unwrap_or_else(|s| s.to_string_lossy().into_owned());
-        if name.starts_with('.') {
-            continue;
+    // One level via the shared walker; recursion (and the depth cap) stays here.
+    let mut child_dirs: Vec<std::path::PathBuf> = Vec::new();
+    walk_dir(dir, &mut |item| {
+        if item.name.starts_with('.') {
+            return WalkAction::Skip;
         }
-        let path = entry.path();
-        let is_dir = entry.file_type().map(|ft| ft.is_dir()).unwrap_or(false);
-        if is_dir {
-            collect_md_paths(&path, out, depth + 1, max_depth);
-        } else if name.ends_with(".md") {
-            out.push(path);
+        if item.is_dir {
+            child_dirs.push(item.path.clone());
+        } else if item.name.ends_with(".md") {
+            out.push(item.path.clone());
         }
+        WalkAction::Skip
+    });
+    for child in child_dirs {
+        collect_md_paths(&child, out, depth + 1, max_depth);
     }
 }

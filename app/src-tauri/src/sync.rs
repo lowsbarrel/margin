@@ -12,22 +12,25 @@ use crate::s3::S3State;
 
 // ─── Types ───────────────────────────────────────────────────────────────
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct ManifestEntry {
     pub path: String,
     pub hash: String,
+    #[specta(type = u32)]
     pub modified: u64,
     #[serde(skip_serializing_if = "Option::is_none")]
+    #[specta(type = Option<u32>)]
     pub deleted_at: Option<u64>,
 }
 
-#[derive(Serialize, Deserialize, Clone)]
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct Manifest {
+    #[specta(type = u32)]
     pub version: u64,
     pub files: Vec<ManifestEntry>,
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct SyncAction {
     pub kind: String,
     pub path: String,
@@ -41,6 +44,7 @@ type HmacSha256 = Hmac<Sha256>;
 /// Uses HMAC-SHA256 with the encryption key to derive a deterministic 32-char
 /// hex identifier. Same path always maps to same key — no lookup table needed.
 #[tauri::command]
+#[specta::specta]
 pub fn path_to_s3_key(rel_path: String, encryption_key: Vec<u8>) -> String {
     path_to_s3_key_internal(&rel_path, &encryption_key)
 }
@@ -76,8 +80,12 @@ fn vault_file_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
     Ok(base.join(rel))
 }
 
+/// Maximum number of concurrent per-object S3 operations in a sync batch.
+const SYNC_CONCURRENCY: usize = 8;
+
 /// Delete files from S3 by their relative paths (computes HMAC keys internally).
 #[tauri::command]
+#[specta::specta]
 pub async fn sync_delete_files(
     s3_prefix: String,
     paths: Vec<String>,
@@ -89,24 +97,45 @@ pub async fn sync_delete_files(
         let cached = s3.as_ref().ok_or("S3 not configured")?;
         cached.bucket.clone()
     };
-    for rel in &paths {
+
+    let mut iter = paths.into_iter();
+    let mut tasks = tokio::task::JoinSet::new();
+
+    let spawn_delete = |tasks: &mut tokio::task::JoinSet<Result<(), String>>, rel: String| {
+        let bucket = bucket.clone();
         let key = format!(
             "{}files/{}.enc",
             s3_prefix,
-            path_to_s3_key_internal(rel, &encryption_key)
+            path_to_s3_key_internal(&rel, &encryption_key)
         );
-        match bucket.delete_object(&key).await {
-            Ok(_) => {}
-            Err(e) => {
-                let err_str = format!("{e}");
-                if err_str.contains("NoSuchKey") || err_str.contains("404") {
-                    // Already gone, ignore
-                } else {
-                    return Err(format!("Delete failed for {rel}: {e}"));
+        tasks.spawn(async move {
+            match bucket.delete_object(&key).await {
+                Ok(_) => Ok(()),
+                Err(e) => {
+                    let err_str = format!("{e}");
+                    if err_str.contains("NoSuchKey") || err_str.contains("404") {
+                        // Already gone, ignore
+                        Ok(())
+                    } else {
+                        Err(format!("Delete failed for {rel}: {e}"))
+                    }
                 }
             }
+        });
+    };
+
+    // Prime the pool with up to SYNC_CONCURRENCY tasks.
+    for rel in iter.by_ref().take(SYNC_CONCURRENCY) {
+        spawn_delete(&mut tasks, rel);
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        result.map_err(|e| format!("Task panicked: {e}"))??;
+        if let Some(rel) = iter.next() {
+            spawn_delete(&mut tasks, rel);
         }
     }
+
     Ok(())
 }
 
@@ -114,6 +143,7 @@ pub async fn sync_delete_files(
 
 /// Compute SHA-256 hashes for a batch of files in parallel.
 #[tauri::command]
+#[specta::specta]
 pub fn hash_files_batch(vault_path: String, paths: Vec<String>) -> Result<Vec<String>, String> {
     let base = Path::new(&vault_path);
     paths
@@ -131,6 +161,7 @@ pub fn hash_files_batch(vault_path: String, paths: Vec<String>) -> Result<Vec<St
 
 /// Load and decrypt the local base manifest, returning a default if missing.
 #[tauri::command]
+#[specta::specta]
 pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Manifest, String> {
     let path = Path::new(&vault_path).join(".margin/sync-base.enc");
     if !path.exists() {
@@ -171,6 +202,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
 
 /// Encrypt and atomically save the base manifest to disk.
 #[tauri::command]
+#[specta::specta]
 pub fn save_manifest(
     vault_path: String,
     encryption_key: Vec<u8>,
@@ -185,6 +217,7 @@ pub fn save_manifest(
 
 /// 3-way diff: compare base, local , and remote manifests to produce sync actions.
 #[tauri::command]
+#[specta::specta]
 pub fn compute_sync_actions(
     base_files: Vec<ManifestEntry>,
     local_files: Vec<ManifestEntry>,
@@ -270,6 +303,7 @@ pub fn compute_sync_actions(
 
 /// Return only entries that have a `deleted_at` timestamp.
 #[tauri::command]
+#[specta::specta]
 pub fn collect_tombstones(files: Vec<ManifestEntry>) -> Vec<ManifestEntry> {
     files
         .into_iter()
@@ -279,6 +313,7 @@ pub fn collect_tombstones(files: Vec<ManifestEntry>) -> Vec<ManifestEntry> {
 
 /// Merge two tombstone lists, keeping the one with the later `deleted_at`.
 #[tauri::command]
+#[specta::specta]
 pub fn merge_tombstones(a: Vec<ManifestEntry>, b: Vec<ManifestEntry>) -> Vec<ManifestEntry> {
     let mut map: HashMap<String, ManifestEntry> = HashMap::new();
     for entry in a.into_iter().chain(b) {
@@ -293,10 +328,14 @@ pub fn merge_tombstones(a: Vec<ManifestEntry>, b: Vec<ManifestEntry>) -> Vec<Man
 }
 
 /// Prune tombstones older than 90 days.
+///
+/// `now_seconds` is a u32 (unix seconds) so specta can export it; widened to u64
+/// internally to match the manifest's `deleted_at` timestamps.
 #[tauri::command]
-pub fn prune_tombstones(tombstones: Vec<ManifestEntry>, now_seconds: u64) -> Vec<ManifestEntry> {
+#[specta::specta]
+pub fn prune_tombstones(tombstones: Vec<ManifestEntry>, now_seconds: u32) -> Vec<ManifestEntry> {
     const TOMBSTONE_TTL: u64 = 90 * 24 * 60 * 60;
-    let cutoff = now_seconds.saturating_sub(TOMBSTONE_TTL);
+    let cutoff = (now_seconds as u64).saturating_sub(TOMBSTONE_TTL);
     tombstones
         .into_iter()
         .filter(|t| t.deleted_at.unwrap_or(0) > cutoff)
@@ -305,6 +344,7 @@ pub fn prune_tombstones(tombstones: Vec<ManifestEntry>, now_seconds: u64) -> Vec
 
 /// Read, encrypt, and upload files to S3 in a single batch.
 #[tauri::command]
+#[specta::specta]
 pub async fn sync_upload_files(
     vault_path: String,
     s3_prefix: String,
@@ -319,34 +359,79 @@ pub async fn sync_upload_files(
     };
     let base = Path::new(&vault_path);
 
-    for rel in &paths {
-        let full = vault_file_path(base, rel)?;
-        let data =
-            fs::read(&full).map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
-        let enc = crate::crypto::encrypt_blob(data, encryption_key.clone())?;
-        let key = format!(
-            "{}files/{}.enc",
-            s3_prefix,
-            path_to_s3_key_internal(rel, &encryption_key)
-        );
-        bucket
-            .put_object(&key, &enc)
-            .await
-            .map_err(|e| format!("Upload failed for {rel}: {e}"))?;
+    // Resolve every path up front so an invalid path fails fast before any I/O.
+    let resolved: Vec<(String, PathBuf)> = paths
+        .into_iter()
+        .map(|rel| vault_file_path(base, &rel).map(|full| (rel, full)))
+        .collect::<Result<_, _>>()?;
+
+    let mut iter = resolved.into_iter();
+    let mut tasks = tokio::task::JoinSet::new();
+
+    let spawn_upload =
+        |tasks: &mut tokio::task::JoinSet<Result<(), String>>, rel: String, full: PathBuf| {
+            let bucket = bucket.clone();
+            let encryption_key = encryption_key.clone();
+            let key = format!(
+                "{}files/{}.enc",
+                s3_prefix,
+                path_to_s3_key_internal(&rel, &encryption_key)
+            );
+            tasks.spawn(async move {
+                let data = tokio::fs::read(&full)
+                    .await
+                    .map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
+                let enc = crate::crypto::encrypt_blob(data, encryption_key)?;
+                bucket
+                    .put_object(&key, &enc)
+                    .await
+                    .map_err(|e| format!("Upload failed for {rel}: {e}"))?;
+                Ok(())
+            });
+        };
+
+    for (rel, full) in iter.by_ref().take(SYNC_CONCURRENCY) {
+        spawn_upload(&mut tasks, rel, full);
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        result.map_err(|e| format!("Task panicked: {e}"))??;
+        if let Some((rel, full)) = iter.next() {
+            spawn_upload(&mut tasks, rel, full);
+        }
     }
 
     Ok(())
 }
 
 /// Download, decrypt, and write files from S3 in a single batch.
+///
+/// `paths` and `mtimes` are parallel arrays: after each file is written its
+/// modification time is set to `mtimes[i]` (Unix seconds) so the local mtime
+/// matches the manifest entry and the file is not seen as locally changed on
+/// the next sync. This folds the previously separate per-file `set_mtime` IPC
+/// call into this single batch command.
+///
+/// `mtimes` are u32 unix seconds (specta cannot export u64); each is widened to
+/// u64 internally to match the manifest timestamps and `filetime`.
 #[tauri::command]
+#[specta::specta]
 pub async fn sync_download_files(
     vault_path: String,
     s3_prefix: String,
     paths: Vec<String>,
+    mtimes: Vec<u32>,
     encryption_key: Vec<u8>,
     state: State<'_, S3State>,
 ) -> Result<(), String> {
+    if mtimes.len() != paths.len() {
+        return Err(format!(
+            "paths/mtimes length mismatch: {} vs {}",
+            paths.len(),
+            mtimes.len()
+        ));
+    }
+
     let bucket = {
         let s3 = state.0.lock().map_err(|e| e.to_string())?;
         let cached = s3.as_ref().ok_or("S3 not configured")?;
@@ -354,23 +439,60 @@ pub async fn sync_download_files(
     };
     let base = Path::new(&vault_path);
 
-    for rel in &paths {
+    // Resolve every destination up front so an invalid path fails fast.
+    let resolved: Vec<(String, PathBuf, u64)> = paths
+        .into_iter()
+        .zip(mtimes)
+        .map(|(rel, mtime)| vault_file_path(base, &rel).map(|dest| (rel, dest, mtime as u64)))
+        .collect::<Result<_, _>>()?;
+
+    let mut iter = resolved.into_iter();
+    let mut tasks = tokio::task::JoinSet::new();
+
+    let spawn_download = |tasks: &mut tokio::task::JoinSet<Result<(), String>>,
+                          rel: String,
+                          dest: PathBuf,
+                          mtime: u64| {
+        let bucket = bucket.clone();
+        let encryption_key = encryption_key.clone();
         let key = format!(
             "{}files/{}.enc",
             s3_prefix,
-            path_to_s3_key_internal(rel, &encryption_key)
+            path_to_s3_key_internal(&rel, &encryption_key)
         );
-        let response = bucket
-            .get_object(&key)
-            .await
-            .map_err(|e| format!("Download failed for {rel}: {e}"))?;
-        let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key.clone())?;
+        tasks.spawn(async move {
+            let response = bucket
+                .get_object(&key)
+                .await
+                .map_err(|e| format!("Download failed for {rel}: {e}"))?;
+            let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key)?;
 
-        let dest = vault_file_path(base, rel)?;
-        if let Some(parent) = dest.parent() {
-            fs::create_dir_all(parent).map_err(|e| format!("Failed to create directory: {e}"))?;
+            if let Some(parent) = dest.parent() {
+                tokio::fs::create_dir_all(parent)
+                    .await
+                    .map_err(|e| format!("Failed to create directory: {e}"))?;
+            }
+            tokio::fs::write(&dest, &dec)
+                .await
+                .map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
+
+            // Restore the manifest mtime so the file isn't flagged as locally
+            // changed on the next sync.
+            filetime::set_file_mtime(&dest, filetime::FileTime::from_unix_time(mtime as i64, 0))
+                .map_err(|e| format!("Failed to set mtime for {}: {e}", dest.display()))?;
+            Ok(())
+        });
+    };
+
+    for (rel, dest, mtime) in iter.by_ref().take(SYNC_CONCURRENCY) {
+        spawn_download(&mut tasks, rel, dest, mtime);
+    }
+
+    while let Some(result) = tasks.join_next().await {
+        result.map_err(|e| format!("Task panicked: {e}"))??;
+        if let Some((rel, dest, mtime)) = iter.next() {
+            spawn_download(&mut tasks, rel, dest, mtime);
         }
-        fs::write(&dest, &dec).map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
     }
 
     Ok(())
@@ -378,6 +500,7 @@ pub async fn sync_download_files(
 
 /// Encrypt and upload the manifest to S3.
 #[tauri::command]
+#[specta::specta]
 pub async fn sync_upload_manifest(
     s3_prefix: String,
     encryption_key: Vec<u8>,

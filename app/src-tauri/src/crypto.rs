@@ -8,7 +8,7 @@ use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::ipc::{InvokeBody, Request, Response};
 
-#[derive(Serialize)]
+#[derive(Serialize, specta::Type)]
 pub struct VaultKeys {
     pub vault_id: String,
     pub encryption_key: Vec<u8>,
@@ -16,6 +16,7 @@ pub struct VaultKeys {
 
 /// Generate a new BIP-39 12-word mnemonic (128-bit entropy).
 #[tauri::command]
+#[specta::specta]
 pub fn generate_mnemonic() -> Result<String, String> {
     let mut entropy = [0u8; 16]; // 128 bits = 12 words
     OsRng.fill_bytes(&mut entropy);
@@ -25,6 +26,7 @@ pub fn generate_mnemonic() -> Result<String, String> {
 
 /// Derive vault_id and encryption_key from a BIP-39 mnemonic.
 #[tauri::command]
+#[specta::specta]
 pub fn derive_vault_keys(mnemonic: &str) -> Result<VaultKeys, String> {
     let mnemonic: Mnemonic = mnemonic.parse().map_err(|e: bip39::Error| e.to_string())?;
     let seed = mnemonic.to_seed("");
@@ -81,6 +83,9 @@ pub fn decrypt_blob(ciphertext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String
 }
 
 /// Tauri command wrapper — receives plaintext as raw body, key as x-key header.
+// NOTE: raw-byte command (takes `Request`, returns `Response`) — these tauri IPC
+// types are not representable in specta, so this command is intentionally NOT
+// annotated with `#[specta::specta]` and is excluded from the specta builder.
 #[tauri::command]
 pub fn encrypt_blob_cmd(request: Request) -> Result<Response, String> {
     let key = parse_key_header(&request)?;
@@ -90,6 +95,8 @@ pub fn encrypt_blob_cmd(request: Request) -> Result<Response, String> {
 }
 
 /// Tauri command wrapper — receives ciphertext as raw body, key as x-key header.
+// NOTE: raw-byte command (takes `Request`, returns `Response`) — excluded from
+// specta for the same reason as `encrypt_blob_cmd` above.
 #[tauri::command]
 pub fn decrypt_blob_cmd(request: Request) -> Result<Response, String> {
     let key = parse_key_header(&request)?;

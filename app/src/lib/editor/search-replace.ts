@@ -1,6 +1,8 @@
-import { Extension } from "@tiptap/core";
+import { Extension, type Editor } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { Decoration, DecorationSet } from "@tiptap/pm/view";
+import type { MarkdownStorage } from "tiptap-markdown";
 import { searchInText, type TextMatch } from "$lib/fs/bridge";
 
 export interface SearchReplaceStorage {
@@ -9,6 +11,27 @@ export interface SearchReplaceStorage {
   caseSensitive: boolean;
   currentIndex: number;
   totalMatches: number;
+}
+
+declare module "@tiptap/core" {
+  interface Commands<ReturnType> {
+    searchReplace: {
+      setSearchTerm: (term: string) => ReturnType;
+      setReplaceTerm: (term: string) => ReturnType;
+      setCaseSensitive: (value: boolean) => ReturnType;
+      findNext: () => ReturnType;
+      findPrev: () => ReturnType;
+      replaceCurrent: () => ReturnType;
+      replaceAll: () => ReturnType;
+      clearSearch: () => ReturnType;
+    };
+  }
+
+  interface Storage {
+    searchReplace: SearchReplaceStorage;
+    // tiptap-markdown's storage (it does not augment this interface itself).
+    markdown: MarkdownStorage;
+  }
 }
 
 interface SearchMatch {
@@ -21,18 +44,19 @@ const searchPluginKey = new PluginKey("searchReplace");
 // ── Document flattening ──
 
 /** Cached flattened document text + ProseMirror position mapping. */
-let cachedDoc: any = null;
+let cachedDoc: PMNode | null = null;
 let cachedFullText = "";
+let cachedFullTextLower = "";
 let cachedPmPos: number[] = [];
 let cachedGaps: number[] = [];
 
-function flattenDoc(doc: any) {
+function flattenDoc(doc: PMNode) {
   if (doc === cachedDoc) return;
   cachedDoc = doc;
   const chars: string[] = [];
   const pmPos: number[] = [];
   const gaps: number[] = [];
-  doc.descendants((node: any, pos: number) => {
+  doc.descendants((node: PMNode, pos: number) => {
     if (!node.isText) return;
     const t = node.text!;
     for (let i = 0; i < t.length; i++) {
@@ -46,6 +70,7 @@ function flattenDoc(doc: any) {
     }
   });
   cachedFullText = chars.join("");
+  cachedFullTextLower = cachedFullText.toLowerCase();
   cachedPmPos = pmPos;
   cachedGaps = gaps;
 }
@@ -54,10 +79,14 @@ function flattenDoc(doc: any) {
 
 let searchVersion = 0;
 
+/** Pending timer for doc-change-triggered re-search debounce. */
+let docChangeSearchTimer: ReturnType<typeof setTimeout> | null = null;
+const DOC_CHANGE_SEARCH_DELAY = 150;
+
 /** Kick off an async Rust search and dispatch results back into the plugin. */
 function triggerAsyncSearch(
-  editor: any,
-  doc: any,
+  editor: Editor,
+  doc: PMNode,
   searchTerm: string,
   caseSensitive: boolean,
   action: string,
@@ -89,7 +118,7 @@ function triggerAsyncSearch(
 // ── Sync JS fallback ──
 
 function findMatchesSync(
-  doc: any,
+  doc: PMNode,
   searchTerm: string,
   caseSensitive: boolean,
 ): SearchMatch[] {
@@ -98,7 +127,7 @@ function findMatchesSync(
   flattenDoc(doc);
   const matches: SearchMatch[] = [];
   const term = caseSensitive ? searchTerm : searchTerm.toLowerCase();
-  const fullText = caseSensitive ? cachedFullText : cachedFullText.toLowerCase();
+  const fullText = caseSensitive ? cachedFullText : cachedFullTextLower;
   const pmPos = cachedPmPos;
 
   let start = 0;
@@ -131,10 +160,10 @@ interface PluginState {
   currentDeco: DecorationSet;
   matches: SearchMatch[];
   /** Doc reference the matches were computed for — used to verify freshness. */
-  matchDoc: any;
+  matchDoc: PMNode | null;
 }
 
-function buildBaseDecos(doc: any, matches: SearchMatch[]): DecorationSet {
+function buildBaseDecos(doc: PMNode, matches: SearchMatch[]): DecorationSet {
   if (matches.length === 0) return DecorationSet.empty;
   const decorations = matches.map((match) =>
     Decoration.inline(match.from, match.to, { class: "search-match" }),
@@ -143,7 +172,7 @@ function buildBaseDecos(doc: any, matches: SearchMatch[]): DecorationSet {
 }
 
 function buildCurrentDeco(
-  doc: any,
+  doc: PMNode,
   matches: SearchMatch[],
   currentIndex: number,
 ): DecorationSet {
@@ -170,11 +199,11 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
     };
   },
 
-  addCommands(): any {
+  addCommands() {
     return {
       setSearchTerm:
         (term: string) =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           editor.storage.searchReplace.searchTerm = term;
           editor.storage.searchReplace.currentIndex = 0;
           const { tr } = editor.state;
@@ -184,13 +213,13 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       setReplaceTerm:
         (term: string) =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           editor.storage.searchReplace.replaceTerm = term;
           return true;
         },
       setCaseSensitive:
         (value: boolean) =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           editor.storage.searchReplace.caseSensitive = value;
           editor.storage.searchReplace.currentIndex = 0;
           const { tr } = editor.state;
@@ -200,7 +229,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       findNext:
         () =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           const storage = editor.storage.searchReplace;
           if (storage.totalMatches === 0) return false;
           storage.currentIndex =
@@ -212,7 +241,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       findPrev:
         () =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           const storage = editor.storage.searchReplace;
           if (storage.totalMatches === 0) return false;
           storage.currentIndex =
@@ -225,7 +254,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       replaceCurrent:
         () =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           const storage = editor.storage.searchReplace;
           if (storage.totalMatches === 0) return false;
 
@@ -242,7 +271,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
 
           editor
             .chain()
-            .command(({ tr }: any) => {
+            .command(({ tr }) => {
               // Collect marks from the matched range so we preserve formatting
               const resolvedFrom = tr.doc.resolve(match.from);
               const marks = resolvedFrom.marksAcross(tr.doc.resolve(match.to)) ?? resolvedFrom.marks();
@@ -258,7 +287,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       replaceAll:
         () =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           const storage = editor.storage.searchReplace;
           if (storage.totalMatches === 0) return false;
 
@@ -271,7 +300,7 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
 
           editor
             .chain()
-            .command(({ tr }: any) => {
+            .command(({ tr }) => {
               const schema = editor.state.schema;
               for (let i = matches.length - 1; i >= 0; i--) {
                 const from = matches[i].from;
@@ -290,13 +319,17 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
         },
       clearSearch:
         () =>
-        ({ editor }: any) => {
+        ({ editor }) => {
           const storage = editor.storage.searchReplace;
           storage.searchTerm = "";
           storage.replaceTerm = "";
           storage.currentIndex = 0;
           storage.totalMatches = 0;
           ++searchVersion; // cancel any pending async search
+          if (docChangeSearchTimer) {
+            clearTimeout(docChangeSearchTimer);
+            docChangeSearchTimer = null;
+          }
           const { tr } = editor.state;
           tr.setMeta(searchPluginKey, { action: "update" });
           editor.view.dispatch(tr);
@@ -350,13 +383,37 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
 
             // Term/doc changed: async re-search
             if (storage.searchTerm) {
-              triggerAsyncSearch(
-                extensionThis.editor,
-                newState.doc,
-                storage.searchTerm,
-                storage.caseSensitive,
-                meta?.action ?? "update",
-              );
+              if (meta) {
+                // Explicit command (update/navigate): search immediately.
+                if (docChangeSearchTimer) {
+                  clearTimeout(docChangeSearchTimer);
+                  docChangeSearchTimer = null;
+                }
+                triggerAsyncSearch(
+                  extensionThis.editor,
+                  newState.doc,
+                  storage.searchTerm,
+                  storage.caseSensitive,
+                  meta.action ?? "update",
+                );
+              } else {
+                // Pure doc edit: debounce so rapid typing collapses to one IPC.
+                ++searchVersion; // invalidate any in-flight search result
+                if (docChangeSearchTimer) clearTimeout(docChangeSearchTimer);
+                docChangeSearchTimer = setTimeout(() => {
+                  docChangeSearchTimer = null;
+                  const editor = extensionThis.editor;
+                  const liveStorage = extensionThis.storage;
+                  if (!editor || !liveStorage.searchTerm) return;
+                  triggerAsyncSearch(
+                    editor,
+                    editor.state.doc,
+                    liveStorage.searchTerm,
+                    liveStorage.caseSensitive,
+                    "update",
+                  );
+                }, DOC_CHANGE_SEARCH_DELAY);
+              }
             } else {
               storage.totalMatches = 0;
               return { baseDecos: DecorationSet.empty, currentDeco: DecorationSet.empty, matches: [], matchDoc: newState.doc };
@@ -386,29 +443,30 @@ export const SearchReplace = Extension.create<{}, SearchReplaceStorage>({
       }),
     ];
 
+    let scrollRaf = 0;
+
     function scrollToMatch(matches: SearchMatch[], currentIndex: number) {
       const current = matches[currentIndex];
       if (!current) return;
-      setTimeout(() => {
+      // Coalesce rapid next/prev into a single scroll on the next frame.
+      if (scrollRaf) cancelAnimationFrame(scrollRaf);
+      scrollRaf = requestAnimationFrame(() => {
+        scrollRaf = 0;
         try {
           const view = extensionThis.editor.view;
           const coords = view.coordsAtPos(current.from);
-          const editorRect = view.dom
-            .closest(".editor-container")
-            ?.getBoundingClientRect();
-          if (editorRect && coords) {
-            const scrollContainer = view.dom.closest(".editor-container");
-            if (scrollContainer) {
-              const relativeTop =
-                coords.top - editorRect.top + scrollContainer.scrollTop;
-              const middle = relativeTop - editorRect.height / 2;
-              scrollContainer.scrollTo({ top: middle, behavior: "smooth" });
-            }
+          const scrollContainer = view.dom.closest(".editor-container");
+          const editorRect = scrollContainer?.getBoundingClientRect();
+          if (editorRect && coords && scrollContainer) {
+            const relativeTop =
+              coords.top - editorRect.top + scrollContainer.scrollTop;
+            const middle = relativeTop - editorRect.height / 2;
+            scrollContainer.scrollTo({ top: middle, behavior: "smooth" });
           }
         } catch {
           /* ignore scroll errors */
         }
-      }, 10);
+      });
     }
   },
 });

@@ -8,9 +8,15 @@ export function useVaultSettings() {
 
   $effect(() => {
     if (vault.vaultPath && vault.encryptionKey) {
+      let cancelled = false;
       loadSettings(vault.vaultPath, vault.encryptionKey).then((s) => {
-        settings = s ?? null;
+        // Ignore a stale resolution if the vault changed (or the effect re-ran)
+        // before this load finished, so an older load can't clobber newer data.
+        if (!cancelled) settings = s ?? null;
       });
+      return () => {
+        cancelled = true;
+      };
     } else {
       settings = null;
     }

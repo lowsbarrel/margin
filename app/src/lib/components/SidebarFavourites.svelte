@@ -20,11 +20,11 @@
 </div>
 
 <div class="panel-content">
-  {#if favourites.paths.size === 0}
-    <div class="search-empty">{m.sidebar_favourites()}: 0</div>
+  {#if favourites.list.length === 0}
+    <div class="search-empty">{m.sidebar_no_favourites()}</div>
   {/if}
 
-  {#each [...favourites.paths] as favPath (favPath)}
+  {#each favourites.list as favPath (favPath)}
     {@const name = favPath.split("/").pop() ?? favPath}
     <button
       class="search-result"

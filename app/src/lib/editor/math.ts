@@ -1,6 +1,58 @@
 import { Node, nodeInputRule, mergeAttributes } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
 import katex from "katex";
+
+/**
+ * Minimal structural types for the tiptap-markdown serializer state and the
+ * markdown-it plugin surface we touch. markdown-it@14 ships no bundled .d.ts
+ * and @types/markdown-it is not a dependency, so we declare just the members
+ * used here instead of falling back to `any`.
+ */
+interface MarkdownSerializerState {
+  write(content: string): void;
+  closeBlock(node: PMNode): void;
+}
+
+interface MdToken {
+  content: string;
+  attrPush(attr: [string, string]): void;
+  attrGet(name: string): string | null;
+  map: [number, number] | null;
+}
+
+interface MdBlockState {
+  src: string;
+  bMarks: number[];
+  eMarks: number[];
+  tShift: number[];
+  line: number;
+  push(type: string, tag: string, nesting: number): MdToken;
+}
+
+interface MdInlineState {
+  src: string;
+  pos: number;
+  posMax: number;
+  push(type: string, tag: string, nesting: number): MdToken;
+}
+
+type MdBlockRule = (
+  state: MdBlockState,
+  startLine: number,
+  endLine: number,
+  silent: boolean,
+) => boolean;
+
+type MdInlineRule = (state: MdInlineState, silent: boolean) => boolean;
+
+type MdRenderRule = (tokens: MdToken[], idx: number) => string;
+
+interface MarkdownIt {
+  utils: { escapeHtml(str: string): string };
+  block: { ruler: { before(beforeName: string, name: string, rule: MdBlockRule): void } };
+  inline: { ruler: { push(name: string, rule: MdInlineRule): void } };
+  renderer: { rules: Record<string, MdRenderRule> };
+}
 // Avoids re-rendering identical expressions (20-100ms each).
 const katexCache = new Map<string, string>();
 const KATEX_CACHE_MAX = 512;
@@ -193,12 +245,12 @@ export const MathBlock = Node.create({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: PMNode) {
+        serialize(state: MarkdownSerializerState, node: PMNode) {
           state.write(`$$\n${node.attrs.text}\n$$`);
           state.closeBlock(node);
         },
         parse: {
-          setup(md: any) {
+          setup(md: MarkdownIt) {
             mathBlockMarkdownPlugin(md);
           },
         },
@@ -291,9 +343,13 @@ export const MathInline = Node.create({
       renderMath(currentText);
 
       // If inserted empty (e.g. from slash menu), immediately open editor
+      let openRafId: number | null = null;
       if (!currentText) {
-        requestAnimationFrame(() => {
+        openRafId = requestAnimationFrame(() => {
+          openRafId = null;
           if (!editor.isEditable) return;
+          // Bail if the node was removed (e.g. undo) before this frame ran.
+          if (typeof getPos !== "function" || getPos() == null) return;
           openEditor();
         });
       }
@@ -374,6 +430,12 @@ export const MathInline = Node.create({
         ignoreMutation() {
           return true;
         },
+        destroy() {
+          if (openRafId != null) {
+            cancelAnimationFrame(openRafId);
+            openRafId = null;
+          }
+        },
       };
     };
   },
@@ -405,11 +467,11 @@ export const MathInline = Node.create({
   addStorage() {
     return {
       markdown: {
-        serialize(state: any, node: PMNode) {
+        serialize(state: MarkdownSerializerState, node: PMNode) {
           state.write(`$${node.attrs.text}$`);
         },
         parse: {
-          setup(md: any) {
+          setup(md: MarkdownIt) {
             mathInlineMarkdownPlugin(md);
           },
         },
@@ -417,11 +479,11 @@ export const MathInline = Node.create({
     };
   },
 });
-function mathBlockMarkdownPlugin(md: any) {
+function mathBlockMarkdownPlugin(md: MarkdownIt) {
   md.block.ruler.before(
     "fence",
     "math_block",
-    function (state: any, startLine: number, endLine: number, silent: boolean) {
+    function (state, startLine, endLine, silent) {
       const pos = state.bMarks[startLine] + state.tShift[startLine];
       const max = state.eMarks[startLine];
       const src = state.src;
@@ -466,7 +528,7 @@ function mathBlockMarkdownPlugin(md: any) {
     },
   );
 
-  md.renderer.rules.math_block = function (tokens: any[], idx: number) {
+  md.renderer.rules.math_block = function (tokens, idx) {
     const token = tokens[idx];
     const text = token.attrGet("data-math-text") || token.content || "";
     const escaped = md.utils.escapeHtml(text);
@@ -474,8 +536,8 @@ function mathBlockMarkdownPlugin(md: any) {
   };
 }
 
-function mathInlineMarkdownPlugin(md: any) {
-  md.inline.ruler.push("math_inline", function (state: any, silent: boolean) {
+function mathInlineMarkdownPlugin(md: MarkdownIt) {
+  md.inline.ruler.push("math_inline", function (state, silent) {
     const max = state.posMax;
     const src = state.src;
     const pos = state.pos;
@@ -485,8 +547,24 @@ function mathInlineMarkdownPlugin(md: any) {
 
     // Single $ for inline math (not $$ which is for block)
     if (src.charCodeAt(pos + 1) === 0x24) return false;
-    const closePos = src.indexOf("$", pos + 1);
-    if (closePos === -1 || closePos > max) return false;
+
+    // Find the closing $, skipping any escaped \$ inside the expression so
+    // `$a \$ b$` does not truncate at the escaped dollar.
+    let closePos = -1;
+    for (let i = pos + 1; i < max; i++) {
+      const code = src.charCodeAt(i);
+      if (code === 0x5c) {
+        // backslash — skip the escaped character
+        i++;
+        continue;
+      }
+      if (code === 0x24) {
+        closePos = i;
+        break;
+      }
+    }
+    // posMax is exclusive, so a close exactly at max is out of range.
+    if (closePos === -1 || closePos >= max) return false;
     const mathText = src.slice(pos + 1, closePos);
     if (!mathText.trim()) return false;
 
@@ -501,7 +579,7 @@ function mathInlineMarkdownPlugin(md: any) {
     return true;
   });
 
-  md.renderer.rules.math_inline = function (tokens: any[], idx: number) {
+  md.renderer.rules.math_inline = function (tokens, idx) {
     const token = tokens[idx];
     const text = token.attrGet("data-math-text") || token.content || "";
     const escaped = md.utils.escapeHtml(text);

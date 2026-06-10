@@ -9,6 +9,7 @@
   import { tags as tagsStore } from "$lib/stores/tags.svelte";
   import { FileText, Image, FileType, Hash, Search } from "lucide-svelte";
   import { IMAGE_EXTS } from "$lib/utils/mime";
+  import { displayName } from "$lib/utils/filename";
   import * as m from "$lib/paraglide/messages.js";
 
   interface Props {
@@ -46,10 +47,6 @@
     return rel;
   }
 
-  function displayName(entry: FsEntry): string {
-    return entry.name.replace(/\.md$/, "");
-  }
-
   function parentPath(entry: FsEntry): string {
     const rel = relativePath(entry.path);
     const lastSlash = rel.lastIndexOf("/");
@@ -57,15 +54,19 @@
     return rel.slice(0, lastSlash);
   }
 
-  // Fuzzy match scoring: -1 = no match, higher = better
+  const WORD_BOUNDARY = new Set(["/", " ", "-", "_", "."]);
+
+  // Subsequence fuzzy scoring: returns NO_MATCH when `query` is not a
+  // subsequence of `target`, otherwise a higher score for closer matches.
+  const NO_MATCH = -1;
+
   function fuzzyScore(query: string, target: string): number {
     const q = query.toLowerCase();
     const t = target.toLowerCase();
+    if (q.length === 0) return 0;
+    if (q.length > t.length) return NO_MATCH;
 
-    for (let i = 0; i < q.length; i++) {
-      if (t.indexOf(q[i]) === -1) return -1;
-    }
-
+    // Contiguous-substring fast path: strongest match.
     const substringIdx = t.indexOf(q);
     if (substringIdx !== -1) {
       return 1000 - substringIdx + (q.length / t.length) * 500;
@@ -76,25 +77,18 @@
     let lastMatchIdx = -1;
 
     for (let ti = 0; ti < t.length && qi < q.length; ti++) {
-      if (t[ti] === q[qi]) {
-        score += 10;
-        if (lastMatchIdx === ti - 1) score += 15;
-        if (
-          ti === 0 ||
-          t[ti - 1] === "/" ||
-          t[ti - 1] === " " ||
-          t[ti - 1] === "-" ||
-          t[ti - 1] === "_"
-        ) {
-          score += 20;
-        }
-        lastMatchIdx = ti;
-        qi++;
-      }
+      if (t[ti] !== q[qi]) continue;
+      score += 10;
+      if (lastMatchIdx === ti - 1) score += 15; // consecutive run bonus
+      if (ti === 0 || WORD_BOUNDARY.has(t[ti - 1])) score += 20; // word-boundary bonus
+      lastMatchIdx = ti;
+      qi += 1;
     }
 
-    if (qi < q.length) return -1;
-    score -= (t.length - q.length) * 0.5;
+    // Not all query chars matched in order: not a subsequence.
+    if (qi < q.length) return NO_MATCH;
+
+    score -= (t.length - q.length) * 0.5; // prefer tighter targets
     return score;
   }
 
@@ -115,9 +109,11 @@
     searching = true;
     try {
       const raw = await searchFiles(vault.vaultPath, trimmed);
-      const files = raw.filter((e) => !e.is_dir);
-      const candidates = files.length > 200 ? files.slice(0, 200) : files;
-      const scored = candidates
+      // Score the full candidate set before truncating so the best match is
+      // never dropped by an arbitrary pre-slice (searchFiles is already capped
+      // server-side, so this list is bounded).
+      const scored = raw
+        .filter((e) => !e.is_dir)
         .map((e) => ({
           entry: e,
           score: Math.max(
@@ -125,7 +121,7 @@
             fuzzyScore(trimmed, relativePath(e.path)),
           ),
         }))
-        .filter((s) => s.score > -1)
+        .filter((s) => s.score > NO_MATCH)
         .sort((a, b) => b.score - a.score)
         .slice(0, 20);
 
@@ -260,7 +256,7 @@
 
     {#if isTagMode && tagResults.length > 0}
       <div class="results" bind:this={listEl}>
-        {#each tagResults as item, i}
+        {#each tagResults as item, i (item.entry.path + "#" + item.tag)}
           {@const folder = parentPath(item.entry)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
           <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -274,7 +270,7 @@
             }}
           >
             <span class="result-icon"><FileText size={16} /></span>
-            <span class="result-name">{displayName(item.entry)}</span>
+            <span class="result-name">{displayName(item.entry.name)}</span>
             <span class="result-tag">#{item.tag}</span>
             {#if folder}
               <span class="result-path">{folder}</span>
@@ -284,7 +280,7 @@
       </div>
     {:else if !isTagMode && results.length > 0}
       <div class="results" bind:this={listEl}>
-        {#each results as entry, i}
+        {#each results as entry, i (entry.path)}
           {@const Icon = getIcon(entry.path)}
           {@const folder = parentPath(entry)}
           <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -299,7 +295,7 @@
             }}
           >
             <span class="result-icon"><Icon size={16} /></span>
-            <span class="result-name">{displayName(entry)}</span>
+            <span class="result-name">{displayName(entry.name)}</span>
             {#if folder}
               <span class="result-path">{folder}</span>
             {/if}

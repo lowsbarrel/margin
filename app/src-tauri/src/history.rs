@@ -1,14 +1,29 @@
 use serde::Serialize;
 use std::fs;
-use std::path::Path;
+use std::path::{Component, Path};
 
-#[derive(Serialize)]
+/// Reject a relative path that contains a `..` (parent-dir) component so a
+/// caller cannot escape the `.margin/history` subtree via the string-concat
+/// path construction below. Empty `rel` is allowed (whole-vault history root).
+fn reject_parent_dir(rel: &str) -> Result<(), String> {
+    if Path::new(rel)
+        .components()
+        .any(|c| matches!(c, Component::ParentDir))
+    {
+        return Err("Path must not contain '..'".into());
+    }
+    Ok(())
+}
+
+#[derive(Serialize, specta::Type)]
 pub struct Snapshot {
     /// Filename of the snapshot (e.g. "1712928000.md")
     pub filename: String,
     /// Unix timestamp (seconds) when the snapshot was taken
+    #[specta(type = u32)]
     pub timestamp: u64,
     /// Size of the snapshot in bytes
+    #[specta(type = u32)]
     pub size: u64,
 }
 
@@ -35,6 +50,7 @@ fn history_dir(vault_path: &str, file_path: &str) -> Result<String, String> {
     }
 
     let rel = &file[vault.len()..].trim_start_matches('/');
+    reject_parent_dir(rel)?;
     let history = format!("{vault}/.margin/history/{rel}");
     Ok(history)
 }
@@ -46,6 +62,7 @@ const MAX_SNAPSHOTS_PER_FILE: usize = 50;
 /// The snapshot is stored as `<timestamp>.md` inside the history directory.
 /// If the number of snapshots exceeds the limit, the oldest are pruned.
 #[tauri::command]
+#[specta::specta]
 pub fn save_snapshot(
     vault_path: &str,
     file_path: &str,
@@ -109,6 +126,7 @@ fn prune_old_snapshots(dir: &str, max_count: usize) {
 
 /// List all snapshots for a given file, sorted newest-first.
 #[tauri::command]
+#[specta::specta]
 pub fn list_snapshots(vault_path: &str, file_path: &str) -> Result<Vec<Snapshot>, String> {
     let dir = history_dir(vault_path, file_path)?;
     let dir_path = Path::new(&dir);
@@ -175,6 +193,7 @@ fn safe_snapshot_path(
 
 /// Read the content of a specific snapshot.
 #[tauri::command]
+#[specta::specta]
 pub fn read_snapshot(
     vault_path: &str,
     file_path: &str,
@@ -186,6 +205,7 @@ pub fn read_snapshot(
 
 /// Delete a specific snapshot.
 #[tauri::command]
+#[specta::specta]
 pub fn delete_snapshot(
     vault_path: &str,
     file_path: &str,
@@ -195,9 +215,12 @@ pub fn delete_snapshot(
     fs::remove_file(&snapshot_path).map_err(|e| format!("Failed to delete snapshot: {e}"))
 }
 
-/// Delete all snapshots for a given file.
+/// Delete all snapshots for a given file. Returns the number of snapshots
+/// deleted as a u32 (not u64) so specta can export it; the count is bounded by
+/// `MAX_SNAPSHOTS_PER_FILE` and never approaches u32::MAX.
 #[tauri::command]
-pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u64, String> {
+#[specta::specta]
+pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u32, String> {
     let dir = history_dir(vault_path, file_path)?;
     let dir_path = Path::new(&dir);
 
@@ -207,7 +230,7 @@ pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u64, String>
 
     let entries = fs::read_dir(dir_path).map_err(|e| format!("Failed to read history dir: {e}"))?;
 
-    let mut count: u64 = 0;
+    let mut count: u32 = 0;
     for entry in entries.flatten() {
         if entry.path().is_file() {
             fs::remove_file(entry.path()).map_err(|e| format!("Failed to delete snapshot: {e}"))?;
@@ -224,6 +247,7 @@ pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u64, String>
 /// Delete the entire history subtree for a given path (file or directory).
 /// When a directory is deleted, all history for every file beneath it is removed.
 #[tauri::command]
+#[specta::specta]
 pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), String> {
     let vault = vault_path.replace('\\', "/");
     let entry = entry_path.replace('\\', "/");
@@ -236,6 +260,7 @@ pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), Stri
     }
 
     let rel = &entry[vault.len()..].trim_start_matches('/');
+    reject_parent_dir(rel)?;
     let history_path = format!("{vault}/.margin/history/{rel}");
     let p = Path::new(&history_path);
 
@@ -252,6 +277,7 @@ pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), Stri
 
 /// Move/rename the history directory when a file or directory is renamed.
 #[tauri::command]
+#[specta::specta]
 pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Result<(), String> {
     let vault = vault_path.replace('\\', "/");
     let old = old_path.replace('\\', "/");
@@ -267,6 +293,8 @@ pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Resul
 
     let old_rel = &old[vault.len()..].trim_start_matches('/');
     let new_rel = &new_[vault.len()..].trim_start_matches('/');
+    reject_parent_dir(old_rel)?;
+    reject_parent_dir(new_rel)?;
 
     let old_history = format!("{vault}/.margin/history/{old_rel}");
     let new_history = format!("{vault}/.margin/history/{new_rel}");

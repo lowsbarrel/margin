@@ -1,17 +1,51 @@
 import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { initWriteQueue, queuedWrite } from "./writeQueue";
+import { commands } from "$lib/bindings";
+import { initWriteQueue, queuedWrite, flushWriteQueue } from "./writeQueue";
 
-export interface FsEntry {
-  name: string;
-  is_dir: boolean;
-  path: string;
-  /** Seconds since UNIX epoch (file modification time). 0 if unavailable. */
-  modified: number;
-}
+/**
+ * Re-exported so call sites (e.g. window-close handlers) can await all pending
+ * file writes via the fs bridge. Resolves once the latest queued content for
+ * every path has landed on disk.
+ */
+export { flushWriteQueue };
+
+/**
+ * Boundary types generated from the Rust structs by tauri-specta. Re-exported
+ * so existing call sites that import them from this bridge keep working.
+ */
+export type {
+  FsEntry,
+  LinkEntry,
+  TreeEntry,
+  ContentMatch,
+  TagInfo,
+  TextMatch,
+  TextNode,
+  WikiLinkMatch,
+} from "$lib/bindings";
+import type {
+  FsEntry,
+  LinkEntry,
+  TreeEntry,
+  ContentMatch,
+  TagInfo,
+  TextMatch,
+  TextNode,
+  WikiLinkMatch,
+} from "$lib/bindings";
+
+/**
+ * Header key used to smuggle the destination path of `write_file_bytes`.
+ * The raw bytes are passed as the invoke args body (avoiding base64 JSON
+ * encoding), so the path travels in this request header instead. The Rust
+ * `write_file_bytes` command reads the same header — keep the two in sync.
+ */
+const X_PATH_HEADER = "x-path";
 
 export async function setVaultDirectory(path: string): Promise<void> {
-  return invoke("set_vault_directory", { path });
+  const r = await commands.setVaultDirectory(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function readFileBytes(path: string): Promise<Uint8Array> {
@@ -23,8 +57,8 @@ async function rawWriteFileBytes(
   path: string,
   content: Uint8Array,
 ): Promise<void> {
-  return invoke("write_file_bytes", content, {
-    headers: { "x-path": path },
+  return invoke<void>("write_file_bytes", content, {
+    headers: { [X_PATH_HEADER]: path },
   });
 }
 
@@ -51,7 +85,9 @@ export async function writeFileBytesRaw(
 }
 
 export async function listDirectory(path: string): Promise<FsEntry[]> {
-  return invoke<FsEntry[]>("list_directory", { path });
+  const r = await commands.listDirectory(path);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 /** Walk entire directory tree in one IPC call. Hidden entries excluded unless includeHidden. */
@@ -59,26 +95,14 @@ export async function walkDirectory(
   root: string,
   includeHidden = false,
 ): Promise<FsEntry[]> {
-  return invoke<FsEntry[]>("walk_directory", { root, includeHidden });
-}
-
-export interface LinkEntry {
-  path: string;
-  links: string[];
+  const r = await commands.walkDirectory(root, includeHidden);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 /** Extract [[wiki-links]] from multiple Markdown files in a single native call. */
 export async function readLinkBatch(paths: string[]): Promise<LinkEntry[]> {
-  return invoke<LinkEntry[]>("read_link_batch", { paths });
-}
-
-export interface TreeEntry {
-  name: string;
-  path: string;
-  is_dir: boolean;
-  modified: number;
-  /** Nesting depth — 0 = vault root level. */
-  depth: number;
+  return commands.readLinkBatch(paths);
 }
 
 /** Build a flat sorted list of visible tree rows in one native call. */
@@ -87,7 +111,9 @@ export async function buildVisibleTree(
   expanded: string[],
   sortBy: string,
 ): Promise<TreeEntry[]> {
-  return invoke<TreeEntry[]>("build_visible_tree", { root, expanded, sortBy });
+  const r = await commands.buildVisibleTree(root, expanded, sortBy);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 /** Build subtree for a single folder — used for incremental expand. */
@@ -97,39 +123,48 @@ export async function buildSubtree(
   expanded: string[],
   sortBy: string,
 ): Promise<TreeEntry[]> {
-  return invoke<TreeEntry[]>("build_subtree", { folder, depthOffset, expanded, sortBy });
+  const r = await commands.buildSubtree(folder, depthOffset, expanded, sortBy);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function deleteEntry(path: string): Promise<void> {
-  return invoke("delete_entry", { path });
+  const r = await commands.deleteEntry(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function renameEntry(from: string, to: string): Promise<void> {
-  return invoke("rename_entry", { from, to });
+  const r = await commands.renameEntry(from, to);
+  if (r.status === "error") throw r.error;
 }
 
 export async function createDirectory(path: string): Promise<void> {
-  return invoke("create_directory", { path });
+  const r = await commands.createDirectory(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function fileExists(path: string): Promise<boolean> {
-  return invoke<boolean>("file_exists", { path });
+  return commands.fileExists(path);
 }
 
 export async function copyFile(from: string, to: string): Promise<void> {
-  return invoke("copy_file", { from, to });
+  const r = await commands.copyFile(from, to);
+  if (r.status === "error") throw r.error;
 }
 
 export async function copyDirectory(from: string, to: string): Promise<void> {
-  return invoke("copy_directory", { from, to });
+  const r = await commands.copyDirectory(from, to);
+  if (r.status === "error") throw r.error;
 }
 
 export async function watchFile(path: string): Promise<void> {
-  return invoke("watch_file", { path });
+  const r = await commands.watchFile(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function unwatchFile(): Promise<void> {
-  return invoke("unwatch_file");
+  const r = await commands.unwatchFile();
+  if (r.status === "error") throw r.error;
 }
 
 export async function onFileChanged(
@@ -141,11 +176,13 @@ export async function onFileChanged(
 }
 
 export async function watchVault(path: string): Promise<void> {
-  return invoke("watch_vault", { path });
+  const r = await commands.watchVault(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function unwatchVault(): Promise<void> {
-  return invoke("unwatch_vault");
+  const r = await commands.unwatchVault();
+  if (r.status === "error") throw r.error;
 }
 
 export async function onVaultFsChanged(
@@ -161,22 +198,18 @@ export async function hasUnsyncedChanges(
   vaultPath: string,
   encryptionKey: number[],
 ): Promise<boolean> {
-  return invoke<boolean>("has_unsynced_changes", { vaultPath, encryptionKey });
+  const r = await commands.hasUnsyncedChanges(vaultPath, encryptionKey);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function searchFiles(
   root: string,
   query: string,
 ): Promise<FsEntry[]> {
-  return invoke<FsEntry[]>("search_files", { root, query });
-}
-
-export interface ContentMatch {
-  path: string;
-  name: string;
-  line: number;
-  column: number;
-  context: string;
+  const r = await commands.searchFiles(root, query);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function searchFileContents(
@@ -184,11 +217,9 @@ export async function searchFileContents(
   query: string,
   caseSensitive: boolean = false,
 ): Promise<ContentMatch[]> {
-  return invoke<ContentMatch[]>("search_file_contents", {
-    root,
-    query,
-    caseSensitive,
-  });
+  const r = await commands.searchFileContents(root, query, caseSensitive);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function replaceInFile(
@@ -197,45 +228,36 @@ export async function replaceInFile(
   replace: string,
   caseSensitive: boolean = false,
 ): Promise<number> {
-  return invoke<number>("replace_in_file", {
-    path,
-    search,
-    replace,
-    caseSensitive,
-  });
+  const r = await commands.replaceInFile(path, search, replace, caseSensitive);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function revealInFileManager(path: string): Promise<void> {
-  return invoke("reveal_in_file_manager", { path });
+  const r = await commands.revealInFileManager(path);
+  if (r.status === "error") throw r.error;
 }
 
 export async function setMtime(path: string, mtime: number): Promise<void> {
-  return invoke("set_mtime", { path, mtime });
-}
-
-export interface TagInfo {
-  tag: string;
-  count: number;
-  files: string[];
+  const r = await commands.setMtime(path, mtime);
+  if (r.status === "error") throw r.error;
 }
 
 export async function listAllTags(root: string): Promise<TagInfo[]> {
-  return invoke<TagInfo[]>("list_all_tags", { root });
+  const r = await commands.listAllTags(root);
+  if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function exportVaultZip(
   vaultPath: string,
   destPath: string,
 ): Promise<void> {
-  return invoke("export_vault_zip", { vaultPath, destPath });
+  const r = await commands.exportVaultZip(vaultPath, destPath);
+  if (r.status === "error") throw r.error;
 }
 
 // ── Text processing (Rust-accelerated) ──
-
-export interface TextMatch {
-  from: number;
-  to: number;
-}
 
 /**
  * Fast substring search on flattened ProseMirror text via Rust memchr.
@@ -249,29 +271,12 @@ export async function searchInText(
   needle: string,
   caseSensitive: boolean,
 ): Promise<TextMatch[]> {
-  return invoke<TextMatch[]>("search_in_text", {
-    text,
-    pmOffsets,
-    gaps,
-    needle,
-    caseSensitive,
-  });
-}
-
-export interface TextNode {
-  text: string;
-  pos: number;
-}
-
-export interface WikiLinkMatch {
-  from: number;
-  to: number;
-  title: string;
+  return commands.searchInText(text, pmOffsets, gaps, needle, caseSensitive);
 }
 
 /** Extract [[wiki-links]] from ProseMirror text nodes in a single Rust call. */
 export async function extractWikiLinks(
   nodes: TextNode[],
 ): Promise<WikiLinkMatch[]> {
-  return invoke<WikiLinkMatch[]>("extract_wiki_links", { nodes });
+  return commands.extractWikiLinks(nodes);
 }

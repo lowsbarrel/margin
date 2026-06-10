@@ -5,7 +5,7 @@
   import { theme } from "$lib/stores/theme.svelte";
   import { toast } from "$lib/stores/toast.svelte";
   import { editor } from "$lib/stores/editor.svelte";
-  import type { Tool, Stroke, Shape, TextLabel } from "$lib/canvas/types";
+  import type { Tool, Stroke, Shape, TextLabel, Point } from "$lib/canvas/types";
   import { colorPresets, sizePresets } from "$lib/canvas/types";
   import { serialize, deserialize } from "$lib/canvas/serialization";
   import { render as renderCanvas, type RenderOptions } from "$lib/canvas/renderer";
@@ -49,13 +49,13 @@
   let currentShape: Shape | null = null;
   let isDrawing = false;
 
-  let editingText = $state<{ x: number; y: number; localX: number; localY: number } | null>(null);
+  let editingText = $state<Point | null>(null);
   let textInputValue = $state("");
   let textInputEl = $state<HTMLInputElement>();
   let blurCommitBlocked = false;
 
-  let activeSnap = $state<{ x: number; y: number } | null>(null);
-  let activeSnapStart = $state<{ x: number; y: number } | null>(null);
+  let activeSnap = $state<Point | null>(null);
+  let activeSnapStart = $state<Point | null>(null);
   const snapCache = new SnapCache();
 
   let cursorX = $state(0);
@@ -67,7 +67,14 @@
     ctx: null,
   };
 
-  function doRender() {
+  // ─── Render coalescing ───────────────────────────────────────────
+  // Pointer/wheel handlers set needsRender and schedule a single rAF so the
+  // scene is redrawn at most once per animation frame regardless of how many
+  // (coalesced) pointer events arrive.
+  let needsRender = false;
+  let rafId = 0;
+
+  function render() {
     if (!ctx || !canvasEl) return;
     const opts: RenderOptions = {
       ctx, canvasEl, camX, camY, zoom,
@@ -79,7 +86,33 @@
     renderCanvas(opts, offscreenRef);
   }
 
-  function emitChange() {
+  function frame() {
+    rafId = 0;
+    if (!needsRender) return;
+    needsRender = false;
+    render();
+  }
+
+  function scheduleRender() {
+    needsRender = true;
+    if (rafId === 0) rafId = requestAnimationFrame(frame);
+  }
+
+  // ─── Persistence (trailing debounce) ─────────────────────────────
+  // A burst of strokes/edits collapses into a single serialize+write. Camera
+  // (pan/zoom) only changes are folded into the same debounced flush so a
+  // view change never triggers an eager full-document write on its own.
+  const PERSIST_DEBOUNCE_MS = 400;
+  let persistTimer: ReturnType<typeof setTimeout> | null = null;
+  let pendingPersist = false;
+
+  function flushPersist() {
+    if (persistTimer !== null) {
+      clearTimeout(persistTimer);
+      persistTimer = null;
+    }
+    if (!pendingPersist) return;
+    pendingPersist = false;
     const data = serialize(strokes, shapes, textLabels, camX, camY, zoom);
     onsave?.(data);
     editor.markLocalChange();
@@ -90,7 +123,22 @@
     });
   }
 
-  function screenToWorld(sx: number, sy: number): { x: number; y: number } {
+  function emitChange() {
+    pendingPersist = true;
+    if (persistTimer !== null) clearTimeout(persistTimer);
+    persistTimer = setTimeout(flushPersist, PERSIST_DEBOUNCE_MS);
+  }
+
+  /** Schedule a camera-only (pan/zoom) persist — folded into the same debounce. */
+  function emitCameraChange() {
+    emitChange();
+  }
+
+  // Flush pending write synchronously when the app is about to close
+  // (+page.svelte dispatches 'margin:flush' before draining the write queue).
+  const handleAppFlush = () => flushPersist();
+
+  function screenToWorld(sx: number, sy: number): Point {
     const rect = canvasEl.getBoundingClientRect();
     return {
       x: (sx - rect.left) / zoom + camX,
@@ -98,9 +146,16 @@
     };
   }
 
-  function worldToLocal(wx: number, wy: number): { x: number; y: number } {
+  function worldToLocal(wx: number, wy: number): Point {
     return { x: (wx - camX) * zoom, y: (wy - camY) * zoom };
   }
+
+  // Text overlay screen position derived reactively from the stored WORLD
+  // coordinate + camera, so the <input> tracks pan/zoom instead of staying
+  // pinned to the local coords computed once at click time.
+  let editingTextLocal = $derived(
+    editingText ? worldToLocal(editingText.x, editingText.y) : null,
+  );
 
   function resizeCanvas() {
     if (!canvasEl || !wrapperEl) return;
@@ -111,7 +166,7 @@
     canvasEl.style.width = `${rect.width}px`;
     canvasEl.style.height = `${rect.height}px`;
     ctx = canvasEl.getContext("2d")!;
-    doRender();
+    render();
   }
 
   function commitText() {
@@ -122,7 +177,7 @@
     if (et && val) {
       textLabels.push({ x: et.x, y: et.y, text: val, color: penColor, fontSize: textFontSize });
       snapCache.invalidate();
-      doRender();
+      scheduleRender();
       emitChange();
     }
   }
@@ -138,8 +193,7 @@
     if (tool === "text") {
       e.preventDefault();
       if (editingText) { blurCommitBlocked = true; commitText(); }
-      const local = worldToLocal(pos.x, pos.y);
-      editingText = { x: pos.x, y: pos.y, localX: local.x, localY: local.y };
+      editingText = { x: pos.x, y: pos.y };
       textInputValue = "";
       blurCommitBlocked = true;
       tick().then(() => { textInputEl?.focus(); blurCommitBlocked = false; });
@@ -166,7 +220,7 @@
       currentShape = { kind: tool as Shape["kind"], x1: startX, y1: startY, x2: startX, y2: startY, color: penColor, size: penSize };
       canvasEl.setPointerCapture(e.pointerId);
     }
-    doRender();
+    scheduleRender();
   }
 
   function handlePointerMove(e: PointerEvent) {
@@ -175,15 +229,22 @@
     if (isPanning) {
       camX = camStartX - (e.clientX - panStartX) / zoom;
       camY = camStartY - (e.clientY - panStartY) / zoom;
-      doRender();
+      scheduleRender();
       return;
     }
     if (!isDrawing) return;
-    const pos = screenToWorld(e.clientX, e.clientY);
     if (currentStroke) {
-      currentStroke.points.push(pos);
+      // Add every sub-frame point in one pass so high-Hz pointers don't lose
+      // detail, then redraw once for the whole batch on the next frame.
+      const coalesced =
+        typeof e.getCoalescedEvents === "function" ? e.getCoalescedEvents() : [];
+      const events = coalesced.length > 0 ? coalesced : [e];
+      for (const ev of events) {
+        currentStroke.points.push(screenToWorld(ev.clientX, ev.clientY));
+      }
       currentStroke = currentStroke;
     } else if (currentShape) {
+      const pos = screenToWorld(e.clientX, e.clientY);
       if (currentShape.kind === "line" || currentShape.kind === "arrow") {
         const snap = snapCache.findNearest(pos.x, pos.y, zoom, shapes, textLabels, ctx);
         if (snap) { currentShape.x2 = snap.x; currentShape.y2 = snap.y; activeSnap = snap; }
@@ -191,11 +252,11 @@
       } else { currentShape.x2 = pos.x; currentShape.y2 = pos.y; }
       currentShape = currentShape;
     }
-    doRender();
+    scheduleRender();
   }
 
   function handlePointerUp(_e: PointerEvent) {
-    if (isPanning) { isPanning = false; wrapperEl.style.cursor = ""; emitChange(); return; }
+    if (isPanning) { isPanning = false; wrapperEl.style.cursor = ""; emitCameraChange(); return; }
     if (!isDrawing) return;
     isDrawing = false;
     if (currentStroke && currentStroke.points.length >= 2) strokes.push(currentStroke);
@@ -208,7 +269,7 @@
     currentShape = null;
     activeSnap = null;
     activeSnapStart = null;
-    doRender();
+    scheduleRender();
     emitChange();
   }
 
@@ -234,7 +295,8 @@
       camX += e.deltaX / zoom;
       camY += e.deltaY / zoom;
     }
-    doRender();
+    scheduleRender();
+    emitCameraChange();
   }
 
   let spaceHeld = false;
@@ -248,7 +310,7 @@
       if (strokes.length > 0) strokes.pop();
       else if (shapes.length > 0) { shapes.pop(); snapCache.invalidate(); }
       else if (textLabels.length > 0) { textLabels.pop(); snapCache.invalidate(); }
-      doRender();
+      scheduleRender();
       emitChange();
     }
   }
@@ -264,13 +326,14 @@
     strokes = [];
     shapes = [];
     textLabels = [];
-    doRender();
+    snapCache.invalidate();
+    scheduleRender();
     emitChange();
     closeContextMenu();
   }
 
-  function setZoom(newZoom: number) { zoom = newZoom; doRender(); }
-  function resetView() { zoom = 1; camX = 0; camY = 0; doRender(); }
+  function setZoom(newZoom: number) { zoom = newZoom; scheduleRender(); emitCameraChange(); }
+  function resetView() { zoom = 1; camX = 0; camY = 0; scheduleRender(); emitCameraChange(); }
 
   let resizeObserver: ResizeObserver;
 
@@ -303,10 +366,18 @@
     resizeCanvas();
     resizeObserver = new ResizeObserver(() => resizeCanvas());
     resizeObserver.observe(wrapperEl);
+    window.addEventListener("margin:flush", handleAppFlush);
   });
 
   onDestroy(() => {
     resizeObserver?.disconnect();
+    window.removeEventListener("margin:flush", handleAppFlush);
+    if (rafId !== 0) {
+      cancelAnimationFrame(rafId);
+      rafId = 0;
+    }
+    // Flush any pending debounced write so the last edit is never lost.
+    flushPersist();
     if (offscreenRef.canvas) {
       offscreenRef.canvas.width = 0;
       offscreenRef.canvas.height = 0;
@@ -320,7 +391,7 @@
   );
 </script>
 
-<svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} />
+<svelte:window onkeydown={handleKeyDown} onkeyup={handleKeyUp} onblur={flushPersist} />
 
 <div
   class="canvas-wrapper"
@@ -373,12 +444,12 @@
     />
   {/if}
 
-  {#if editingText}
+  {#if editingText && editingTextLocal}
     <input
       class="text-input-overlay"
       bind:this={textInputEl}
-      style:left={`${editingText.localX}px`}
-      style:top={`${editingText.localY}px`}
+      style:left={`${editingTextLocal.x}px`}
+      style:top={`${editingTextLocal.y}px`}
       style:font-size={`${textFontSize * zoom}px`}
       style:color={penColor}
       bind:value={textInputValue}

@@ -232,3 +232,99 @@ pub fn run() {
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
+
+/// Build the tauri-specta command/type registry. Used both to register the
+/// invoke handler and to regenerate the TypeScript bindings.
+pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        crypto::generate_mnemonic,
+        crypto::derive_vault_keys,
+        // crypto::encrypt_blob_cmd / decrypt_blob_cmd are raw-byte (Request/Response)
+        // commands not representable in specta — excluded (still registered in run()).
+        fs::set_vault_directory,
+        fs::list_directory,
+        fs::walk_directory,
+        fs::read_link_batch,
+        fs::build_visible_tree,
+        fs::build_subtree,
+        fs::delete_entry,
+        fs::rename_entry,
+        fs::create_directory,
+        fs::file_exists,
+        fs::copy_file,
+        fs::copy_directory,
+        fs::reveal_in_file_manager,
+        fs::set_mtime,
+        fs::watch_file,
+        fs::unwatch_file,
+        fs::watch_vault,
+        fs::unwatch_vault,
+        fs::search_files,
+        fs::search_file_contents,
+        fs::replace_in_file,
+        fs::list_all_tags,
+        fs::export_vault_zip,
+        fs::has_unsynced_changes,
+        s3::s3_configure,
+        s3::s3_get_config,
+        s3::s3_test_connection,
+        // s3::s3_upload / s3_download are raw-byte (Request/Response) commands not
+        // representable in specta — excluded (still registered in run()).
+        s3::s3_list,
+        s3::s3_delete,
+        settings::save_settings,
+        settings::load_settings,
+        settings::export_settings_string,
+        settings::import_settings_string,
+        settings::save_workspace_state,
+        settings::load_workspace_state,
+        session::save_session,
+        session::load_session,
+        session::clear_session,
+        session::load_vault_profiles,
+        session::save_vault_profile,
+        session::delete_vault_profile,
+        history::save_snapshot,
+        history::list_snapshots,
+        history::read_snapshot,
+        history::delete_snapshot,
+        history::clear_snapshots,
+        history::clear_history_tree,
+        history::rename_history,
+        text::search_in_text,
+        text::extract_wiki_links,
+        text_transform::fuzzy_filter_files,
+        text_transform::transform_image_paths,
+        sync::hash_files_batch,
+        sync::load_manifest,
+        sync::save_manifest,
+        sync::compute_sync_actions,
+        sync::collect_tombstones,
+        sync::merge_tombstones,
+        sync::prune_tombstones,
+        sync::sync_upload_files,
+        sync::sync_download_files,
+        sync::sync_upload_manifest,
+        sync::sync_delete_files,
+        sync::path_to_s3_key,
+        themes::load_themes,
+        themes::save_themes,
+        themes::export_theme,
+        themes::import_theme,
+    ])
+}
+
+/// Regenerate `src/lib/bindings.ts` from the Rust command/type definitions.
+/// Invoked by the `gen_bindings` binary so codegen never requires launching
+/// the GUI/webview runtime.
+pub fn export_bindings() {
+    // u64/usize fields are second-resolution timestamps / small counts, annotated
+    // with `#[specta(type = f64)]` so they export as TS `number` (matching the
+    // previous hand-written interfaces) rather than tripping specta's BigInt guard.
+    specta_builder()
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/lib/bindings.ts",
+        )
+        .expect("failed to export TypeScript bindings");
+}

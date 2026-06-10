@@ -1,4 +1,4 @@
-import type { Stroke, Shape, TextLabel } from "./types";
+import type { Point, Stroke, Shape, TextLabel } from "./types";
 
 export function drawGrid(
   ctx: CanvasRenderingContext2D,
@@ -9,7 +9,11 @@ export function drawGrid(
   zoom: number,
   isDark: boolean,
 ) {
-  const step = 40;
+  // Adapt the grid step to zoom so on-screen spacing stays roughly constant
+  // (~40px) and the iteration count stays bounded at far zoom-out instead of
+  // exploding into a dense unreadable mesh.
+  const baseStep = 40;
+  const step = baseStep * Math.pow(2, Math.round(Math.log2(1 / zoom)));
   const startX = Math.floor(camX / step) * step;
   const startY = Math.floor(camY / step) * step;
   const endX = camX + w / zoom;
@@ -116,8 +120,8 @@ export interface RenderOptions {
   textLabels: TextLabel[];
   currentStroke: Stroke | null;
   currentShape: Shape | null;
-  activeSnap: { x: number; y: number } | null;
-  activeSnapStart: { x: number; y: number } | null;
+  activeSnap: Point | null;
+  activeSnapStart: Point | null;
 }
 
 /**

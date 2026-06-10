@@ -1,9 +1,7 @@
-import { invoke } from "@tauri-apps/api/core";
+import { commands } from "$lib/bindings";
 
-export interface FuzzyEntry {
-  name: string;
-  path: string;
-}
+export type { FuzzyEntry } from "$lib/bindings";
+import type { FuzzyEntry } from "$lib/bindings";
 
 /** Fuzzy-filter files by name in Rust (much faster for large vaults). */
 export async function fuzzyFilterFiles(
@@ -11,7 +9,7 @@ export async function fuzzyFilterFiles(
   query: string,
   limit: number,
 ): Promise<FuzzyEntry[]> {
-  return invoke<FuzzyEntry[]>("fuzzy_filter_files", { files, query, limit });
+  return commands.fuzzyFilterFiles(files, query, limit);
 }
 
 /**
@@ -25,10 +23,10 @@ export async function transformImagePaths(
   attachmentFolder: string | null,
   mode: "resolve" | "unresolve",
 ): Promise<string> {
-  return invoke<string>("transform_image_paths", {
+  return commands.transformImagePaths(
     markdown,
     vaultPath,
     attachmentFolder,
     mode,
-  });
+  );
 }
