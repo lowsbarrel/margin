@@ -1,6 +1,6 @@
 import { Node, mergeAttributes } from "@tiptap/core";
 import type { Node as PMNode } from "@tiptap/pm/model";
-import mermaid from "mermaid";
+import type MermaidApi from "mermaid";
 
 /**
  * Minimal structural type for the tiptap-markdown serializer state we touch.
@@ -11,20 +11,28 @@ interface MarkdownSerializerState {
   closeBlock(node: PMNode): void;
 }
 
-let mermaidInitialized = false;
 let renderSeq = 0;
 
-/** (Re)configure mermaid to match the current app theme. */
-function initMermaid() {
-  const light =
-    document.documentElement.getAttribute("data-theme") === "light";
-  mermaid.initialize({
-    startOnLoad: false,
-    theme: light ? "default" : "dark",
-    securityLevel: "strict",
-    fontFamily: "inherit",
-  });
-  mermaidInitialized = true;
+// mermaid is a large dependency, so it is loaded on demand the first time a
+// diagram renders rather than eagerly at editor (and app) startup.
+let mermaidPromise: Promise<typeof MermaidApi> | null = null;
+
+async function loadMermaid(): Promise<typeof MermaidApi> {
+  if (!mermaidPromise) {
+    mermaidPromise = import("mermaid").then((mod) => {
+      const mermaid = mod.default;
+      const light =
+        document.documentElement.getAttribute("data-theme") === "light";
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: light ? "default" : "dark",
+        securityLevel: "strict",
+        fontFamily: "inherit",
+      });
+      return mermaid;
+    });
+  }
+  return mermaidPromise;
 }
 
 /** Render `code` into `target` as an SVG diagram, swallowing render errors. */
@@ -37,9 +45,9 @@ async function renderInto(target: HTMLElement, code: string): Promise<void> {
     target.appendChild(empty);
     return;
   }
-  if (!mermaidInitialized) initMermaid();
   const id = `mmd-${++renderSeq}`;
   try {
+    const mermaid = await loadMermaid();
     // parse() validates without leaving an orphan DOM node on failure
     await mermaid.parse(code);
     const { svg } = await mermaid.render(id, code);
