@@ -1,9 +1,84 @@
 import type { Editor } from "@tiptap/core";
+import mermaid from "mermaid";
+import { common, createLowlight } from "lowlight";
 import { readFileBytes, writeFileBytes } from "$lib/fs/bridge";
 import { toast } from "$lib/stores/toast.svelte";
 import { mimeForPath } from "$lib/utils/mime";
 import { save } from "@tauri-apps/plugin-dialog";
 import { isLocalfileUrl, stripLocalfilePrefix } from "$lib/editor/image-url";
+
+// getHTML() serializes mermaid as its source text and code blocks without
+// syntax highlighting (lowlight highlights via view-only decorations). So we
+// re-render both into the offscreen PDF container before rasterizing.
+const pdfLowlight = createLowlight(common);
+let pdfMermaidSeq = 0;
+
+interface HastNode {
+  type: string;
+  value?: string;
+  properties?: { className?: string[] | string };
+  children?: HastNode[];
+}
+
+/** Serialize a lowlight hast tree to highlighted HTML (`<span class="hljs-…">`). */
+function hastToHtml(nodes: readonly HastNode[]): string {
+  let out = "";
+  for (const node of nodes) {
+    if (node.type === "text") {
+      out += escapeHtml(node.value ?? "");
+    } else if (node.type === "element") {
+      const cls = node.properties?.className;
+      const className = Array.isArray(cls) ? cls.join(" ") : (cls ?? "");
+      out += `<span class="${className}">${hastToHtml(node.children ?? [])}</span>`;
+    }
+  }
+  return out;
+}
+
+/** Replace each `<pre><code>` body with lowlight-highlighted markup in place. */
+function highlightCodeBlocks(container: HTMLElement): void {
+  container.querySelectorAll("pre code").forEach((codeEl) => {
+    const text = codeEl.textContent ?? "";
+    if (!text.trim()) return;
+    const lang = (codeEl.getAttribute("class") ?? "").match(
+      /language-([\w-]+)/,
+    )?.[1];
+    try {
+      const tree =
+        lang && pdfLowlight.registered(lang)
+          ? pdfLowlight.highlight(lang, text)
+          : pdfLowlight.highlightAuto(text);
+      codeEl.innerHTML = hastToHtml(tree.children as unknown as HastNode[]);
+    } catch {
+      /* unknown language / highlight failure — keep the plain text */
+    }
+  });
+}
+
+/** Render each mermaid source block into an inline SVG, forcing a light theme. */
+async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
+  const blocks = Array.from(
+    container.querySelectorAll<HTMLElement>('[data-type="mermaid"]'),
+  );
+  for (const el of blocks) {
+    const code = el.getAttribute("data-mermaid") ?? el.textContent ?? "";
+    if (!code.trim()) continue;
+    try {
+      // Force the light theme (the PDF page is white) and SVG text labels
+      // instead of foreignObject HTML, which html2canvas can't rasterize.
+      const directive =
+        "%%{init: {'theme':'default','flowchart':{'htmlLabels':false}}}%%\n";
+      const { svg } = await mermaid.render(
+        `pdf-mmd-${++pdfMermaidSeq}`,
+        directive + code,
+      );
+      el.innerHTML = svg;
+      el.removeAttribute("data-mermaid");
+    } catch (err) {
+      console.warn("PDF export: mermaid render failed:", err);
+    }
+  }
+}
 
 /**
  * PDF render styles injected into the offscreen container.
@@ -59,6 +134,30 @@ const PDF_STYLES = `
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
+	/* Mermaid diagrams (rendered inline before rasterizing) */
+	#pdf-render [data-type="mermaid"] { margin: 0.75em 0; text-align: center; }
+	#pdf-render [data-type="mermaid"] svg { max-width: 100%; height: auto; }
+	/* Callouts */
+	#pdf-render .callout { display: flex; gap: 10px; margin: 0.75em 0; padding: 10px 14px; border-radius: 6px; border-left: 4px solid #888; background: #f5f5f5; }
+	#pdf-render .callout-indicator { flex-shrink: 0; }
+	#pdf-render .callout-content { flex: 1; min-width: 0; }
+	#pdf-render .callout-content > :first-child { margin-top: 0; }
+	#pdf-render .callout-content > :last-child { margin-bottom: 0; }
+	#pdf-render .callout-info { border-left-color: #1a73e8; background: #e8f0fe; }
+	#pdf-render .callout-note { border-left-color: #6b7280; background: #f3f4f6; }
+	#pdf-render .callout-success { border-left-color: #22a06b; background: #e6f4ea; }
+	#pdf-render .callout-warning { border-left-color: #f59e0b; background: #fef7e6; }
+	#pdf-render .callout-danger { border-left-color: #e5484d; background: #fde8e8; }
+	/* Code syntax highlighting (github-light subset) */
+	#pdf-render .hljs-comment, #pdf-render .hljs-quote { color: #6a737d; font-style: italic; }
+	#pdf-render .hljs-keyword, #pdf-render .hljs-selector-tag, #pdf-render .hljs-built_in, #pdf-render .hljs-name, #pdf-render .hljs-tag { color: #d73a49; }
+	#pdf-render .hljs-string, #pdf-render .hljs-attr, #pdf-render .hljs-template-string, #pdf-render .hljs-regexp, #pdf-render .hljs-addition { color: #032f62; }
+	#pdf-render .hljs-number, #pdf-render .hljs-literal, #pdf-render .hljs-variable, #pdf-render .hljs-meta { color: #005cc5; }
+	#pdf-render .hljs-title, #pdf-render .hljs-section, #pdf-render .hljs-doctag { color: #6f42c1; }
+	#pdf-render .hljs-type, #pdf-render .hljs-attribute, #pdf-render .hljs-symbol, #pdf-render .hljs-bullet { color: #e36209; }
+	#pdf-render .hljs-emphasis { font-style: italic; }
+	#pdf-render .hljs-strong { font-weight: 700; }
+	#pdf-render .hljs-deletion { color: #b31d28; }
 `;
 
 /** Convert a localfile image element to an inline base64 data URL. */
@@ -137,6 +236,11 @@ export async function exportPdf(
     // Inline local images so html2canvas can render them
     const images = container.querySelectorAll("img");
     await Promise.all(Array.from(images).map(inlineLocalImage));
+
+    // getHTML() carries mermaid as source text and code without highlighting —
+    // render the diagrams and re-highlight code into the container first.
+    await renderMermaidBlocks(container);
+    highlightCodeBlocks(container);
 
     // html2canvas-pro is a maintained fork with the same API that supports
     // modern CSS (oklch colors, flex/grid) which upstream html2canvas breaks on.

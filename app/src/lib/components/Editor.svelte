@@ -204,26 +204,6 @@
     }
   }
 
-  // Markers of legacy appearance an older note may still carry: `==highlight==`,
-  // and the inline HTML the dropped extensions used to emit (<u>/<sub>/<sup>/
-  // <mark>, coloured <span style>). A cheap gate — the real decision is whether
-  // the cleaned re-serialization actually differs from disk.
-  const LEGACY_APPEARANCE_REGEX =
-    /==[^=\n]+==|<\/?(?:u|sub|sup|mark)\b|<span[^>]*\sstyle\s*=|style\s*=\s*["'][^"']*(?:color|background)/i;
-
-  /**
-   * One-shot migration: now that colour/highlight/underline/sub-sup/alignment
-   * are gone from the schema, a loaded legacy note already renders clean (its
-   * styling dropped on parse). Persist that clean form so the vault converges on
-   * plain Markdown instead of keeping dead styling on disk.
-   */
-  function migrateLegacyAppearance() {
-    if (!tiptap || !alive || !vault.vaultPath) return;
-    if (!LEGACY_APPEARANCE_REGEX.test(initialContent)) return;
-    const cleaned = unresolveImagePaths(getEditorMarkdown(tiptap), vault.vaultPath);
-    if (cleaned !== initialContent) saveNow(cleaned);
-  }
-
   // Capture the caret when this editor goes active → inactive (tab switch) so
   // the per-tab snapshot stays fresh. Within a session the cached instance keeps
   // its own caret; this only matters for persistence across a restart.
@@ -487,7 +467,6 @@
     ).then((resolved) => {
       createEditor(resolved);
       restoreCursorOnce();
-      migrateLegacyAppearance();
     });
     container.addEventListener("paste", handlePaste as EventListener, true);
     container.addEventListener(

@@ -2,12 +2,16 @@
   import { vault } from "$lib/stores/vault.svelte";
   import { toast } from "$lib/stores/toast.svelte";
   import { saveVaultProfile } from "$lib/session/bridge";
+  import { cleanVault } from "$lib/editor/clean-vault";
   import { Button, Input, Field, Section } from "$lib/ui";
-  import { KeyRound, Eye, EyeOff, FolderOpen } from "lucide-svelte";
+  import { KeyRound, Eye, EyeOff, FolderOpen, Sparkles } from "lucide-svelte";
   import * as m from "$lib/paraglide/messages.js";
 
   let showPassphrase = $state(false);
   let editingVaultName = $state("");
+  let cleaning = $state(false);
+  let confirmingClean = $state(false);
+  let cleanProgress = $state("");
 
   $effect(() => {
     editingVaultName = vault.profileName ?? "";
@@ -26,6 +30,35 @@
       toast.success(m.toast_settings_saved());
     } catch (err) {
       toast.error(String(err));
+    }
+  }
+
+  async function runCleanVault() {
+    if (!vault.vaultPath || cleaning) return;
+    confirmingClean = false;
+    cleaning = true;
+    cleanProgress = m.settings_cleanup_progress({ done: "0", total: "…" });
+    try {
+      const res = await cleanVault(
+        vault.vaultPath,
+        vault.encryptionKey,
+        (p) => {
+          cleanProgress = m.settings_cleanup_progress({
+            done: String(p.scanned),
+            total: String(p.total),
+          });
+        },
+      );
+      if (res.cleaned > 0) {
+        toast.success(m.toast_cleanup_done({ count: String(res.cleaned) }));
+      } else {
+        toast.info(m.toast_cleanup_none());
+      }
+    } catch (err) {
+      toast.error(m.toast_cleanup_failed({ error: String(err) }));
+    } finally {
+      cleaning = false;
+      cleanProgress = "";
     }
   }
 </script>
@@ -82,8 +115,46 @@
   </Field>
 </Section>
 
+<Section
+  title={m.settings_cleanup_title()}
+  icon={Sparkles}
+  collapsible
+  defaultOpen={false}
+>
+  <p class="cleanup-desc">{m.settings_cleanup_desc()}</p>
+  {#if cleaning}
+    <Button variant="secondary" loading disabled>{cleanProgress}</Button>
+  {:else if confirmingClean}
+    <div class="cleanup-actions">
+      <Button variant="primary" onclick={runCleanVault}
+        >{m.settings_cleanup_confirm()}</Button
+      >
+      <Button variant="ghost" onclick={() => (confirmingClean = false)}
+        >{m.settings_cleanup_cancel()}</Button
+      >
+    </div>
+  {:else}
+    <Button variant="secondary" onclick={() => (confirmingClean = true)}
+      >{m.settings_cleanup_button()}</Button
+    >
+  {/if}
+</Section>
+
 <style>
   .vault-name-row {
+    display: flex;
+    gap: var(--space-sm);
+    align-items: center;
+  }
+
+  .cleanup-desc {
+    margin: 0 0 var(--space-sm);
+    font-size: 0.8rem;
+    color: var(--text-muted);
+    line-height: 1.5;
+  }
+
+  .cleanup-actions {
     display: flex;
     gap: var(--space-sm);
     align-items: center;
