@@ -8,7 +8,7 @@
   import PdfViewer from "$lib/components/PdfViewer.svelte";
   import CanvasEditor from "$lib/components/CanvasEditor.svelte";
   import GraphView from "$lib/components/GraphView.svelte";
-  import { X, ChevronRight } from "lucide-svelte";
+  import { X, ChevronRight, Pin } from "lucide-svelte";
   import * as m from "$lib/paraglide/messages.js";
   import { handleTabMouseDown } from "$lib/utils/tab-drag";
 
@@ -67,6 +67,9 @@
             panes.switchTab(paneIndex, i);
         }}
       >
+        {#if tab.pinned}
+          <Pin size={11} class="tab-pin" />
+        {/if}
         <span class="tab-label">{fileTitle(tab.path)}</span>
         <button
           class="tab-close"
@@ -125,12 +128,14 @@
           externalContentVersion={pane.externalContentVersion}
           title={fileTitle(tab.path)}
           active={isActive && paneIndex === panes.activePaneIndex}
+          initialCursorPos={tab.cursorPos}
           onrename={onrename}
           onwikilink={onwikilink}
           onsave={(content) => {
             tab.content = content;
             panes.broadcastContent(paneIndex, tab.path, content);
           }}
+          onsnapshotcursor={(pos) => (tab.cursorPos = pos)}
           {attachmentFolder}
         />
       </div>
@@ -270,6 +275,11 @@
     max-width: 160px;
     flex-shrink: 1;
     min-width: 0;
+  }
+
+  .tab :global(.tab-pin) {
+    flex-shrink: 0;
+    color: var(--accent-link);
   }
 
   .tab-close {

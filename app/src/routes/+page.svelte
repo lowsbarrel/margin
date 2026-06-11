@@ -142,7 +142,12 @@
     tabIndex: number,
   ): ContextMenuItem[] {
     const pane = panes.list[paneIndex];
+    const tab = pane.tabs[tabIndex];
     return [
+      {
+        label: tab?.pinned ? m.tab_unpin() : m.tab_pin(),
+        onclick: () => panes.togglePin(paneIndex, tabIndex),
+      },
       { label: m.tab_close(), onclick: () => panes.closeTab(paneIndex, tabIndex) },
       {
         label: m.tab_close_others(),
@@ -150,6 +155,13 @@
         disabled: pane.tabs.length <= 1,
       },
       { label: m.tab_close_all(), onclick: () => panes.closeAllTabs(paneIndex) },
+      {
+        label: m.tab_reopen_closed(),
+        onclick: () => {
+          panes.reopenClosedTab();
+        },
+        disabled: !panes.canReopenClosedTab,
+      },
     ];
   }
 
@@ -182,7 +194,12 @@
     if (!vault.vaultPath || !vault.encryptionKey) return;
     const wsState: WorkspaceState = {
       panes: panes.list.map((p) => ({
-        tabs: p.tabs.map((t) => ({ path: t.path, type: t.type })),
+        tabs: p.tabs.map((t) => ({
+          path: t.path,
+          type: t.type,
+          pinned: t.pinned,
+          cursor_pos: t.cursorPos ?? null,
+        })),
         active_tab_index: p.activeTabIndex,
       })),
       pane_flexes: [...panes.flexes],
@@ -526,6 +543,10 @@
     if ((e.metaKey || e.ctrlKey) && e.key === "p") {
       e.preventDefault();
       showQuickSwitcher = !showQuickSwitcher;
+    }
+    if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === "t" || e.key === "T")) {
+      e.preventDefault();
+      panes.reopenClosedTab();
     }
   }}
   onmousemove={(e) => {

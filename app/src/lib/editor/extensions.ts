@@ -7,23 +7,18 @@ import TaskList from "@tiptap/extension-task-list";
 import TaskItem from "@tiptap/extension-task-item";
 import Placeholder from "@tiptap/extension-placeholder";
 import Typography from "@tiptap/extension-typography";
-import Highlight from "@tiptap/extension-highlight";
 import markdownItMark from "markdown-it-mark";
 import Link from "@tiptap/extension-link";
-import Underline from "@tiptap/extension-underline";
-import Superscript from "@tiptap/extension-superscript";
-import Subscript from "@tiptap/extension-subscript";
-import TextAlign from "@tiptap/extension-text-align";
-import { TextStyle } from "@tiptap/extension-text-style";
-import { Color } from "@tiptap/extension-color";
 import CharacterCount from "@tiptap/extension-character-count";
 import CodeBlockLowlight from "@tiptap/extension-code-block-lowlight";
 import Image from "@tiptap/extension-image";
 import { Markdown } from "tiptap-markdown";
 import FileEmbed from "$lib/editor/file-embed";
+import NoteEmbed from "$lib/editor/note-embed";
 import WikiLink from "$lib/editor/wiki-link";
 import Callout from "$lib/editor/callout";
 import { MathBlock, MathInline } from "$lib/editor/math";
+import { Mermaid } from "$lib/editor/mermaid";
 import SlashCommand from "$lib/editor/slash-command";
 import { getSlashMenuItems } from "$lib/editor/menu-items";
 import renderSlashMenu from "$lib/editor/slash-menu-renderer.svelte";
@@ -31,19 +26,45 @@ import MentionCommand from "$lib/editor/mention-command";
 import renderMentionMenu from "$lib/editor/mention-menu-renderer.svelte";
 import { SearchReplace } from "$lib/editor/search-replace";
 import { ContentDrag } from "$lib/editor/content-drag";
+import { PasteCleanup } from "$lib/editor/paste-cleanup";
 import { Extension, type Extensions } from "@tiptap/core";
 import { Plugin, PluginKey } from "@tiptap/pm/state";
 
 interface CreateExtensionsOptions {
   lowlight: any;
   attachmentFolder?: string | null;
+  /** Build a trimmed, non-interactive set for read-only transclusion previews. */
+  embed?: boolean;
+  /** Transclusion nesting level passed through to NoteEmbed. */
+  embedDepth?: number;
 }
+
+// Consumes legacy `==highlight==` syntax in existing notes without bringing a
+// highlight mark back into the schema: the markdown-it rule still parses it on
+// load (so code blocks and inline code are respected), but with no Highlight
+// extension present ProseMirror keeps only the inner text.
+const LegacyHighlightStrip = Extension.create({
+  name: "legacyHighlightStrip",
+  addStorage() {
+    return {
+      markdown: {
+        parse: {
+          setup(md: any) {
+            md.use(markdownItMark);
+          },
+        },
+      },
+    };
+  },
+});
 
 export function createEditorExtensions({
   lowlight,
   attachmentFolder,
+  embed = false,
+  embedDepth = 0,
 }: CreateExtensionsOptions): Extensions {
-  return [
+  const exts: Extensions = [
     StarterKit.configure({
       heading: { levels: [1, 2, 3, 4, 5, 6] },
       codeBlock: false,
@@ -132,111 +153,113 @@ export function createEditorExtensions({
     }).configure({
       nested: true,
     }),
-    Placeholder.configure({
-      placeholder: ({ node }) => {
-        if (node.type.name === "heading") {
-          return `Heading ${node.attrs.level}`;
-        }
-        return 'Write anything, "/" for commands, "@" to link a note...';
-      },
-      includeChildren: true,
-      showOnlyWhenEditable: true,
-    }),
-    Typography,
-    Highlight.extend({
-      addStorage() {
-        return {
-          markdown: {
-            serialize: { open: "==", close: "==" },
-            parse: {
-              setup(md: any) {
-                md.use(markdownItMark);
-              },
-              updateDOM(el: HTMLElement) {
-                el.querySelectorAll("mark").forEach((mark: HTMLElement) => {
-                  mark.setAttribute("data-color", "");
-                });
-              },
+    ...(embed
+      ? []
+      : [
+          Placeholder.configure({
+            placeholder: ({ node }) => {
+              if (node.type.name === "heading") {
+                return `Heading ${node.attrs.level}`;
+              }
+              return 'Write anything, "/" for commands, "@" to link a note...';
             },
-          },
-        };
-      },
-    }).configure({
-      multicolor: true,
-    }),
+            includeChildren: true,
+            showOnlyWhenEditable: true,
+          }),
+        ]),
+    Typography,
     Link.configure({
       openOnClick: false,
     }),
-    Underline,
-    Superscript,
-    Subscript,
-    TextAlign.configure({
-      types: ["heading", "paragraph"],
-    }),
-    TextStyle,
-    Color,
+    LegacyHighlightStrip,
     CharacterCount,
-    SlashCommand.configure({
-      suggestion: {
-        items: getSlashMenuItems,
-        render: renderSlashMenu,
-      },
-    }),
+    ...(embed
+      ? []
+      : [
+          SlashCommand.configure({
+            suggestion: {
+              items: getSlashMenuItems,
+              render: renderSlashMenu,
+            },
+          }),
+        ]),
     Image.configure({
       inline: false,
       allowBase64: true,
     }),
+    // NoteEmbed must precede FileEmbed so it claims `![[Note]]` / `![[Note.md]]`
+    // before the file-embed markdown rule sees them.
+    NoteEmbed.configure({
+      attachmentFolder: attachmentFolder || "attachments",
+      lowlight,
+      depth: embedDepth,
+    }),
     FileEmbed.configure({
       attachmentFolder: attachmentFolder || "attachments",
     }),
-    MentionCommand.configure({
-      suggestion: {
-        items: () => [{ id: "placeholder" }],
-        render: renderMentionMenu,
-      },
-    }),
+    ...(embed
+      ? []
+      : [
+          MentionCommand.configure({
+            suggestion: {
+              items: () => [{ id: "placeholder" }],
+              render: renderMentionMenu,
+            },
+          }),
+        ]),
     WikiLink,
     Callout,
     MathBlock,
     MathInline,
+    Mermaid,
     Markdown.configure({
       html: true,
       transformPastedText: true,
       transformCopiedText: false,
     }),
-    // Serialize lists as markdown on copy; tables use default PM serializer
-    Extension.create({
-      name: "selectiveClipboardMarkdown",
-      priority: 100,
-      addProseMirrorPlugins() {
-        return [
-          new Plugin({
-            key: new PluginKey("selectiveClipboardMarkdown"),
-            props: {
-              clipboardTextSerializer: (slice) => {
-                const listTypes = ["bulletList", "orderedList", "taskList"];
-                let topLevelCount = 0;
-                let hasList = false;
-                slice.content.forEach((node) => {
-                  if (listTypes.includes(node.type.name)) {
-                    hasList = true;
-                    topLevelCount += node.childCount;
-                  } else {
-                    topLevelCount++;
-                  }
-                });
-                if (!hasList || topLevelCount < 2) return null;
-                const serializer =
-                  (this.editor.storage as any).markdown?.serializer;
-                if (!serializer) return null;
-                return serializer.serialize(slice.content);
-              },
-            },
-          }),
-        ];
-      },
-    }),
-    SearchReplace,
-    ContentDrag,
   ];
+
+  if (!embed) {
+    exts.push(
+      // Serialize lists as markdown on copy; tables use default PM serializer
+      Extension.create({
+        name: "selectiveClipboardMarkdown",
+        priority: 100,
+        addProseMirrorPlugins() {
+          return [
+            new Plugin({
+              key: new PluginKey("selectiveClipboardMarkdown"),
+              props: {
+                clipboardTextSerializer: (slice) => {
+                  const listTypes = ["bulletList", "orderedList", "taskList"];
+                  let topLevelCount = 0;
+                  let hasList = false;
+                  slice.content.forEach((node) => {
+                    if (listTypes.includes(node.type.name)) {
+                      hasList = true;
+                      topLevelCount += node.childCount;
+                    } else {
+                      topLevelCount++;
+                    }
+                  });
+                  if (!hasList || topLevelCount < 2) return null;
+                  const serializer = (this.editor.storage as any).markdown
+                    ?.serializer;
+                  if (!serializer) return null;
+                  return serializer.serialize(slice.content);
+                },
+              },
+            }),
+          ];
+        },
+      }),
+      // Normalises the clipboard: strips non-Markdown appearance (colour,
+      // highlight, underline, super/subscript, alignment) on both paste and copy.
+      PasteCleanup,
+      SearchReplace,
+      ContentDrag,
+    );
+  }
+
+  return exts;
 }

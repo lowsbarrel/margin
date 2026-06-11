@@ -395,3 +395,120 @@ input::placeholder, textarea::placeholder {
 
 /* KaTeX color overrides */
 .katex { color: var(--text-primary); }
+
+/* ───────────────────────── Mermaid diagrams ───────────────────────── */
+.mermaid-block {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	margin: 16px 0;
+	padding: 16px;
+	background: var(--bg-secondary, #111);
+	border: 1px solid var(--border, #262626);
+	border-radius: var(--radius-sm, 8px);
+	cursor: pointer;
+	transition: border-color 0.15s ease;
+}
+
+.mermaid-block:hover {
+	border-color: var(--text-muted, #666);
+}
+
+.mermaid-block .mermaid-render {
+	min-height: 32px;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 100%;
+}
+
+.mermaid-block .mermaid-render svg {
+	max-width: 100%;
+	height: auto;
+}
+
+.mermaid-block .mermaid-empty {
+	color: var(--text-muted, #666);
+	font-style: italic;
+	font-size: 13px;
+}
+
+.mermaid-block .mermaid-error {
+	color: var(--danger, #ef4444);
+	font-family: var(--font-mono);
+	font-size: 12px;
+	white-space: pre-wrap;
+	text-align: left;
+	width: 100%;
+}
+
+.mermaid-block .mermaid-input {
+	width: 100%;
+	background: var(--bg-tertiary, #191919);
+	color: var(--text-primary, #dcddde);
+	border: 1px solid var(--border, #262626);
+	border-radius: var(--radius-xs, 4px);
+	padding: 10px 12px;
+	font-family: var(--font-mono);
+	font-size: 13px;
+	line-height: 1.5;
+	resize: none;
+	outline: none;
+	overflow: hidden;
+}
+
+.mermaid-block .mermaid-input:focus {
+	border-color: var(--text-muted, #666);
+}
+
+/* ───────────────────────── Note transclusion ──────────────────────── */
+.note-embed {
+	margin: 16px 0;
+	border: 1px solid var(--border, #262626);
+	border-left: 3px solid var(--accent-link, rgb(255, 102, 51));
+	border-radius: var(--radius-sm, 8px);
+	background: var(--bg-secondary, #111);
+	overflow: hidden;
+}
+
+.note-embed .note-embed-header {
+	display: flex;
+	align-items: center;
+	gap: 8px;
+	padding: 8px 12px;
+	font-size: 13px;
+	font-weight: 600;
+	color: var(--accent-link, rgb(255, 102, 51));
+	cursor: pointer;
+	border-bottom: 1px solid var(--border, #262626);
+	user-select: none;
+}
+
+.note-embed .note-embed-header:hover {
+	background: var(--bg-tertiary, #191919);
+}
+
+.note-embed .note-embed-icon::before {
+	content: "🔗";
+	font-size: 12px;
+}
+
+.note-embed .note-embed-body {
+	padding: 4px 16px 8px;
+}
+
+/* Embedded content uses the shared editor typography but without the standalone
+   editor's outer padding / max-width / tall bottom gutter. */
+.note-embed .note-embed-body .md-editor {
+	padding: 0;
+	margin: 0;
+	max-width: none;
+}
+
+.note-embed .note-embed-missing,
+.note-embed .note-embed-empty {
+	padding: 8px 16px;
+	color: var(--text-muted, #666);
+	font-style: italic;
+	font-size: 13px;
+}

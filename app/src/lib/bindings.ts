@@ -389,6 +389,8 @@ export type WorkspaceState = {
 export type WorkspaceTab = {
 	path: string,
 	type: string,
+	pinned?: boolean,
+	cursor_pos?: number | null,
 };
 
 /* Tauri Specta runtime */

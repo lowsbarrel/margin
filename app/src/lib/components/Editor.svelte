@@ -39,9 +39,13 @@
     externalContentVersion?: number;
     title: string;
     active?: boolean;
+    /** Caret position to restore once, on first mount (workspace restore). */
+    initialCursorPos?: number;
     onrename?: (oldPath: string, newPath: string) => void;
     onwikilink?: (title: string) => void;
     onsave?: (content: string) => void;
+    /** Report the current caret position so it can be persisted per tab. */
+    onsnapshotcursor?: (pos: number) => void;
     attachmentFolder?: string | null;
   }
 
@@ -51,9 +55,11 @@
     externalContentVersion = 0,
     title: initialTitle,
     active = true,
+    initialCursorPos,
     onrename,
     onwikilink,
     onsave,
+    onsnapshotcursor,
     attachmentFolder = null,
   }: Props = $props();
 
@@ -175,6 +181,58 @@
     pendingSaveText = null;
     if (text != null) saveNow(text);
   }
+
+  /** Report the caret position to the parent so it can be persisted per tab. */
+  function snapshotCursor() {
+    if (!tiptap) return;
+    onsnapshotcursor?.(tiptap.state.selection.from);
+  }
+
+  /**
+   * Restore a persisted caret position exactly once, on first mount. Clamped to
+   * the document so a stale position (file shrank on disk) can't throw.
+   */
+  function restoreCursorOnce() {
+    if (initialCursorPos == null || !tiptap) return;
+    try {
+      const size = tiptap.state.doc.content.size;
+      const pos = Math.min(Math.max(initialCursorPos, 0), Math.max(size - 1, 0));
+      tiptap.commands.setTextSelection(pos);
+      tiptap.commands.scrollIntoView();
+    } catch {
+      /* stale position — ignore */
+    }
+  }
+
+  // Markers of legacy appearance an older note may still carry: `==highlight==`,
+  // and the inline HTML the dropped extensions used to emit (<u>/<sub>/<sup>/
+  // <mark>, coloured <span style>). A cheap gate — the real decision is whether
+  // the cleaned re-serialization actually differs from disk.
+  const LEGACY_APPEARANCE_REGEX =
+    /==[^=\n]+==|<\/?(?:u|sub|sup|mark)\b|<span[^>]*\sstyle\s*=|style\s*=\s*["'][^"']*(?:color|background)/i;
+
+  /**
+   * One-shot migration: now that colour/highlight/underline/sub-sup/alignment
+   * are gone from the schema, a loaded legacy note already renders clean (its
+   * styling dropped on parse). Persist that clean form so the vault converges on
+   * plain Markdown instead of keeping dead styling on disk.
+   */
+  function migrateLegacyAppearance() {
+    if (!tiptap || !alive || !vault.vaultPath) return;
+    if (!LEGACY_APPEARANCE_REGEX.test(initialContent)) return;
+    const cleaned = unresolveImagePaths(getEditorMarkdown(tiptap), vault.vaultPath);
+    if (cleaned !== initialContent) saveNow(cleaned);
+  }
+
+  // Capture the caret when this editor goes active → inactive (tab switch) so
+  // the per-tab snapshot stays fresh. Within a session the cached instance keeps
+  // its own caret; this only matters for persistence across a restart.
+  let wasActive = untrack(() => active);
+  $effect(() => {
+    const isActive = active;
+    if (wasActive && !isActive) untrack(() => snapshotCursor());
+    wasActive = isActive;
+  });
 
   function handleTitleInput() {
     if (!titleEl || !alive) return;
@@ -428,6 +486,8 @@
       "resolve",
     ).then((resolved) => {
       createEditor(resolved);
+      restoreCursorOnce();
+      migrateLegacyAppearance();
     });
     container.addEventListener("paste", handlePaste as EventListener, true);
     container.addEventListener(
@@ -452,6 +512,8 @@
 
     // Flush the pending save when the app requests it (e.g. before window close).
     window.addEventListener("margin:flush", flushPendingSave);
+    // Also capture the caret on flush so the active tab's position survives quit.
+    window.addEventListener("margin:flush", snapshotCursor);
   });
 
   // Global document click + webview drag-drop are gated on `active` so hidden
@@ -501,6 +563,7 @@
     if (saveTimer) clearTimeout(saveTimer);
     if (bubbleUpdateRaf) cancelAnimationFrame(bubbleUpdateRaf);
     window.removeEventListener("margin:flush", flushPendingSave);
+    window.removeEventListener("margin:flush", snapshotCursor);
     container?.removeEventListener("paste", handlePaste as EventListener, true);
     container?.removeEventListener(
       "contextmenu",

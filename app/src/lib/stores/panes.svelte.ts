@@ -21,6 +21,14 @@ export interface Tab {
   type: TabType;
   blobUrl?: string;
   pdfData?: Uint8Array;
+  /** Pinned tabs sort to the front of the pane and survive close-others/all. */
+  pinned: boolean;
+  /**
+   * Last known ProseMirror caret position. Only consumed once, when the editor
+   * first mounts (i.e. on workspace restore after a restart) — within a session
+   * the cached editor instance already keeps its own caret/scroll.
+   */
+  cursorPos?: number;
 }
 
 export interface Pane {
@@ -29,6 +37,14 @@ export interface Pane {
   activeTabIndex: number;
   externalContentVersion: number;
 }
+
+/** A recently-closed tab, reopenable via {@link panes.reopenClosedTab}. */
+interface ClosedTab {
+  path: string;
+  type: TabType;
+}
+
+const MAX_CLOSED_HISTORY = 10;
 
 
 let _nextTabId = 0;
@@ -115,6 +131,27 @@ let _panes = $state<Pane[]>([createEmptyPane()]);
 let _paneFlexes = $state<number[]>([1]);
 let _activePaneIndex = $state(0);
 let _fileSelectGeneration = 0;
+let _closedTabs = $state<ClosedTab[]>([]);
+
+function pushClosedTab(tab: Tab): void {
+  // Skip transient/unsupported tabs that can't be meaningfully reopened.
+  if (tab.type === "unknown") return;
+  _closedTabs = [
+    { path: tab.path, type: tab.type },
+    ..._closedTabs.filter((t) => t.path !== tab.path).slice(0, MAX_CLOSED_HISTORY - 1),
+  ];
+}
+
+/** Re-sort a pane's tabs so pinned ones lead, preserving the active tab by id. */
+function applyPinOrder(paneIndex: number, tabs: Tab[], activeId: number | null) {
+  const pinned = tabs.filter((t) => t.pinned);
+  const unpinned = tabs.filter((t) => !t.pinned);
+  const next = [...pinned, ...unpinned];
+  _panes[paneIndex].tabs = next;
+  const idx = activeId == null ? -1 : next.findIndex((t) => t.id === activeId);
+  _panes[paneIndex].activeTabIndex =
+    idx >= 0 ? idx : Math.min(_panes[paneIndex].activeTabIndex, next.length - 1);
+}
 
 
 export const panes = {
@@ -135,6 +172,9 @@ export const panes = {
     return p && p.activeTabIndex >= 0 && p.activeTabIndex < p.tabs.length
       ? p.tabs[p.activeTabIndex]
       : null;
+  },
+  get canReopenClosedTab(): boolean {
+    return _closedTabs.length > 0;
   },
 
   set list(v: Pane[]) {
@@ -174,6 +214,7 @@ export const panes = {
   async closeTab(paneIndex: number, tabIndex: number) {
     const pane = _panes[paneIndex];
     const closing = pane.tabs[tabIndex];
+    pushClosedTab(closing);
     revokeBlobUrls([closing]);
 
     const oldActiveIndex = pane.activeTabIndex;
@@ -204,9 +245,13 @@ export const panes = {
   async closeOtherTabs(paneIndex: number, tabIndex: number) {
     const pane = _panes[paneIndex];
     const keepTab = pane.tabs[tabIndex];
-    revokeBlobUrls(pane.tabs.filter((_, i) => i !== tabIndex));
-    _panes[paneIndex].tabs = [keepTab];
-    _panes[paneIndex].activeTabIndex = 0;
+    // Pinned tabs (other than the kept one) survive; everything else closes.
+    const removed = pane.tabs.filter((t, i) => i !== tabIndex && !t.pinned);
+    const kept = pane.tabs.filter((t, i) => i === tabIndex || t.pinned);
+    for (const t of removed) pushClosedTab(t);
+    revokeBlobUrls(removed);
+    _panes[paneIndex].tabs = kept;
+    _panes[paneIndex].activeTabIndex = kept.findIndex((t) => t.id === keepTab.id);
     if (paneIndex === _activePaneIndex) {
       await unwatchFile();
       files.setActiveFile(keepTab.path);
@@ -217,7 +262,19 @@ export const panes = {
 
   async closeAllTabs(paneIndex: number) {
     const pane = _panes[paneIndex];
-    revokeBlobUrls(pane.tabs);
+    const pinned = pane.tabs.filter((t) => t.pinned);
+    const removed = pane.tabs.filter((t) => !t.pinned);
+    for (const t of removed) pushClosedTab(t);
+    revokeBlobUrls(removed);
+
+    // Pinned tabs keep the pane alive; activate the first of them.
+    if (pinned.length > 0) {
+      _panes[paneIndex].tabs = pinned;
+      _panes[paneIndex].activeTabIndex = -1;
+      await this.switchTab(paneIndex, 0);
+      return;
+    }
+
     if (_panes.length > 1) {
       await this.closePane(paneIndex);
       return;
@@ -228,6 +285,30 @@ export const panes = {
       files.setActiveFile(null);
       await unwatchFile();
     }
+  },
+
+  togglePin(paneIndex: number, tabIndex: number) {
+    const pane = _panes[paneIndex];
+    if (!pane) return;
+    const tab = pane.tabs[tabIndex];
+    if (!tab) return;
+    const activeId =
+      pane.activeTabIndex >= 0 ? pane.tabs[pane.activeTabIndex]?.id ?? null : null;
+    const next = pane.tabs.map((t) =>
+      t.id === tab.id ? { ...t, pinned: !t.pinned } : t,
+    );
+    applyPinOrder(paneIndex, next, activeId);
+  },
+
+  async reopenClosedTab(): Promise<boolean> {
+    const entry = _closedTabs[0];
+    if (!entry) return false;
+    _closedTabs = _closedTabs.slice(1);
+    if (entry.type === "graph") {
+      this.openGraph();
+      return true;
+    }
+    return this.openFile(entry.path);
   },
 
 
@@ -348,6 +429,7 @@ export const panes = {
       type: tabType,
       blobUrl,
       pdfData,
+      pinned: false,
     };
     _panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
     _panes[paneIndex].activeTabIndex = _panes[paneIndex].tabs.length - 1;
@@ -374,6 +456,7 @@ export const panes = {
       path: "__graph__",
       content: "",
       type: "graph",
+      pinned: false,
     };
     _panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
     _panes[paneIndex].activeTabIndex = _panes[paneIndex].tabs.length - 1;
@@ -569,6 +652,7 @@ export const panes = {
     _panes = [createEmptyPane()];
     _paneFlexes = [1];
     _activePaneIndex = 0;
+    _closedTabs = [];
   },
 
 
@@ -580,7 +664,10 @@ export const panes = {
     // Build each tab independently; the file reads are mutually independent, so
     // run them concurrently (per pane) instead of blocking on a serial chain at
     // startup. A failed read or unsupported type yields null and is dropped.
-    const buildTab = async (path: string): Promise<Tab | null> => {
+    const buildTab = async (
+      wsTab: WorkspacePane["tabs"][number],
+    ): Promise<Tab | null> => {
+      const path = wsTab.path;
       const tabType = getTabType(path);
       if (tabType === "unknown" && path !== "__graph__") return null;
       const type = path === "__graph__" ? ("graph" as TabType) : tabType;
@@ -603,12 +690,21 @@ export const panes = {
       } catch {
         return null;
       }
-      return { id: nextTabId(), path, content, type, blobUrl, pdfData };
+      return {
+        id: nextTabId(),
+        path,
+        content,
+        type,
+        blobUrl,
+        pdfData,
+        pinned: wsTab.pinned ?? false,
+        cursorPos: wsTab.cursor_pos ?? undefined,
+      };
     };
 
     const restoredPanes: Pane[] = [];
     for (const wsPane of wsPanes) {
-      const built = await Promise.all(wsPane.tabs.map((t) => buildTab(t.path)));
+      const built = await Promise.all(wsPane.tabs.map((t) => buildTab(t)));
       const tabs = built.filter((t): t is Tab => t !== null);
 
       if (tabs.length > 0) {

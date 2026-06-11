@@ -119,6 +119,13 @@ pub struct WorkspaceTab {
     pub path: String,
     #[serde(rename = "type")]
     pub tab_type: String,
+    // `#[serde(default)]` keeps workspace.enc files written before these fields
+    // existed loadable — they decode as an unpinned tab with no saved cursor.
+    #[serde(default)]
+    pub pinned: bool,
+    // ProseMirror document position of the caret, restored on next launch.
+    #[serde(default)]
+    pub cursor_pos: Option<u32>,
 }
 
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]

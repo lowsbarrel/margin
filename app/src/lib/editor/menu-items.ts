@@ -189,6 +189,26 @@ const items: SlashMenuItem[] = [
       editor.chain().focus().deleteRange(range).setMathInline().run();
     },
   },
+  {
+    title: "Mermaid Diagram",
+    description: "Flowchart or diagram from text.",
+    icon: "🧜",
+    searchTerms: ["mermaid", "diagram", "flowchart", "graph", "sequence", "chart"],
+    command: ({ editor, range }) => {
+      editor.chain().focus().deleteRange(range).setMermaid().run();
+    },
+  },
+  {
+    title: "Embed Note",
+    description: "Transclude another note inline.",
+    icon: "🔗",
+    searchTerms: ["embed", "transclude", "include", "note", "reference"],
+    command: ({ editor, range }) => {
+      // Insert the `![[` opener; typing the title then `]]` converts it to an
+      // embed via NoteEmbed's input rule.
+      editor.chain().focus().deleteRange(range).insertContent("![[").run();
+    },
+  },
 ];
 
 export function getSlashMenuItems({
