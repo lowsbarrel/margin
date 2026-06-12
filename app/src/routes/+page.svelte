@@ -63,6 +63,7 @@
   let unlistenCloseRequested: (() => void) | null = null;
   let vaultRefreshTimer: ReturnType<typeof setTimeout> | null = null;
   let destroyed = false;
+  let closing = false;
   let updateInterval: ReturnType<typeof setInterval> | null = null;
   let panesContainerEl = $state<HTMLElement | null>(null);
   let dividerResizing = $state(false);
@@ -308,10 +309,27 @@
     // window closes so no in-flight edit is lost on quit.
     getCurrentWindow()
       .onCloseRequested(async (event) => {
+        // Re-entrancy guard: ignore further close clicks while we're already
+        // tearing down (otherwise each click stacks another preventDefault).
+        if (closing) return;
+        closing = true;
         event.preventDefault();
-        window.dispatchEvent(new Event("margin:flush"));
-        await flushWriteQueue();
-        await getCurrentWindow().destroy();
+        try {
+          window.dispatchEvent(new Event("margin:flush"));
+          // Stop autosync now so it can't keep enqueuing writes while we drain;
+          // otherwise flushWriteQueue()'s loop may never see settled.size hit 0.
+          stopAutoSync();
+          // Bound the flush: a stuck/looping write queue (locked file, stalled
+          // IPC) must never be able to wedge the window permanently open.
+          await Promise.race([
+            flushWriteQueue(),
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+        } finally {
+          // Always close, even if the flush threw or timed out — losing a few
+          // ms of unsaved edits beats an app you can't quit.
+          await getCurrentWindow().destroy();
+        }
       })
       .then((unlisten) => {
         if (destroyed) unlisten();
