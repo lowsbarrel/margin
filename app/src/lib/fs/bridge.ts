@@ -84,6 +84,22 @@ export async function writeFileBytesRaw(
   return rawWriteFileBytes(path, content);
 }
 
+/**
+ * Save raw bytes to an arbitrary path *outside* the vault containment check.
+ * For explicit "save as / export" flows where the destination was chosen by
+ * the user through the native save dialog (e.g. exporting a note to PDF onto
+ * the Desktop). Mirrors `rawWriteFileBytes` but targets the unguarded
+ * `save_file_bytes` command — see the matching Rust command, kept in sync.
+ */
+export async function saveFileBytes(
+  path: string,
+  content: Uint8Array,
+): Promise<void> {
+  return invoke<void>("save_file_bytes", content, {
+    headers: { [X_PATH_HEADER]: path },
+  });
+}
+
 export async function listDirectory(path: string): Promise<FsEntry[]> {
   const r = await commands.listDirectory(path);
   if (r.status === "error") throw r.error;
@@ -150,6 +166,17 @@ export async function fileExists(path: string): Promise<boolean> {
 export async function copyFile(from: string, to: string): Promise<void> {
   const r = await commands.copyFile(from, to);
   if (r.status === "error") throw r.error;
+}
+
+/**
+ * Copy a file from an arbitrary source *outside* the vault into a
+ * vault-contained destination — for drag-drop / import of an external file as
+ * an attachment. Unlike `copyFile`, the source is NOT containment-checked (the
+ * user explicitly chose it); only the destination must resolve inside the
+ * vault. Mirrors the `import_external_file` Rust command — keep the two in sync.
+ */
+export async function importExternalFile(from: string, to: string): Promise<void> {
+  return invoke<void>("import_external_file", { from, to });
 }
 
 export async function copyDirectory(from: string, to: string): Promise<void> {

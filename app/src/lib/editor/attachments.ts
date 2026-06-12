@@ -3,7 +3,7 @@ import {
   writeFileBytes,
   fileExists,
   createDirectory,
-  copyFile,
+  importExternalFile,
 } from "$lib/fs/bridge";
 import { isImageFile } from "$lib/utils/mime";
 import { buildLocalfileUrl } from "$lib/editor/image-url";
@@ -61,7 +61,7 @@ export async function insertDroppedFile(
   const fileName = makeSafeFileName(name);
   const destPath = `${attDir}/${fileName}`;
 
-  await copyFile(srcPath, destPath);
+  await importExternalFile(srcPath, destPath);
 
   const relPath = `${attachmentFolder}/${fileName}`;
   insertIntoEditor(editor, relPath, name, isImageFile(name), vaultPath);
