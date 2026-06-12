@@ -1,7 +1,7 @@
 import type { Editor } from "@tiptap/core";
 import mermaid from "mermaid";
 import { common, createLowlight } from "lowlight";
-import { readFileBytes, writeFileBytes } from "$lib/fs/bridge";
+import { readFileBytes, saveFileBytes } from "$lib/fs/bridge";
 import { toast } from "$lib/stores/toast.svelte";
 import { mimeForPath } from "$lib/utils/mime";
 import { save } from "@tauri-apps/plugin-dialog";
@@ -300,7 +300,7 @@ export async function exportPdf(
     }
 
     const arrayBuf = pdf.output("arraybuffer");
-    await writeFileBytes(savePath, new Uint8Array(arrayBuf));
+    await saveFileBytes(savePath, new Uint8Array(arrayBuf));
     toast.success(successMessage);
   } finally {
     document.body.removeChild(container);

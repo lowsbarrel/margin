@@ -248,6 +248,32 @@ pub fn write_file_bytes(
     atomic_write(&p, &data)
 }
 
+/// Write raw bytes to an arbitrary path **without** the vault containment check.
+/// Used only for explicit "save as / export" flows where the destination was
+/// chosen by the user through the native save dialog (e.g. exporting a note to
+/// PDF onto the Desktop). Mirrors `export_vault_zip`, which likewise writes to a
+/// user-picked path outside the vault. Raw-byte command (Request body), so it is
+/// registered in `run()` but excluded from the specta bindings.
+#[tauri::command]
+pub fn save_file_bytes(request: Request) -> Result<(), String> {
+    let path = request
+        .headers()
+        .get("x-path")
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| "Missing x-path header".to_string())?;
+    let data = match request.body() {
+        InvokeBody::Raw(bytes) => bytes.clone(),
+        InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
+            .map_err(|e| format!("Invalid body: {e}"))?,
+    };
+    let dest = Path::new(path);
+    if let Some(parent) = dest.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
+    }
+    atomic_write(dest, &data)
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
@@ -348,6 +374,28 @@ pub fn copy_file(
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
     fs::copy(&from_path, &to_path).map_err(|e| format!("Failed to copy file: {e}"))?;
+    Ok(())
+}
+
+/// Copy a file from an arbitrary source **outside** the vault into a
+/// vault-contained destination. Used by drag-drop / paste import flows where
+/// the user explicitly brings an external file (e.g. an image on the Desktop)
+/// into a note as an attachment. Only the *destination* is containment-checked;
+/// the source is user-chosen and may live anywhere — mirroring `save_file_bytes`,
+/// which writes to a user-picked path outside the vault. Plain command (not in
+/// the specta bindings); invoked directly from `bridge.ts`, kept in sync.
+#[tauri::command]
+pub fn import_external_file(
+    from: &str,
+    to: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let to_path = ensure_in_vault(to, &vault_path_state)?;
+    if let Some(parent) = to_path.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
+    }
+    fs::copy(Path::new(from), &to_path).map_err(|e| format!("Failed to import file: {e}"))?;
     Ok(())
 }
 
