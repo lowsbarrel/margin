@@ -328,7 +328,14 @@
         } finally {
           // Always close, even if the flush threw or timed out — losing a few
           // ms of unsaved edits beats an app you can't quit.
-          await getCurrentWindow().destroy();
+          try {
+            await getCurrentWindow().destroy();
+          } catch (err) {
+            // destroy() can reject (e.g. missing capability). Don't stay wedged:
+            // clear the guard so another X click can retry instead of no-op'ing.
+            console.error("[close] window.destroy() failed:", err);
+            closing = false;
+          }
         }
       })
       .then((unlisten) => {
