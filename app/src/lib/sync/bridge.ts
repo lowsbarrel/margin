@@ -129,13 +129,19 @@ export async function syncUploadFiles(
  * UNIX epoch), so callers no longer need a follow-up `setMtime` per file.
  * `mtimes[i]` corresponds to `paths[i]`.
  */
+/**
+ * Returns the subset of `paths` that were skipped because their blob is missing
+ * on S3 (HTTP 404 — a dangling manifest entry whose upload never landed). These
+ * are not fatal; the caller should leave them out of the local base so they're
+ * retried on the next sync.
+ */
 export async function syncDownloadFiles(
   vaultPath: string,
   s3Prefix: string,
   paths: string[],
   mtimes: number[],
   encryptionKey: number[],
-): Promise<void> {
+): Promise<string[]> {
   const r = await commands.syncDownloadFiles(
     vaultPath,
     s3Prefix,
@@ -144,6 +150,7 @@ export async function syncDownloadFiles(
     encryptionKey,
   );
   if (r.status === "error") throw r.error;
+  return r.data;
 }
 
 export async function syncUploadManifest(

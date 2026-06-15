@@ -215,6 +215,17 @@ pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Respo
         .await
         .map_err(|e| format!("Download failed: {e}"))?;
 
+    // rust-s3 returns Ok even for HTTP error statuses (e.g. 404), handing back
+    // the provider's XML error page as the body. Without this guard that error
+    // page gets passed to decrypt_blob and surfaces as a baffling
+    // "Decryption failed: aead::Error" instead of an honest "missing object".
+    // The numeric status is kept in the message so isMissingRemoteManifestError
+    // (which matches "404"/"Not Found") still recognises a missing manifest.
+    let status = response.status_code();
+    if !(200..300).contains(&status) {
+        return Err(format!("Download failed: HTTP {status} for {key}"));
+    }
+
     Ok(Response::new(response.to_vec()))
 }
 

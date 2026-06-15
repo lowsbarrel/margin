@@ -423,7 +423,7 @@ pub async fn sync_download_files(
     mtimes: Vec<u32>,
     encryption_key: Vec<u8>,
     state: State<'_, S3State>,
-) -> Result<(), String> {
+) -> Result<Vec<String>, String> {
     if mtimes.len() != paths.len() {
         return Err(format!(
             "paths/mtimes length mismatch: {} vs {}",
@@ -449,7 +449,11 @@ pub async fn sync_download_files(
     let mut iter = resolved.into_iter();
     let mut tasks = tokio::task::JoinSet::new();
 
-    let spawn_download = |tasks: &mut tokio::task::JoinSet<Result<(), String>>,
+    // Tasks return `Ok(None)` on success, `Ok(Some(rel))` when the blob is
+    // missing on S3 (404) — a dangling manifest entry whose upload never landed.
+    // Such files are skipped (not fatal) and reported back so the caller can
+    // leave them out of the local base, prompting a retry on the next sync.
+    let spawn_download = |tasks: &mut tokio::task::JoinSet<Result<Option<String>, String>>,
                           rel: String,
                           dest: PathBuf,
                           mtime: u64| {
@@ -465,6 +469,19 @@ pub async fn sync_download_files(
                 .get_object(&key)
                 .await
                 .map_err(|e| format!("Download failed for {rel}: {e}"))?;
+            // rust-s3 returns Ok for HTTP error statuses (e.g. a 404 when the
+            // manifest references a blob whose upload never landed). Without an
+            // explicit status check the error-page body would be fed to
+            // decrypt_blob and masquerade as "Decryption failed: aead::Error".
+            let status = response.status_code();
+            if status == 404 {
+                // Dangling manifest entry: skip this file rather than wedge the
+                // entire sync. Reported to the caller for a retry next time.
+                return Ok(Some(rel));
+            }
+            if !(200..300).contains(&status) {
+                return Err(format!("Download failed for {rel}: HTTP {status}"));
+            }
             let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key)?;
 
             if let Some(parent) = dest.parent() {
@@ -480,7 +497,7 @@ pub async fn sync_download_files(
             // changed on the next sync.
             filetime::set_file_mtime(&dest, filetime::FileTime::from_unix_time(mtime as i64, 0))
                 .map_err(|e| format!("Failed to set mtime for {}: {e}", dest.display()))?;
-            Ok(())
+            Ok(None)
         });
     };
 
@@ -488,14 +505,17 @@ pub async fn sync_download_files(
         spawn_download(&mut tasks, rel, dest, mtime);
     }
 
+    let mut skipped: Vec<String> = Vec::new();
     while let Some(result) = tasks.join_next().await {
-        result.map_err(|e| format!("Task panicked: {e}"))??;
+        if let Some(rel) = result.map_err(|e| format!("Task panicked: {e}"))?? {
+            skipped.push(rel);
+        }
         if let Some((rel, dest, mtime)) = iter.next() {
             spawn_download(&mut tasks, rel, dest, mtime);
         }
     }
 
-    Ok(())
+    Ok(skipped)
 }
 
 /// Encrypt and upload the manifest to S3.

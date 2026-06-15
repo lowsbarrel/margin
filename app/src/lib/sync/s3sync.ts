@@ -288,6 +288,11 @@ async function doSyncToS3(
     // 5. Execute each action
     const conflicts: string[] = [];
     const mergedFiles = new Map<string, ManifestEntry>();
+    // Remote-manifest entries whose blob is missing on S3 (HTTP 404). They are
+    // kept OUT of `mergedFiles` (so the saved local base excludes them and they
+    // re-download next sync) but re-injected into the manifest uploaded to S3
+    // (so other devices that still hold the file don't see it as deleted).
+    const missingRemoteBlobs = new Map<string, ManifestEntry>();
     let actionsDone = 0;
     const actionsTotal = actions.length;
     editor.setSyncProgress(
@@ -362,22 +367,35 @@ async function doSyncToS3(
     //    setMtime follow-up is needed here.
     if (downloadPaths.length > 0) {
       checkAbort(signal);
-      await syncDownloadFiles(
+      const skipped = await syncDownloadFiles(
         vaultPath,
         s3Prefix,
         downloadPaths,
         downloadMtimes,
         encryptionKey,
       );
+      const skippedSet = new Set(skipped);
       for (let i = 0; i < downloadPaths.length; i++) {
         const path = downloadPaths[i];
         const remoteEntry = remoteMap.get(path)!;
+        if (skippedSet.has(path)) {
+          // Blob missing on S3 — don't record it locally (so it retries next
+          // sync) but preserve the remote entry so peers keep their copy.
+          missingRemoteBlobs.set(path, remoteEntry);
+          continue;
+        }
         mergedFiles.set(path, {
           path: remoteEntry.path,
           hash: remoteEntry.hash,
           modified: remoteEntry.modified,
         });
         tombstones.delete(path);
+      }
+      if (skipped.length > 0) {
+        console.warn(
+          "[s3sync] Skipped files whose blob is missing on S3:",
+          skipped,
+        );
       }
       reportProgress(downloadPaths.length);
     }
@@ -431,7 +449,7 @@ async function doSyncToS3(
           encryptionKey,
         );
 
-        await syncDownloadFiles(
+        const skipped = await syncDownloadFiles(
           vaultPath,
           s3Prefix,
           [action.path],
@@ -439,11 +457,22 @@ async function doSyncToS3(
           encryptionKey,
         );
 
-        mergedFiles.set(action.path, {
-          path: remoteEntry.path,
-          hash: remoteEntry.hash,
-          modified: remoteEntry.modified,
-        });
+        if (skipped.includes(action.path)) {
+          // Remote blob missing — can't take the remote side. Keep the local
+          // file as-is (its entry stays in mergedFiles) and preserve the remote
+          // manifest entry so it isn't dropped for peers.
+          missingRemoteBlobs.set(action.path, remoteEntry);
+          console.warn(
+            "[s3sync] Conflict: remote blob missing, kept local:",
+            action.path,
+          );
+        } else {
+          mergedFiles.set(action.path, {
+            path: remoteEntry.path,
+            hash: remoteEntry.hash,
+            modified: remoteEntry.modified,
+          });
+        }
       } else {
         // Local wins (default) → save remote as conflict copy
         const s3Key = await pathToS3Key(action.path, encryptionKey);
@@ -488,14 +517,29 @@ async function doSyncToS3(
       Array.from(tombstones.values()),
       nowSeconds(),
     );
-    const mergedManifest: Manifest = {
+    // Local base: only files we actually hold on disk (+ tombstones). Excludes
+    // any blob that 404'd, so the next sync re-attempts its download instead of
+    // treating the absent file as a local deletion.
+    const newBaseManifest: Manifest = {
       version: 3,
       files: [...Array.from(mergedFiles.values()), ...prunedTombstones],
     };
-    await syncUploadManifest(s3Prefix, encryptionKey, mergedManifest);
+    // Remote manifest: same, plus the preserved entries for blobs missing on S3
+    // — so a peer that still holds the file doesn't see it as deleted-on-remote.
+    const uploadedManifest: Manifest =
+      missingRemoteBlobs.size > 0
+        ? {
+            version: 3,
+            files: [
+              ...newBaseManifest.files,
+              ...Array.from(missingRemoteBlobs.values()),
+            ],
+          }
+        : newBaseManifest;
+    await syncUploadManifest(s3Prefix, encryptionKey, uploadedManifest);
 
-    // 7. Persist merged manifest as local base for next sync — fully in Rust
-    await saveManifest(vaultPath, encryptionKey, mergedManifest);
+    // 7. Persist the local base for next sync — fully in Rust
+    await saveManifest(vaultPath, encryptionKey, newBaseManifest);
 
     // 8. Refresh file tree if anything changed on disk
     const hadFsChanges = actions.some(
