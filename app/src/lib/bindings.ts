@@ -205,7 +205,7 @@ export const commands = {
 	 *  `mtimes` are u32 unix seconds (specta cannot export u64); each is widened to
 	 *  u64 internally to match the manifest timestamps and `filetime`.
 	 */
-	syncDownloadFiles: (vaultPath: string, s3Prefix: string, paths: string[], mtimes: number[], encryptionKey: number[]) => typedError<null, string>(__TAURI_INVOKE("sync_download_files", { vaultPath, s3Prefix, paths, mtimes, encryptionKey })),
+	syncDownloadFiles: (vaultPath: string, s3Prefix: string, paths: string[], mtimes: number[], encryptionKey: number[]) => typedError<string[], string>(__TAURI_INVOKE("sync_download_files", { vaultPath, s3Prefix, paths, mtimes, encryptionKey })),
 	/**  Encrypt and upload the manifest to S3. */
 	syncUploadManifest: (s3Prefix: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("sync_upload_manifest", { s3Prefix, encryptionKey, manifest })),
 	/**  Delete files from S3 by their relative paths (computes HMAC keys internally). */
