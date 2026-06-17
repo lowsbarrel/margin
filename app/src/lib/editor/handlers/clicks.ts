@@ -1,5 +1,5 @@
 import type { Editor } from "@tiptap/core";
-import { isLocalfileUrl, stripLocalfilePrefix } from "$lib/editor/image-url";
+import { isLocalfileUrl, stripLocalfilePrefix, toOsPath } from "$lib/editor/image-url";
 import {
   openPath,
   openUrl,
@@ -16,7 +16,7 @@ export function resolveAbsPath(
 ): string | null {
   if (isLocalfileUrl(src)) {
     const tail = stripLocalfilePrefix(src) ?? "";
-    return decodeURIComponent(tail);
+    return toOsPath(decodeURIComponent(tail));
   }
   if (
     !src.startsWith("http://") &&
@@ -24,7 +24,7 @@ export function resolveAbsPath(
     !src.startsWith("data:") &&
     vaultPath
   ) {
-    return `${vaultPath}/${src}`;
+    return toOsPath(`${vaultPath}/${src}`);
   }
   return null;
 }
@@ -78,7 +78,7 @@ export function handleEditorClick(
       event.preventDefault();
       event.stopPropagation();
       event.stopImmediatePropagation();
-      const absPath = `${opts.vaultPath}/${src}`;
+      const absPath = toOsPath(`${opts.vaultPath}/${src}`);
       openPath(absPath).catch((err) =>
         toast.error(m.toast_cannot_open_file({ error: String(err) })),
       );
@@ -104,12 +104,12 @@ export function handleEditorClick(
     );
   } else if (isLocalfileUrl(href)) {
     const tail = stripLocalfilePrefix(href) ?? "";
-    const absPath = decodeURIComponent(tail);
+    const absPath = toOsPath(decodeURIComponent(tail));
     openPath(absPath).catch((err) =>
       toast.error(m.toast_cannot_open_file({ error: String(err) })),
     );
   } else if (opts.vaultPath) {
-    const absPath = `${opts.vaultPath}/${href}`;
+    const absPath = toOsPath(`${opts.vaultPath}/${href}`);
     openPath(absPath).catch((err) =>
       toast.error(m.toast_cannot_open_file({ error: String(err) })),
     );
@@ -171,7 +171,7 @@ export function buildEditorContextMenu(
     event.stopPropagation();
     const src = embed.getAttribute("data-src");
     if (src && opts.vaultPath) {
-      const absPath = `${opts.vaultPath}/${src}`;
+      const absPath = toOsPath(`${opts.vaultPath}/${src}`);
       const fileName = embed.getAttribute("data-filename") || "File";
       return {
         x: event.clientX,
