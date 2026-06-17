@@ -35,6 +35,20 @@ export function stripLocalfilePrefix(url: string): string | null {
   return null;
 }
 
+/**
+ * Normalize a vault-derived path into a real OS path for the opener plugin
+ * (openPath / revealItemInDir). A path stripped from a localfile URL on Windows
+ * looks like `/C:/Users/…` (a leading slash before the drive letter, with `/`
+ * separators), which the shell rejects with os error 123. Drop the leading
+ * slash and switch to backslashes so it becomes `C:\Users\…`. POSIX paths
+ * (no drive letter) are returned unchanged.
+ */
+export function toOsPath(path: string): string {
+  const m = path.match(/^\/?([A-Za-z]:[\\/].*)$/);
+  if (m) return m[1].replace(/\//g, "\\");
+  return path;
+}
+
 /** %20-encode the spaces in a path/URL so tiptap-markdown and the WebView can parse it. */
 export function encodeLocalfileSpaces(path: string): string {
   return path.replace(/ /g, "%20");
