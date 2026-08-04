@@ -212,6 +212,15 @@ pub fn set_vault_directory(
     if let Ok(mut vp) = vault_path_state.0.lock() {
         *vp = path.to_string();
     }
+    // Warm the full-text search index in the background so the first content
+    // search is a fast FTS lookup. Skips unchanged files, so this is cheap on
+    // subsequent opens. Best-effort: a failure here never blocks opening a vault.
+    let root = path.to_string();
+    std::thread::spawn(move || {
+        if let Err(e) = crate::index::rebuild(&root) {
+            eprintln!("Initial search index build failed: {e}");
+        }
+    });
     Ok(())
 }
 
@@ -245,7 +254,24 @@ pub fn write_file_bytes(
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
-    atomic_write(&p, &data)
+    atomic_write(&p, &data)?;
+    // Keep both derived indexes current without waiting on the watcher's 300ms
+    // debounce. The FTS upsert re-indexes only this file — a full `rebuild`
+    // would stat every note in the vault just to discover the one that changed.
+    crate::index::tree::invalidate();
+    crate::index::upsert_path(&vault_root(&vault_path_state), &p);
+    Ok(())
+}
+
+/// The current vault root, or an empty string when no vault is open. Only used
+/// to locate the per-vault index database; an empty root makes the index calls
+/// no-ops rather than errors.
+fn vault_root(vault_path_state: &tauri::State<'_, VaultPathState>) -> String {
+    vault_path_state
+        .0
+        .lock()
+        .map(|v| v.clone())
+        .unwrap_or_default()
 }
 
 /// Write raw bytes to an arbitrary path **without** the vault containment check.
@@ -320,10 +346,20 @@ pub fn delete_entry(
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
     let p = ensure_in_vault(path, &vault_path_state)?;
-    if p.is_dir() {
+    let was_dir = p.is_dir();
+    if was_dir {
         fs::remove_dir_all(&p).map_err(|e| format!("Failed to delete directory: {e}"))?;
     } else {
         fs::remove_file(&p).map_err(|e| format!("Failed to delete file: {e}"))?;
+    }
+    crate::index::tree::invalidate();
+    let root = vault_root(&vault_path_state);
+    if was_dir {
+        // A directory delete removes an unknown number of notes; a prefix sweep
+        // is still one statement, versus re-walking the vault to find them.
+        crate::index::remove_prefix(&root, &p);
+    } else {
+        crate::index::remove_path(&root, &p);
     }
     Ok(())
 }
@@ -341,7 +377,20 @@ pub fn rename_entry(
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
-    fs::rename(&from_path, &to_path).map_err(|e| format!("Failed to rename: {e}"))
+    let was_dir = from_path.is_dir();
+    fs::rename(&from_path, &to_path).map_err(|e| format!("Failed to rename: {e}"))?;
+    crate::index::tree::invalidate();
+    let root = vault_root(&vault_path_state);
+    if was_dir {
+        // Renaming a folder moves every note under it. Drop the old subtree
+        // here; the notes reappear under their new paths on the next rebuild,
+        // which the watcher's `vault-fs-changed` already triggers.
+        crate::index::remove_prefix(&root, &from_path);
+    } else {
+        crate::index::remove_path(&root, &from_path);
+        crate::index::upsert_path(&root, &to_path);
+    }
+    Ok(())
 }
 
 #[tauri::command]
@@ -351,7 +400,9 @@ pub fn create_directory(
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
     let p = ensure_in_vault(path, &vault_path_state)?;
-    fs::create_dir_all(&p).map_err(|e| format!("Failed to create directory: {e}"))
+    fs::create_dir_all(&p).map_err(|e| format!("Failed to create directory: {e}"))?;
+    crate::index::tree::invalidate();
+    Ok(())
 }
 
 #[tauri::command]
@@ -374,6 +425,8 @@ pub fn copy_file(
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
     fs::copy(&from_path, &to_path).map_err(|e| format!("Failed to copy file: {e}"))?;
+    crate::index::tree::invalidate();
+    crate::index::upsert_path(&vault_root(&vault_path_state), &to_path);
     Ok(())
 }
 
@@ -396,6 +449,8 @@ pub fn import_external_file(
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
     }
     fs::copy(Path::new(from), &to_path).map_err(|e| format!("Failed to import file: {e}"))?;
+    crate::index::tree::invalidate();
+    crate::index::upsert_path(&vault_root(&vault_path_state), &to_path);
     Ok(())
 }
 
@@ -408,7 +463,11 @@ pub fn copy_directory(
 ) -> Result<(), String> {
     let src = ensure_in_vault(from, &vault_path_state)?;
     let dst = ensure_in_vault(to, &vault_path_state)?;
-    copy_dir_recursive(&src, &dst)
+    copy_dir_recursive(&src, &dst)?;
+    // A directory copy adds an unknown number of notes; the watcher-driven
+    // rebuild picks them up, and it skips every file it has already indexed.
+    crate::index::tree::invalidate();
+    Ok(())
 }
 
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {

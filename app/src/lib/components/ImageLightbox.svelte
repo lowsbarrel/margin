@@ -1,81 +1,40 @@
 <script lang="ts">
-  interface Props {
-    src: string;
-    alt?: string;
-    onclose: () => void;
-  }
+	interface Props {
+		src: string;
+		alt?: string;
+		onclose: () => void;
+	}
 
-  let { src, alt = "Image", onclose }: Props = $props();
+	let { src, alt = 'Image', onclose }: Props = $props();
 
-  function handleKeydown(e: KeyboardEvent) {
-    if (e.key === "Escape") onclose();
-  }
+	function handleKeydown(e: KeyboardEvent) {
+		if (e.key === 'Escape') onclose();
+	}
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
+<!--
+	The scrim and its close button are deliberately theme-independent: a photo
+	lightbox is always a dark room, in light mode as much as dark. So these use
+	literal black/white with an alpha modifier rather than the semantic surface
+	tokens, which would flip with `data-theme` and wash the image out.
+-->
 <div
-  class="lightbox-overlay"
-  onclick={onclose}
-  onkeydown={handleKeydown}
+	class="fixed inset-0 z-[300] flex cursor-zoom-out items-center justify-center bg-black/85 backdrop-blur-[6px]"
+	onclick={onclose}
+	onkeydown={handleKeydown}
 >
-  <!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
-  <!-- svelte-ignore a11y_click_events_have_key_events -->
-  <img
-    {src}
-    {alt}
-    class="lightbox-img"
-    onclick={(e) => e.stopPropagation()}
-  />
-  <button
-    class="lightbox-close"
-    onclick={onclose}
-    aria-label="Close">&times;</button
-  >
+	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
+	<!-- svelte-ignore a11y_click_events_have_key_events -->
+	<img
+		{src}
+		{alt}
+		class="max-h-[90vh] max-w-[90vw] cursor-default rounded-sm object-contain shadow-[var(--shadow-lg)] select-none"
+		onclick={(e) => e.stopPropagation()}
+	/>
+	<button
+		class="absolute top-4 right-5 rounded-sm bg-transparent px-2.5 py-1 text-3xl/none text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
+		onclick={onclose}
+		aria-label="Close">&times;</button
+	>
 </div>
-
-<style>
-  .lightbox-overlay {
-    position: fixed;
-    inset: 0;
-    z-index: 300;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0, 0, 0, 0.85);
-    backdrop-filter: blur(6px);
-    -webkit-backdrop-filter: blur(6px);
-    cursor: zoom-out;
-  }
-
-  .lightbox-img {
-    max-width: 90vw;
-    max-height: 90vh;
-    object-fit: contain;
-    border-radius: 6px;
-    cursor: default;
-    user-select: none;
-    box-shadow: 0 8px 40px rgba(0, 0, 0, 0.5);
-  }
-
-  .lightbox-close {
-    position: absolute;
-    top: 16px;
-    right: 20px;
-    background: transparent;
-    border: none;
-    color: rgba(255, 255, 255, 0.7);
-    font-size: 2rem;
-    line-height: 1;
-    cursor: pointer;
-    padding: 4px 10px;
-    border-radius: 6px;
-    transition:
-      color 0.12s,
-      background 0.12s;
-  }
-
-  .lightbox-close:hover {
-    color: #fff;
-    background: rgba(255, 255, 255, 0.1);
-  }
-</style>

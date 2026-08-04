@@ -7,5 +7,5 @@
 // Only this clock helper remains and is consumed by s3sync.ts.
 
 export function nowSeconds(): number {
-  return Math.floor(Date.now() / 1000);
+	return Math.floor(Date.now() / 1000);
 }

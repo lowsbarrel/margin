@@ -1,3 +1,25 @@
 packages: []
+
 onlyBuiltDependencies:
   - esbuild
+# Pre-approve the build scripts of the packages that genuinely need them, so
+# pnpm 10+ doesn't abort the install with ERR_PNPM_IGNORED_BUILDS: `esbuild`
+# builds native bindings and `@tauri-apps/cli` downloads its platform binary.
+allowBuilds:
+  esbuild: true
+  '@tauri-apps/cli': true
+
+# --- Supply-chain hardening (https://pnpm.io/supply-chain-security) ---
+# New releases must be at least one week old before pnpm resolves them,
+# giving malware scanners and the npm registry time to catch compromised versions.
+minimumReleaseAge: 10080
+# The Tauri toolchain ships often with exact-pinned platform binaries, so the age
+# gate would block every fresh CLI resolution outright (exact pins can't back off
+# to an older release). Trusting these is equivalent to trusting the shell the
+# app runs in.
+minimumReleaseAgeExclude:
+  - '@tauri-apps/*'
+  - '@crabnebula/tauri-plugin-drag'
+
+# Transitive dependencies may only come from the npm registry (no git/tarball URLs).
+blockExoticSubdeps: true

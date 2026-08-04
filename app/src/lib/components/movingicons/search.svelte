@@ -1,0 +1,83 @@
+<script lang="ts">
+	interface IconProps {
+		color?: string;
+		size?: number;
+		strokeWidth?: number;
+		animate?: boolean;
+		class?: string;
+	}
+
+	let {
+		color = 'currentColor',
+		size = 24,
+		strokeWidth = 2,
+		animate: animateProp = false,
+		class: className = ''
+	}: IconProps = $props();
+
+	let hoverAnimate = $state(false);
+	let resetTimer: ReturnType<typeof setTimeout> | undefined;
+	const animate = $derived(animateProp || hoverAnimate);
+
+	function handleMouseEnter() {
+		if (animate) return;
+		hoverAnimate = true;
+		resetTimer = setTimeout(() => {
+			hoverAnimate = false;
+		}, 1000);
+	}
+
+	$effect(() => () => clearTimeout(resetTimer));
+</script>
+
+<div class={className} onmouseenter={handleMouseEnter} aria-label="search" role="img">
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke={color}
+		stroke-width={strokeWidth}
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		class:animate
+	>
+		<circle cx="11" cy="11" r="8" />
+		<path d="m21 21-4.3-4.3" />
+	</svg>
+</div>
+
+<style>
+	div {
+		/* Local change from the upstream registry: inline-flex instead of
+		   inline-block, so the wrapper adds no line-height gap when it sits
+		   inside margin's flex button rows. */
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	svg {
+		transition:
+			transform 1s cubic-bezier(0.175, 0.885, 0.32, 1.275),
+			transform 1s ease-in-out;
+	}
+
+	.animate {
+		animation: search-bounce 1s ease-in-out;
+	}
+
+	@keyframes search-bounce {
+		0%,
+		100% {
+			transform: translateX(0) translateY(0);
+		}
+		25% {
+			transform: translateX(0) translateY(-4px);
+		}
+		50% {
+			transform: translateX(-3px) translateY(0);
+		}
+	}
+</style>

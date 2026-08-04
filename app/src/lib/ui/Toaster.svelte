@@ -1,130 +1,74 @@
 <script lang="ts">
-  import { toast } from "$lib/stores/toast.svelte";
-  import { Check, AlertCircle, Info, X } from "lucide-svelte";
+	import { toast } from '$lib/stores/toast.svelte';
+	import { Check, AlertCircle, Info, X } from '@lucide/svelte';
+	import { cn } from '$lib/utils';
 </script>
 
 {#if toast.items.length > 0}
-  <div class="toast-container">
-    {#each toast.items as item (item.id)}
-      <div class="toast {item.type}" role="alert">
-        <span class="toast-icon">
-          {#if item.type === "success"}
-            <Check size={14} />
-          {:else if item.type === "error"}
-            <AlertCircle size={14} />
-          {:else}
-            <Info size={14} />
-          {/if}
-        </span>
-        <span class="toast-msg">{item.message}</span>
-        {#if item.action}
-          <button class="toast-action" onclick={() => { item.action!.onClick(); toast.dismiss(item.id); }}>
-            {item.action.label}
-          </button>
-        {/if}
-        <button class="toast-close" onclick={() => toast.dismiss(item.id)}>
-          <X size={12} />
-        </button>
-      </div>
-    {/each}
-  </div>
+	<div class="pointer-events-none fixed right-4 bottom-11 z-200 flex flex-col gap-2">
+		{#each toast.items as item (item.id)}
+			<!-- Toasts float above everything, so they get a real shadow — but still
+			     on a solid surface with a hairline border rather than a blurred pane. -->
+			<div
+				class="toast-in pointer-events-auto flex max-w-[380px] items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-[var(--shadow-lg)]"
+				role="alert"
+			>
+				<span
+					class={cn(
+						'flex shrink-0 items-center',
+						item.type === 'success' && 'text-[var(--color-text-positive)]',
+						item.type === 'error' && 'text-[var(--color-text-negative)]',
+						item.type !== 'success' && item.type !== 'error' && 'text-subtle-foreground'
+					)}
+				>
+					{#if item.type === 'success'}
+						<Check size={14} />
+					{:else if item.type === 'error'}
+						<AlertCircle size={14} />
+					{:else}
+						<Info size={14} />
+					{/if}
+				</span>
+				<span class="min-w-0 flex-1 font-sans text-sm tracking-normal">{item.message}</span>
+				{#if item.action}
+					<!-- `!` modifiers: app.css styles the bare `button` element outside any
+					     cascade layer, so it outranks plain padding/font-size/radius utilities. -->
+					<button
+						class="shrink-0 cursor-pointer rounded-sm bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-opacity duration-120 ease-out hover:opacity-[0.86]"
+						onclick={() => {
+							item.action!.onClick();
+							toast.dismiss(item.id);
+						}}
+					>
+						{item.action.label}
+					</button>
+				{/if}
+				<button
+					class="flex size-[22px] shrink-0 items-center justify-center rounded-xs bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
+					onclick={() => toast.dismiss(item.id)}
+				>
+					<X size={12} />
+				</button>
+			</div>
+		{/each}
+	</div>
 {/if}
 
 <style>
-  .toast-container {
-    position: fixed;
-    bottom: 40px;
-    right: 16px;
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-sm);
-    z-index: 200;
-    pointer-events: none;
-  }
+	/* The one rule with no utility equivalent: `tw-animate-css` is not installed,
+	   so there is no `animate-in` enter keyframe to lean on. */
+	.toast-in {
+		animation: toast-in var(--duration-base) var(--ease-out);
+	}
 
-  .toast {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    padding: 10px 14px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--glass-shadow);
-    font-size: 0.8rem;
-    color: var(--text-primary);
-    pointer-events: auto;
-    animation: toastIn 0.25s cubic-bezier(0.16, 1, 0.3, 1);
-    max-width: 360px;
-  }
-
-  .toast.success .toast-icon {
-    color: var(--success);
-  }
-  .toast.error .toast-icon {
-    color: var(--danger);
-  }
-  .toast.info .toast-icon {
-    color: var(--text-muted);
-  }
-
-  .toast-icon {
-    display: flex;
-    align-items: center;
-    flex-shrink: 0;
-  }
-
-  .toast-msg {
-    flex: 1;
-    min-width: 0;
-    font-family: var(--font-sans);
-    font-size: 0.78rem;
-  }
-
-  .toast-action {
-    padding: 2px 10px;
-    font-size: 0.74rem;
-    font-family: var(--font-sans);
-    font-weight: 500;
-    border-radius: var(--radius-xs);
-    background: var(--text-primary);
-    color: var(--bg-primary);
-    flex-shrink: 0;
-    cursor: pointer;
-  }
-
-  .toast-action:hover {
-    filter: brightness(1.1);
-  }
-
-  .toast-close {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    width: 20px;
-    height: 20px;
-    padding: 0;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-xs);
-    flex-shrink: 0;
-  }
-
-  .toast-close:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  @keyframes toastIn {
-    from {
-      opacity: 0;
-      transform: translateY(8px) scale(0.96);
-    }
-    to {
-      opacity: 1;
-      transform: translateY(0) scale(1);
-    }
-  }
+	@keyframes toast-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px) scale(0.98);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
+	}
 </style>

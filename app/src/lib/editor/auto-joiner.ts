@@ -1,97 +1,93 @@
 // Auto-joins adjacent same-type nodes (e.g. split lists) after transactions.
 
-import { Extension } from "@tiptap/core";
-import { Plugin, PluginKey } from "@tiptap/pm/state";
-import { canJoin } from "@tiptap/pm/transform";
-import type { NodeType } from "@tiptap/pm/model";
-import type { Transaction } from "@tiptap/pm/state";
+import { Extension } from '@tiptap/core';
+import { Plugin, PluginKey } from '@tiptap/pm/state';
+import { canJoin } from '@tiptap/pm/transform';
+import type { NodeType } from '@tiptap/pm/model';
+import type { Transaction } from '@tiptap/pm/state';
 
 /** Collect changed ranges and join adjacent same-type nodes within them. */
 function autoJoin(
-  transactions: readonly Transaction[],
-  newTr: Transaction,
-  nodeTypes: NodeType[],
+	transactions: readonly Transaction[],
+	newTr: Transaction,
+	nodeTypes: NodeType[]
 ): boolean {
-  let ranges: number[] = [];
-  for (const tr of transactions) {
-    for (let i = 0; i < tr.mapping.maps.length; i++) {
-      const map = tr.mapping.maps[i];
-      if (!map) continue;
-      for (let j = 0; j < ranges.length; j++) ranges[j] = map.map(ranges[j]!);
-      map.forEach((_s, _e, from, to) => ranges.push(from, to));
-    }
-  }
+	const ranges: number[] = [];
+	for (const tr of transactions) {
+		for (let i = 0; i < tr.mapping.maps.length; i++) {
+			const map = tr.mapping.maps[i];
+			if (!map) continue;
+			for (let j = 0; j < ranges.length; j++) ranges[j] = map.map(ranges[j]!);
+			map.forEach((_s, _e, from, to) => ranges.push(from, to));
+		}
+	}
 
-  const joinable: number[] = [];
-  for (let i = 0; i < ranges.length; i += 2) {
-    const from = ranges[i]!;
-    const to = ranges[i + 1]!;
-    const $from = newTr.doc.resolve(from);
-    const depth = $from.sharedDepth(to);
-    const parent = $from.node(depth);
-    for (
-      let index = $from.indexAfter(depth), pos = $from.after(depth + 1);
-      pos <= to;
-      ++index
-    ) {
-      const after = parent.maybeChild(index);
-      if (!after) break;
-      if (index && joinable.indexOf(pos) === -1) {
-        const before = parent.child(index - 1);
-        if (before.type === after.type && nodeTypes.includes(before.type)) {
-          joinable.push(pos);
-        }
-      }
-      pos += after.nodeSize;
-    }
-  }
+	const joinable: number[] = [];
+	for (let i = 0; i < ranges.length; i += 2) {
+		const from = ranges[i]!;
+		const to = ranges[i + 1]!;
+		const $from = newTr.doc.resolve(from);
+		const depth = $from.sharedDepth(to);
+		const parent = $from.node(depth);
+		for (let index = $from.indexAfter(depth), pos = $from.after(depth + 1); pos <= to; ++index) {
+			const after = parent.maybeChild(index);
+			if (!after) break;
+			if (index && joinable.indexOf(pos) === -1) {
+				const before = parent.child(index - 1);
+				if (before.type === after.type && nodeTypes.includes(before.type)) {
+					joinable.push(pos);
+				}
+			}
+			pos += after.nodeSize;
+		}
+	}
 
-  let joined = false;
-  joinable.sort((a, b) => a - b);
-  for (let i = joinable.length - 1; i >= 0; i--) {
-    if (canJoin(newTr.doc, joinable[i]!)) {
-      newTr.join(joinable[i]!);
-      joined = true;
-    }
-  }
+	let joined = false;
+	joinable.sort((a, b) => a - b);
+	for (let i = joinable.length - 1; i >= 0; i--) {
+		if (canJoin(newTr.doc, joinable[i]!)) {
+			newTr.join(joinable[i]!);
+			joined = true;
+		}
+	}
 
-  return joined;
+	return joined;
 }
 
 export interface AutoJoinerOptions {
-  elementsToJoin: string[];
+	elementsToJoin: string[];
 }
 
 export const AutoJoiner = Extension.create<AutoJoinerOptions>({
-  name: "autoJoiner",
+	name: 'autoJoiner',
 
-  addOptions() {
-    return {
-      elementsToJoin: [],
-    };
-  },
+	addOptions() {
+		return {
+			elementsToJoin: []
+		};
+	},
 
-  addProseMirrorPlugins() {
-    const joinableNodes: NodeType[] = [
-      this.editor.schema.nodes.bulletList,
-      this.editor.schema.nodes.orderedList,
-    ];
+	addProseMirrorPlugins() {
+		const joinableNodes: NodeType[] = [
+			this.editor.schema.nodes.bulletList,
+			this.editor.schema.nodes.orderedList
+		];
 
-    for (const element of this.options.elementsToJoin) {
-      const nodeType = this.editor.schema.nodes[element];
-      if (nodeType) joinableNodes.push(nodeType);
-    }
+		for (const element of this.options.elementsToJoin) {
+			const nodeType = this.editor.schema.nodes[element];
+			if (nodeType) joinableNodes.push(nodeType);
+		}
 
-    return [
-      new Plugin({
-        key: new PluginKey(this.name),
-        appendTransaction(transactions, _, newState) {
-          const newTr = newState.tr;
-          if (autoJoin(transactions, newTr, joinableNodes)) {
-            return newTr;
-          }
-        },
-      }),
-    ];
-  },
+		return [
+			new Plugin({
+				key: new PluginKey(this.name),
+				appendTransaction(transactions, _, newState) {
+					const newTr = newState.tr;
+					if (autoJoin(transactions, newTr, joinableNodes)) {
+						return newTr;
+					}
+				}
+			})
+		];
+	}
 });

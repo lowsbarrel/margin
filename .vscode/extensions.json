@@ -1,7 +1,18 @@
 {
-  "recommendations": [
-    "svelte.svelte-vscode",
-    "tauri-apps.tauri-vscode",
-    "rust-lang.rust-analyzer"
-  ]
+	"recommendations": [
+		// Svelte language support (syntax, intellisense, TS integration)
+		"svelte.svelte-vscode",
+		// The Rust half
+		"rust-lang.rust-analyzer",
+		"tauri-apps.tauri-vscode",
+		// Formatting and linting, wired to format-on-save in settings.json
+		"esbenp.prettier-vscode",
+		"dbaeumer.vscode-eslint",
+		// Validates .github/workflows/*.yml (needs GitHub sign-in to resolve actions)
+		"github.vscode-github-actions",
+		// Schema validation for ci.yml, dependabot.yml, pnpm-workspace.yaml
+		"redhat.vscode-yaml",
+		// Claude Code
+		"anthropic.claude-code"
+	]
 }
