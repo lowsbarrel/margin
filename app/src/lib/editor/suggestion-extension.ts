@@ -1,6 +1,6 @@
-import { Extension, type Editor, type Range } from "@tiptap/core";
-import { PluginKey, type EditorState } from "@tiptap/pm/state";
-import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
+import { Extension, type Editor, type Range } from '@tiptap/core';
+import { PluginKey, type EditorState } from '@tiptap/pm/state';
+import Suggestion, { type SuggestionOptions } from '@tiptap/suggestion';
 
 /**
  * True when the suggestion range is not inside a code block. Used by every
@@ -8,28 +8,28 @@ import Suggestion, { type SuggestionOptions } from "@tiptap/suggestion";
  * stay inert while typing code.
  */
 export function notInCodeBlock(state: EditorState, range: Range): boolean {
-  const $from = state.doc.resolve(range.from);
-  return $from.parent.type.name !== "codeBlock";
+	const $from = state.doc.resolve(range.from);
+	return $from.parent.type.name !== 'codeBlock';
 }
 
 /**
  * Arguments passed to a suggestion `command` callback once an item is picked.
  */
 export interface SuggestionCommandProps<TItem> {
-  editor: Editor;
-  range: Range;
-  props: TItem;
+	editor: Editor;
+	range: Range;
+	props: TItem;
 }
 
 export interface CreateSuggestionExtensionOptions<TItem> {
-  /** Extension name (e.g. "slash-command"). */
-  name: string;
-  /** Trigger character (e.g. "/", "@", ":"). */
-  char: string;
-  /** Stable plugin key shared with the matching renderer. */
-  pluginKey: PluginKey;
-  /** Runs when an item is selected. */
-  command: (props: SuggestionCommandProps<TItem>) => void;
+	/** Extension name (e.g. "slash-command"). */
+	name: string;
+	/** Trigger character (e.g. "/", "@", ":"). */
+	char: string;
+	/** Stable plugin key shared with the matching renderer. */
+	pluginKey: PluginKey;
+	/** Runs when an item is selected. */
+	command: (props: SuggestionCommandProps<TItem>) => void;
 }
 
 /**
@@ -39,32 +39,32 @@ export interface CreateSuggestionExtensionOptions<TItem> {
  * and `render` later via `.configure({ suggestion: { … } })`.
  */
 export function createSuggestionExtension<TItem>(
-  options: CreateSuggestionExtensionOptions<TItem>,
+	options: CreateSuggestionExtensionOptions<TItem>
 ): Extension {
-  const { name, char, pluginKey, command } = options;
+	const { name, char, pluginKey, command } = options;
 
-  return Extension.create({
-    name,
+	return Extension.create({
+		name,
 
-    addOptions() {
-      return {
-        suggestion: {
-          char,
-          command,
-          allow: ({ state, range }: { state: EditorState; range: Range }) =>
-            notInCodeBlock(state, range),
-        } as Partial<SuggestionOptions<TItem, TItem>>,
-      };
-    },
+		addOptions() {
+			return {
+				suggestion: {
+					char,
+					command,
+					allow: ({ state, range }: { state: EditorState; range: Range }) =>
+						notInCodeBlock(state, range)
+				} as Partial<SuggestionOptions<TItem, TItem>>
+			};
+		},
 
-    addProseMirrorPlugins() {
-      return [
-        Suggestion({
-          pluginKey,
-          ...this.options.suggestion,
-          editor: this.editor,
-        }),
-      ];
-    },
-  });
+		addProseMirrorPlugins() {
+			return [
+				Suggestion({
+					pluginKey,
+					...this.options.suggestion,
+					editor: this.editor
+				})
+			];
+		}
+	});
 }

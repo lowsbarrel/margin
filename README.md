@@ -1,103 +1,131 @@
-<p align="center">
-  <img src="media/logo.png" alt="Margin logo" width="128" />
-</p>
+<div align="center">
+
+<img src="media/logo.png" alt="Margin logo" width="128" />
 
 # Margin
 
-First of all, this name is banging. Like WOAH, marketing team (it's just me) deserves a raise.
+**A local-first Markdown note app. Plain `.md` files on your disk, end-to-end encrypted sync to any S3 bucket.**
 
-Second of all, it's a note app. The most basic form of computer program known to man. Right up there with calculators and todo lists. And yet here we are, acting like it's revolutionary.
+Notes stay as ordinary Markdown in a folder you choose. Everything that leaves the machine is encrypted in Rust first, under a key derived from a 12-word passphrase that no server ever sees. No account, no email, no telemetry.
 
-Imagine Obsidian but open source, with fewer features, and wrapped in a fancy Tauri wrapper so I can say **it's Rust based** at parties. Nobody at parties cares. I still say it.
+[![CI](https://github.com/lowsbarrel/margin/actions/workflows/ci.yml/badge.svg)](https://github.com/lowsbarrel/margin/actions/workflows/ci.yml)
+![Tauri 2](https://img.shields.io/badge/Tauri_2-24C8DB?logo=tauri&logoColor=white)
+![Rust](https://img.shields.io/badge/Rust-000000?logo=rust&logoColor=white)
+![Svelte 5](https://img.shields.io/badge/Svelte_5-FF3E00?logo=svelte&logoColor=white)
+![SvelteKit 2](https://img.shields.io/badge/SvelteKit_2-FF3E00?logo=svelte&logoColor=white)
+![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
+![Tiptap](https://img.shields.io/badge/Tiptap-000000?logo=tiptap&logoColor=white)
+![AES-256-GCM-SIV](https://img.shields.io/badge/AES--256--GCM--SIV-4B32C3)
+[![License](https://img.shields.io/badge/License-see_LICENSE-blue)](LICENSE)
 
-I created this in 3 days using Claude because I refuse to learn Rust properly. Why spend weeks understanding lifetimes and borrow checkers when you can just throw money at the problem? Capitalism wins again.
+[Get started](#getting-started) · [How it works](#how-it-works) · [Features](#features) · [Security](#security) · [Stack](#stack)
 
-It works surprisingly well. Like, *suspiciously* well. I'm scared to touch anything.
+</div>
 
-The UI is like 👌. Banging. I peaked here honestly.
+---
 
-If you want to contribute, do it. You're probably less lazy than I am. The bar is underground.
+## What this is
 
-## What it does
+A **desktop note app** for people who want their notes to outlive the app. Every
+note is a `.md` file in a directory you pick: readable by any editor, greppable
+by any tool, portable the day you decide to leave.
 
-- **Encrypted notes** — Every byte that leaves your machine is AES-256-GCM-SIV encrypted in Rust. Your sync target sees nothing but scrambled nonsense. Like my code
-- **S3 sync** — Encrypted backup and sync to any S3-compatible bucket (Backblaze B2, Cloudflare R2, MinIO, etc.). 3-way merge with conflict resolution because I'm overengineering a note app
-- **12-word passphrase** — No accounts, no emails, no passwords. A BIP-39 mnemonic *is* your identity and encryption key. Lose it and your notes are gone forever. No I will not help you recover them. I literally can't
-- **Plain Markdown on disk** — Notes are stored as `.md` files in a directory you choose. Readable by any tool. You can leave me whenever you want. I won't hold your files hostage like some apps I could name
-- **Rich editor** — WYSIWYG Tiptap editor with tables, math, wiki-links, callouts, code blocks, slash commands, and more. It's actually kinda fire
-- **Graph view** — Visualise connections between notes via `[[wiki-links]]`. Makes you feel like a genius detective with a conspiracy board
-- **File history** — Timestamped snapshots of every file, stored locally. Because you WILL accidentally delete that paragraph you spent 40 minutes writing
-- **Multi-vault** — Multiple named vaults, each with its own mnemonic and folder. For when you need to separate your work notes from your unhinged personal thoughts
-- **Desktop-only** — Native Tauri 2 app. All crypto runs in Rust, never in JavaScript. Because letting JS handle encryption is like letting a toddler hold a sword
+The other half is sync, and that's where the constraint lives: the vault can be
+mirrored to any S3-compatible bucket, but the bucket only ever holds ciphertext.
+Encryption happens in Rust before upload; the key is derived on your machine from
+a BIP-39 mnemonic and is never transmitted. Your storage provider stores your
+notes without being able to read a single one.
+
+Imagine Obsidian but open source, with fewer features, wrapped in Tauri so I can
+say **it's Rust based** at parties. Nobody at parties cares. I still say it.
 
 ## Features
 
-### Editor
-- Tables with resizable columns
-- Task lists (nested, for when your procrastination has subcategories)
-- Code blocks with syntax highlighting
-- Math — inline `$…$` and block `$$$…$$$` via KaTeX (I don't use this but it makes me look smart)
-- Wiki-links `[[page]]` with click-to-navigate
-- Callouts — `info`, `note`, `success`, `warning`, `danger` (the five moods of documentation)
-- File embeds and image attachments
-- Slash command menu (`/`) — the single most satisfying UX pattern ever invented
-- `@` mention menu to insert wiki-links inline — because typing `[[` with your bare hands is beneath you
-- Bubble toolbar for formatting
-- Find & replace
-- Highlight, underline, superscript, subscript, text colour, text alignment
-- Block drag handles — grab and rearrange paragraphs like furniture
-- Smart typography (curly quotes, em dashes, etc.)
-- Clickable links
-- Image lightbox — click any image to enlarge it. Squinting is optional
-- Character count (for when you're writing an essay and need exactly 500 words)
-- Export current note to PDF
+| Area       | What you get                                                                                                                         |
+| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- -|
+| Storage    | Plain Markdown `.md` files in a folder you choose. No proprietary format, no lock-in                                                 |
+| Editor     | Tiptap WYSIWYG: tables, task lists, code blocks, KaTeX math, callouts, wiki-links, slash menu, `@` mentions, find & replace          |
+| Encryption | AES-256-GCM-SIV in Rust with 96-bit random nonces. JavaScript never touches keys or plaintext                                        |
+| Identity   | A 12-word BIP-39 mnemonic derives the vault ID and the encryption key. No accounts, no email, no password reset                      |
+| Sync       | Encrypted 3-way merge to any S3-compatible bucket (Backblaze B2, Cloudflare R2, MinIO); manual or every 5 minutes                    |
+| Navigation | Quick switcher, full-text search across the vault, tags with sidebar filtering, favourites, graph view of `[[wiki-links]]`           |
+| Workspace  | Multi-pane split view with tabs, canvas editor, built-in image and PDF viewers, drag files out to the desktop, zip export            |
+| History    | Timestamped snapshots of every file in `.margin/history/`: browsable, restorable, never uploaded anywhere                            |
+| Vaults     | Multiple named vaults, each with its own mnemonic and its own folder                                                                 |
+| Appearance | Dark and light themes, Inter + JetBrains Mono, image lightbox, toast notifications                                                   |
+| Privacy    | No telemetry, no analytics, no phone-home. CORS locked to `tauri://localhost`                                                        |
+| Updates    | OTA auto-updater; macOS, Linux and Windows binaries built and signed by CI on every tag                                              |
 
-### Vault & files
-- File tree with folders, right-click context menu, drag-and-drop
-- Quick switcher for instant note navigation (Ctrl+P gang rise up)
-- Full-text search across the entire vault — find that one sentence you wrote at 3am
-- Tag system with sidebar filtering
-- Favourites — pin files to the top like they're VIP
-- Multi-pane split view with tabs — for when one note isn't enough to contain your thoughts
-- Canvas editor for free-form visual notes
-- Built-in image viewer and PDF viewer (because alt-tabbing is for quitters)
-- Native file drag to desktop
-- Copy/cut/paste files in the tree like a civilised person
-- Zip export of the whole vault
+<details>
+<summary>The full editor list</summary>
 
-### Sync (S3)
-- Encrypted sync to any S3-compatible bucket — Backblaze B2, Cloudflare R2, MinIO, etc.
-- 3-way merge: compares base, local and remote states — only uploads/downloads what changed. It's like git but for people who don't want to learn git
-- Conflict strategy: local wins; conflicting remote version saved as `file.sync-conflict-<timestamp>.md`. Your version is always right. I believe in you
-- All file types supported (`.md`, `.png`, `.pdf`, `.canvas`, …)
-- Auto-sync every 5 minutes (optional) or manual via the status bar
-- Hidden `.margin/` folder excluded automatically
+Tables with resizable columns · nested task lists · syntax-highlighted code
+blocks · inline `$…$` and block `$$$…$$$` math via KaTeX · `[[wiki-links]]` with
+click-to-navigate · `info` / `note` / `success` / `warning` / `danger` callouts ·
+file embeds and image attachments · slash command menu · `@` mention menu for
+inline wiki-links · bubble formatting toolbar · find & replace · highlight,
+underline, superscript, subscript, text colour, alignment · block drag handles ·
+smart typography · clickable links · image lightbox · character count · export
+the current note to PDF.
 
-### Security
-- All crypto in Rust — JavaScript never touches keys or plaintext. JS has done enough damage
-- AES-256-GCM-SIV authenticated encryption, 96-bit random nonces, nonce-misuse resistant. I don't fully understand what half of that means but it sounds very secure
-- BIP-39 key derivation: 128-bit entropy → 512-bit seed (PBKDF2-HMAC-SHA512) → SHA-256 split into vault ID + encryption key. Yeah I definitely typed all that myself
-- Session encrypted at rest with a per-device random key (`device.key`, permissions `0600`)
-- Settings stored encrypted per vault (`settings.enc`), exportable as a portable encrypted string
-- File history stored in `.margin/history/` inside the vault — never leaves your machine
-- CORS restricted to `tauri://localhost` by default
-- No telemetry, no analytics, no phone-home. I don't want your data. I have enough problems
+</details>
 
-### App
-- Custom theme editor — create, edit, import/export themes. Make it ugly. I dare you
-- OTA auto-updater — updates itself so you don't have to re-download like it's 2005
-- Toast notifications — little popups that tell you things went well (or didn't)
+## Getting started
 
-## Architecture
+```bash
+cd app
+pnpm install
+pnpm tauri dev
+```
 
-| Layer | Technology |
-| ----- | ---------- |
-| Client | Tauri 2 (Rust) + SvelteKit + TypeScript |
-| Editor | Tiptap + ProseMirror |
-| Encryption | Rust — AES-256-GCM-SIV (`aes-gcm-siv` crate) |
-| Key derivation | BIP-39 mnemonic → seed → SHA-256 split (vault ID + encryption key) |
-| S3 sync | Rust (`aws-sdk-s3` / `rust-s3`) — encrypted 3-way merge |
-| i18n | Paraglide — English, Italian (because I'm Italian and I do what I want) |
+If that works on the first try, buy a lottery ticket.
+
+```bash
+pnpm tauri build   # release binary for the current platform
+```
+
+## How it works
+
+1. **Generate or enter a mnemonic.** A 12-word BIP-39 passphrase is your
+   identity. Write it down. Lose it and the vault is unrecoverable: not
+   "contact support" unrecoverable, *math* unrecoverable.
+2. **Pick a folder.** Any local directory; your `.md` files live there.
+3. **Unlock.** The mnemonic derives a vault ID and an AES-256-GCM-SIV key, both
+   client-side, neither transmitted.
+4. **Write.** WYSIWYG editing, or type Markdown syntax directly and let it
+   convert. `/` opens the slash menu.
+5. **Sync.** Add S3 credentials in Settings, then sync from the status bar or let
+   auto-sync run. Files are encrypted in Rust before upload; conflicts resolve
+   local-wins, with the remote version kept as
+   `file.sync-conflict-<timestamp>.md`.
+6. **History.** Snapshots are written automatically to `.margin/history/<file>/`.
+   The history panel browses and restores them.
+
+## Security
+
+| Concern         | How it's handled                                                                                               |
+| --------------- | ------------------------------------------------------------------------------------------------------------ --|
+| Cipher          | AES-256-GCM-SIV, authenticated, nonce-misuse resistant, 96-bit random nonces                                   |
+| Key derivation  | BIP-39: 128-bit entropy → 512-bit seed (PBKDF2-HMAC-SHA512) → SHA-256, split into vault ID + encryption key    |
+| Crypto boundary | All encryption lives in Rust behind Tauri commands; the frontend passes paths and receives plaintext, no keys  |
+| Session at rest | Encrypted with a per-device random key (`device.key`, mode `0600`)                                             |
+| Settings        | Stored encrypted per vault (`settings.enc`), exportable as a portable encrypted string                         |
+| What sync sees  | Ciphertext only. The `.margin/` folder, history included, never leaves the machine                             |
+| Network         | CORS restricted to `tauri://localhost`; no analytics, no crash reporting, no phone-home                        |
+
+## Stack
+
+| Layer          | Choice                                                                      |
+| -------------- | -------------------------------------------------------------------------- -|
+| Shell          | Tauri 2: Rust core, system webview, no bundled browser                      |
+| Frontend       | SvelteKit 2 with Svelte 5 runes + TypeScript, static-adapter prerendered    |
+| Editor         | Tiptap 3 on ProseMirror, with custom extensions per feature                 |
+| Encryption     | Rust `aes-gcm-siv`, providing AES-256-GCM-SIV                               |
+| Key derivation | BIP-39 mnemonic → seed → SHA-256 split (vault ID + encryption key)          |
+| Sync           | Rust S3 client, encrypted 3-way merge against base / local / remote state   |
+| Rendering      | KaTeX for math, lowlight for code, Mermaid for diagrams, pdf.js for PDFs    |
+| i18n           | Paraglide: English and Italian (because I'm Italian and I do what I want)   |
+| CI             | GitHub Actions: `svelte-check` + `cargo check` on PRs, tagged releases      |
 
 ## Project structure
 
@@ -117,7 +145,7 @@ margin/
 │   │   │   └── sync/           # S3 sync orchestration
 │   │   └── routes/             # SvelteKit pages
 │   └── src-tauri/
-│       └── src/                # Rust commands (written by Claude, let's be honest)
+│       └── src/                # Rust commands
 │           ├── crypto.rs       # AES-256-GCM-SIV encrypt/decrypt
 │           ├── fs.rs           # Filesystem operations
 │           ├── history.rs      # File snapshot management
@@ -126,36 +154,20 @@ margin/
 │           └── settings.rs     # Encrypted settings load/save/export
 ```
 
-## Prerequisites
+**The one rule:** plaintext and keys stay on the Rust side. If a feature needs to
+touch either from JavaScript, it gets a Tauri command instead.
 
-- Node.js 20+, [pnpm](https://pnpm.io/), Rust toolchain, [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/)
-- A functioning computer (shocking, I know)
+## Contributing
 
-## Getting started
+Do it. You're probably less lazy than I am, and the bar is underground.
 
-```bash
-cd app
-pnpm install
-pnpm tauri dev
-```
+## Requirements
 
-If that works on the first try, buy a lottery ticket.
-
-To build a release binary:
-
-```bash
-pnpm tauri build
-```
-
-## How it works
-
-1. **Generate or enter a mnemonic** — A 12-word BIP-39 passphrase is your identity. Write it down. Tattoo it. I don't care. Lose it and the vault is unrecoverable. I'm not even being dramatic, it's literally math
-2. **Pick a folder** — Choose any local directory; your `.md` files live there. It's your folder. I'm not the boss of you
-3. **Unlock** — The mnemonic derives a vault ID and an AES-256-GCM-SIV encryption key. Both are derived client-side and never transmitted anywhere. Not even I can see your stuff
-4. **Write** — WYSIWYG Tiptap editor; use `/` for the slash menu or type Markdown syntax directly. Go wild
-5. **Sync** — Configure S3 credentials in Settings. Hit sync in the status bar or let auto-sync run every 5 minutes. Files are encrypted in Rust before upload; the bucket holds only ciphertext. Your cloud provider gets to store your secrets without knowing a single one. Beautiful
-6. **History** — Snapshots are saved automatically to `.margin/history/<file>/`. Open the history panel to browse and restore any version. Past you is looking out for future you
+Node ≥ 24 · pnpm · a Rust toolchain · the
+[Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your
+platform.
 
 ## License
 
-[AGPL-3.0](LICENSE) — Because corporate vultures can contribute back or get lost
+See [LICENSE](LICENSE). Because corporate vultures can contribute back or get
+lost.

@@ -54,8 +54,16 @@ export const commands = {
 	 */
 	watchVault: (path: string) => typedError<null, string>(__TAURI_INVOKE("watch_vault", { path })),
 	unwatchVault: () => typedError<null, string>(__TAURI_INVOKE("unwatch_vault")),
+	/**
+	 *  Ranked filename search.
+	 * 
+	 *  This used to re-walk the whole vault from disk on every keystroke. It is now
+	 *  served from the in-memory vault tree in [`crate::index::tree`], which walks
+	 *  once and answers subsequent queries out of a prefix trie. Results come back
+	 *  ranked (name prefix → token prefix → substring → path → fuzzy) rather than
+	 *  merely alphabetical, so the caller can render them directly.
+	 */
 	searchFiles: (root: string, query: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("search_files", { root, query })),
-	searchFileContents: (root: string, query: string, caseSensitive: boolean) => typedError<ContentMatch[], string>(__TAURI_INVOKE("search_file_contents", { root, query, caseSensitive })),
 	replaceInFile: (path: string, search: string, replace: string, caseSensitive: boolean) => typedError<number, string>(__TAURI_INVOKE("replace_in_file", { path, search, replace, caseSensitive })),
 	/**  Scan all `.md` files under `root` and collect unique `#tag` tokens. */
 	listAllTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("list_all_tags", { root })),
@@ -68,6 +76,16 @@ export const commands = {
 	 *  when called in quick succession (e.g. on every vault-fs-changed event).
 	 */
 	hasUnsyncedChanges: (vaultPath: string, encryptionKey: number[]) => typedError<boolean, string>(__TAURI_INVOKE("has_unsynced_changes", { vaultPath, encryptionKey })),
+	/**
+	 *  Ranked full-text search over indexed note bodies and names. Returns up to
+	 *  `limit` hits ordered by FTS5 relevance (bm25).
+	 */
+	indexSearch: (root: string, query: string, limit: number) => typedError<SearchHit[], string>(__TAURI_INVOKE("index_search", { root, query, limit })),
+	/**
+	 *  Rebuild the index (skipping unchanged files) and return the indexed count.
+	 *  Called by the frontend on vault open and on `vault-fs-changed`.
+	 */
+	indexRebuild: (root: string) => typedError<number, string>(__TAURI_INVOKE("index_rebuild", { root })),
 	s3Configure: (config: S3Config) => typedError<null, string>(__TAURI_INVOKE("s3_configure", { config })),
 	s3GetConfig: () => typedError<{
 	endpoint: string,
@@ -216,14 +234,6 @@ export const commands = {
 	 *  hex identifier. Same path always maps to same key — no lookup table needed.
 	 */
 	pathToS3Key: (relPath: string, encryptionKey: number[]) => __TAURI_INVOKE<string>("path_to_s3_key", { relPath, encryptionKey }),
-	/**  Load all saved themes from the app data directory */
-	loadThemes: () => typedError<ThemeData, string>(__TAURI_INVOKE("load_themes")),
-	/**  Save all themes to the app data directory */
-	saveThemes: (data: ThemeData) => typedError<null, string>(__TAURI_INVOKE("save_themes", { data })),
-	/**  Export a single theme to a user-chosen path */
-	exportTheme: (theme: Theme, dest: string) => typedError<null, string>(__TAURI_INVOKE("export_theme", { theme, dest })),
-	/**  Import a theme from a user-chosen JSON file */
-	importTheme: (path: string) => typedError<Theme, string>(__TAURI_INVOKE("import_theme", { path })),
 };
 
 /* Types */
@@ -232,14 +242,6 @@ export type AppSettings = {
 	attachment_folder?: string | null,
 	auto_sync?: boolean | null,
 	conflict_strategy?: string | null,
-};
-
-export type ContentMatch = {
-	path: string,
-	name: string,
-	line: number,
-	column: number,
-	context: string,
 };
 
 export type FsEntry = {
@@ -297,6 +299,17 @@ export type S3Config = {
 	secret_key: string,
 };
 
+/**  One ranked search result (a whole note, best matches first). */
+export type SearchHit = {
+	path: string,
+	name: string,
+	/**
+	 *  Plain-text excerpt around the best match, for display (highlighted on
+	 *  the frontend). Empty for filename-only matches.
+	 */
+	snippet: string,
+};
+
 export type Snapshot = {
 	/**  Filename of the snapshot (e.g. "1712928000.md") */
 	filename: string,
@@ -326,16 +339,6 @@ export type TextNode = {
 	text: string,
 	/**  ProseMirror position of the first character of this text node. */
 	pos: number,
-};
-
-export type Theme = {
-	name: string,
-	colors: { [key in string]: string },
-};
-
-export type ThemeData = {
-	themes: Theme[],
-	active_theme: string | null,
 };
 
 /**  A single row in the file tree, pre-sorted and depth-annotated. */

@@ -10,4 +10,4 @@ export const toBytes = (u: Uint8Array): number[] => Array.from(u);
 
 /** Convert an IPC byte payload (`number[]` or `ArrayBuffer`) back to a `Uint8Array`. */
 export const fromBytes = (a: number[] | ArrayBuffer): Uint8Array =>
-  a instanceof ArrayBuffer ? new Uint8Array(a) : Uint8Array.from(a);
+	a instanceof ArrayBuffer ? new Uint8Array(a) : Uint8Array.from(a);

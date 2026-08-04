@@ -1,0 +1,151 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Tailwind + shadcn bridge
+   ───────────────────────────────────────────────────────────────────────
+   `tokens.css` owns the design system: primitives → semantic (per theme) →
+   resolved `--color-*`. This file is the adapter that exposes those same
+   values to two consumers that expect their own naming:
+
+   1. **Tailwind v4** reads `@theme` to generate utilities. Mapping our tokens
+      here is what makes `bg-surface-1`, `text-secondary`, `rounded-lg` etc.
+      resolve to the design system rather than Tailwind's stock palette.
+
+   2. **shadcn-svelte** components are written against a fixed set of names
+      (`--background`, `--foreground`, `--primary`, `--border`, `--ring`, …).
+      Aliasing those onto our semantic layer means a stock shadcn component
+      drops in already wearing margin's colours — no per-component overrides,
+      and no second palette to keep in sync.
+
+   `@theme inline` is important: it emits the utilities referencing the var
+   *by name* rather than baking in the value, so flipping `data-theme` on
+   <html> re-resolves everything. A plain `@theme` would freeze the light
+   values into the generated CSS and dark mode would not work.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+@theme inline {
+	/* ── Surfaces & text ── */
+	--color-background: var(--color-bg-primary);
+	--color-foreground: var(--color-text-primary);
+
+	--color-surface-1: var(--color-bg-secondary);
+	--color-surface-2: var(--color-bg-tertiary);
+	--color-surface-3: var(--color-bg-hover);
+
+	--color-muted: var(--color-bg-secondary);
+	--color-muted-foreground: var(--color-text-secondary);
+	--color-subtle-foreground: var(--color-text-tertiary);
+
+	/* shadcn calls the inverse-of-canvas action "primary", which matches the
+	   house style exactly: near-black on light, white on dark. */
+	--color-primary: var(--color-bg-inverse);
+	--color-primary-foreground: var(--color-text-inverse);
+
+	--color-secondary: var(--color-bg-secondary);
+	--color-secondary-foreground: var(--color-text-primary);
+
+	--color-accent: var(--color-brand-12);
+	--color-accent-foreground: var(--color-text-brand);
+
+	--color-brand: var(--color-bg-brand);
+	--color-brand-foreground: hsl(0 0% 100%);
+
+	--color-destructive: var(--color-bg-negative);
+	--color-destructive-foreground: hsl(0 0% 100%);
+
+	--color-positive: var(--color-bg-positive);
+	--color-warning: var(--color-bg-warning);
+
+	/* Modal scrim. Exposed as a utility (`bg-overlay`) so shadcn's dialog
+	   overlay can use a semantic class instead of an arbitrary-value escape
+	   hatch — its stock `bg-black/10` ignores the theme entirely. */
+	--color-overlay: var(--color-bg-overlay);
+
+	--color-card: var(--color-bg-primary);
+	--color-card-foreground: var(--color-text-primary);
+	--color-popover: var(--color-bg-primary);
+	--color-popover-foreground: var(--color-text-primary);
+
+	/* Note: NOT named `--color-border-strong`. `tokens.css` already defines that
+	   exact name in :root, so re-declaring it inside @theme would make it
+	   reference itself and resolve to nothing. `--color-hairline` is the same
+	   value under a non-colliding name, giving `border-hairline`,
+	   `text-hairline` and `bg-hairline` utilities — otherwise every use of the
+	   strong border needs an arbitrary-value escape hatch. */
+	--color-hairline: var(--color-border-strong);
+	--color-border: var(--color-border-secondary);
+	--color-input: var(--color-border-strong);
+	--color-ring: var(--color-border-focus);
+
+	/* ── Radius ── */
+	--radius-xs: 4px;
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+	--radius-2xl: 24px;
+
+	/* ── Type ──
+	   Tailwind pairs each size with a line height; these mirror the ramp in
+	   tokens.css so `text-sm` is the 14/20 body style the design calls for. */
+	--text-xs: 12px;
+	--text-xs--line-height: 16px;
+	--text-sm: 14px;
+	--text-sm--line-height: 20px;
+	--text-base: 16px;
+	--text-base--line-height: 22px;
+	--text-lg: 18px;
+	--text-lg--line-height: 26px;
+	--text-xl: 20px;
+	--text-xl--line-height: 28px;
+	--text-2xl: 24px;
+	--text-2xl--line-height: 30px;
+	--text-3xl: 32px;
+	--text-3xl--line-height: 38px;
+
+	--tracking-tight: -0.02em;
+	--tracking-normal: -0.01em;
+	--tracking-wide: 0.06em;
+
+	/* The font stacks live here rather than in app.css so there is one
+	   definition serving both `font-sans` utilities and bare `var(--font-sans)`
+	   references — @theme emits its variables into :root, so both work.
+	   Saans is the reference face for this system but is commercially licensed;
+	   Inter Variable is the bundled stand-in. */
+	--font-sans: 'Inter Variable', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+	--font-mono: 'JetBrains Mono Variable', 'SF Mono', 'Fira Code', monospace;
+
+	/* Motion.
+	   Tailwind's bare `transition-*` utilities default to 150ms / `ease`, but the
+	   house motion is 120ms / ease-out. Overriding the defaults here means every
+	   `transition-colors` in the app picks up the token timing automatically —
+	   otherwise each migrated component would have to spell out
+	   `duration-120 ease-out` and any that forgot would drift. */
+	--default-transition-duration: 120ms;
+	--default-transition-timing-function: cubic-bezier(0, 0, 0.2, 1);
+}
+
+/* shadcn-svelte components reference these names directly rather than through
+   Tailwind utilities (e.g. `bg-background`, but also raw `var(--background)`
+   inside some primitives). Defining both spellings keeps every stock component
+   working unmodified. */
+:root {
+	--background: var(--color-bg-primary);
+	--foreground: var(--color-text-primary);
+	--card: var(--color-bg-primary);
+	--card-foreground: var(--color-text-primary);
+	--popover: var(--color-bg-primary);
+	--popover-foreground: var(--color-text-primary);
+	--primary: var(--color-bg-inverse);
+	--primary-foreground: var(--color-text-inverse);
+	--secondary: var(--color-bg-secondary);
+	--secondary-foreground: var(--color-text-primary);
+	--muted: var(--color-bg-secondary);
+	--muted-foreground: var(--color-text-secondary);
+	--accent: var(--color-brand-12);
+	--accent-foreground: var(--color-text-brand);
+	--destructive: var(--color-bg-negative);
+	--destructive-foreground: hsl(0 0% 100%);
+	--border: var(--color-border-secondary);
+	--input: var(--color-border-strong);
+	--ring: var(--color-border-focus);
+	--radius: 0.75rem;
+}

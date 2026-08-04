@@ -1,205 +1,158 @@
 <script lang="ts">
-  import * as m from "$lib/paraglide/messages.js";
-  import type { Tool } from "$lib/canvas/types";
-  import { colorPresets, sizePresets } from "$lib/canvas/types";
+	import * as m from '$lib/paraglide/messages.js';
+	import type { Tool } from '$lib/canvas/types';
+	import { colorPresets, sizePresets } from '$lib/canvas/types';
 
-  interface Props {
-    x: number;
-    y: number;
-    tool: Tool;
-    penColor: string;
-    currentSize: number;
-    onSizeChange: (v: number) => void;
-    onClearAll: () => void;
-    onClose: () => void;
-  }
+	interface Props {
+		x: number;
+		y: number;
+		tool: Tool;
+		penColor: string;
+		currentSize: number;
+		onSizeChange: (v: number) => void;
+		onClearAll: () => void;
+		onClose: () => void;
+	}
 
-  let {
-    x,
-    y,
-    tool = $bindable(),
-    penColor = $bindable(),
-    currentSize,
-    onSizeChange,
-    onClearAll,
-    onClose,
-  }: Props = $props();
+	let {
+		x,
+		y,
+		tool = $bindable(),
+		penColor = $bindable(),
+		currentSize,
+		onSizeChange,
+		onClearAll,
+		onClose
+	}: Props = $props();
+
+	// Padding, radius, border and font-size are restated throughout this file
+	// because app.css's `@layer base` rule styles every bare <button>; these
+	// utilities sit in `@layer utilities` and so override it.
+	const ITEM =
+		'block w-full rounded-xs bg-transparent px-2.5 py-1.5 text-left text-sm [transition:background_var(--transition-fast),color_var(--transition-fast)]';
+
+	// Active/hover are alternatives rather than stacked, mirroring the original
+	// CSS where `.active` was declared after `:hover` and so won when an active
+	// row was hovered.
+	const itemCls = (active: boolean) =>
+		`${ITEM} hover:bg-surface-3 hover:text-foreground ${
+			active ? 'text-foreground' : 'text-muted-foreground'
+		}`;
+
+	// `box-content` keeps the 2px ring outside the 18px dot, as the original
+	// `box-sizing: content-box` did. The transition names `scale` rather than
+	// `transform` because Tailwind's `scale-*` sets the `scale` property.
+	const SWATCH =
+		'size-[18px] min-h-[18px] min-w-[18px] shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
+
+	const swatchCls = (active: boolean) =>
+		`${SWATCH} ${active ? 'border-foreground scale-115' : 'border-transparent hover:scale-120'}`;
+
+	const SIZE_BTN =
+		'size-7 min-h-7 min-w-7 rounded-xs border bg-transparent p-0 text-xs [transition:background_var(--transition-fast),color_var(--transition-fast),border-color_var(--transition-fast)]';
+
+	const sizeBtnCls = (active: boolean) =>
+		`${SIZE_BTN} ${
+			active
+				? 'border-foreground bg-surface-2 text-foreground'
+				: 'border-border text-muted-foreground hover:bg-surface-3'
+		}`;
 </script>
 
+{#snippet sectionLabel(text: string)}
+	<div class="px-2 pt-1 pb-0.5 text-xs tracking-[0.04em] text-subtle-foreground uppercase">
+		{text}
+	</div>
+{/snippet}
+
+{#snippet sep()}
+	<div class="my-1 h-px bg-border"></div>
+{/snippet}
+
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="ctx-backdrop" onmousedown={onClose}></div>
-<div class="ctx-menu" style:left={`${x}px`} style:top={`${y}px`} role="menu">
-  <div class="ctx-section-label">{m.canvas_tool()}</div>
-  <button class="ctx-item" class:active={tool === "pen"} onclick={() => { tool = "pen"; onClose(); }} role="menuitem">
-    {m.canvas_pen()}
-  </button>
-  <button class="ctx-item" class:active={tool === "eraser"} onclick={() => { tool = "eraser"; onClose(); }} role="menuitem">
-    {m.canvas_eraser()}
-  </button>
-  <button class="ctx-item" class:active={tool === "text"} onclick={() => { tool = "text"; onClose(); }} role="menuitem">
-    {m.canvas_text()}
-  </button>
-  <div class="ctx-sep"></div>
+<div class="fixed inset-0 z-[99]" onmousedown={onClose}></div>
+<div
+	class="fixed z-[100] min-w-[180px] rounded-sm border border-border bg-background p-1.5 shadow-[var(--shadow-lg)]"
+	style:left={`${x}px`}
+	style:top={`${y}px`}
+	role="menu"
+>
+	{@render sectionLabel(m.canvas_tool())}
+	<button
+		class={itemCls(tool === 'pen')}
+		onclick={() => {
+			tool = 'pen';
+			onClose();
+		}}
+		role="menuitem"
+	>
+		{m.canvas_pen()}
+	</button>
+	<button
+		class={itemCls(tool === 'eraser')}
+		onclick={() => {
+			tool = 'eraser';
+			onClose();
+		}}
+		role="menuitem"
+	>
+		{m.canvas_eraser()}
+	</button>
+	<button
+		class={itemCls(tool === 'text')}
+		onclick={() => {
+			tool = 'text';
+			onClose();
+		}}
+		role="menuitem"
+	>
+		{m.canvas_text()}
+	</button>
+	{@render sep()}
 
-  <div class="ctx-section-label">{m.canvas_color()}</div>
-  <div class="ctx-colors">
-    {#each colorPresets as c}
-      <button
-        class="color-swatch"
-        class:active={penColor === c}
-        style:background={c}
-        onclick={() => { penColor = c; onClose(); }}
-        aria-label={c}
-      ></button>
-    {/each}
-  </div>
-  <div class="ctx-sep"></div>
+	{@render sectionLabel(m.canvas_color())}
+	<div class="flex max-w-[160px] flex-wrap gap-1 px-2 py-1">
+		{#each colorPresets as c (c)}
+			<!-- `style:background` is canvas data (the pen colour), not theming. -->
+			<button
+				class={swatchCls(penColor === c)}
+				style:background={c}
+				onclick={() => {
+					penColor = c;
+					onClose();
+				}}
+				aria-label={c}
+			></button>
+		{/each}
+	</div>
+	{@render sep()}
 
-  <div class="ctx-section-label">{m.canvas_size()}</div>
-  <div class="ctx-sizes">
-    {#each sizePresets as s}
-      <button
-        class="ctx-size-btn"
-        class:active={currentSize === s}
-        onclick={() => { onSizeChange(s); onClose(); }}
-      >
-        {s}
-      </button>
-    {/each}
-  </div>
-  <div class="ctx-sep"></div>
+	{@render sectionLabel(m.canvas_size())}
+	<div class="flex flex-wrap gap-[3px] px-2 py-1">
+		{#each sizePresets as s (s)}
+			<button
+				class={sizeBtnCls(currentSize === s)}
+				onclick={() => {
+					onSizeChange(s);
+					onClose();
+				}}
+			>
+				{s}
+			</button>
+		{/each}
+	</div>
+	{@render sep()}
 
-  <button class="ctx-item danger" onclick={onClearAll} role="menuitem">
-    {m.canvas_clear_all()}
-  </button>
+	<!--
+		The destructive row keeps its own colour on hover: in the original CSS
+		`.ctx-item.danger` was declared after `.ctx-item:hover`, so hovering only
+		changed the background. Hence no `hover:text-foreground` here.
+	-->
+	<button
+		class="{ITEM} text-destructive hover:bg-destructive/10"
+		onclick={onClearAll}
+		role="menuitem"
+	>
+		{m.canvas_clear_all()}
+	</button>
 </div>
-
-<style>
-  .ctx-backdrop {
-    position: fixed;
-    inset: 0;
-    z-index: 99;
-  }
-
-  .ctx-menu {
-    position: fixed;
-    z-index: 100;
-    min-width: 180px;
-    padding: 6px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--glass-shadow);
-  }
-
-  .ctx-section-label {
-    padding: 4px 8px 2px;
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    text-transform: uppercase;
-    letter-spacing: 0.04em;
-  }
-
-  .ctx-item {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-xs);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    text-align: left;
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s;
-  }
-
-  .ctx-item:hover {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .ctx-item.active {
-    color: var(--accent);
-  }
-
-  .ctx-item.danger {
-    color: var(--danger);
-  }
-
-  .ctx-item.danger:hover {
-    background: rgba(239, 68, 68, 0.1);
-  }
-
-  .ctx-sep {
-    height: 1px;
-    background: var(--border);
-    margin: 4px 0;
-  }
-
-  .ctx-colors {
-    display: flex;
-    gap: 4px;
-    padding: 4px 8px;
-    flex-wrap: wrap;
-    max-width: 160px;
-  }
-
-  .color-swatch {
-    width: 18px;
-    height: 18px;
-    min-width: 18px;
-    min-height: 18px;
-    border-radius: 50%;
-    border: 2px solid transparent;
-    cursor: pointer;
-    transition: border-color 0.1s, transform 0.1s;
-    box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
-    flex-shrink: 0;
-    padding: 0;
-    box-sizing: content-box;
-  }
-
-  .color-swatch:hover {
-    transform: scale(1.2);
-  }
-
-  .color-swatch.active {
-    border-color: var(--accent);
-    transform: scale(1.15);
-  }
-
-  .ctx-sizes {
-    display: flex;
-    gap: 3px;
-    padding: 4px 8px;
-    flex-wrap: wrap;
-  }
-
-  .ctx-size-btn {
-    width: 28px;
-    height: 28px;
-    min-width: 28px;
-    min-height: 28px;
-    padding: 0;
-    border-radius: var(--radius-xs);
-    border: 1px solid var(--border);
-    background: transparent;
-    color: var(--text-secondary);
-    font-size: 0.75rem;
-    cursor: pointer;
-    transition: background 0.1s, color 0.1s, border-color 0.1s;
-  }
-
-  .ctx-size-btn:hover {
-    background: var(--bg-hover);
-  }
-
-  .ctx-size-btn.active {
-    border-color: var(--accent);
-    color: var(--accent);
-    background: var(--bg-tertiary);
-  }
-</style>
