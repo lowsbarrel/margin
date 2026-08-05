@@ -1,13 +1,13 @@
 mod crypto;
 mod fs;
 mod history;
+mod index;
 mod s3;
 mod session;
 mod settings;
 mod sync;
 mod text;
 mod text_transform;
-mod themes;
 
 use fs::{VaultPathState, VaultWatcherState, WatcherState};
 use s3::S3State;
@@ -162,7 +162,6 @@ pub fn run() {
             fs::save_file_bytes,
             fs::list_directory,
             fs::walk_directory,
-            fs::read_link_batch,
             fs::build_visible_tree,
             fs::build_subtree,
             fs::delete_entry,
@@ -179,11 +178,17 @@ pub fn run() {
             fs::watch_vault,
             fs::unwatch_vault,
             fs::search_files,
-            fs::search_file_contents,
             fs::replace_in_file,
-            fs::list_all_tags,
             fs::export_vault_zip,
             fs::has_unsynced_changes,
+            index::index_search,
+            index::index_rebuild,
+            index::index_tags,
+            index::index_links,
+            index::index_backlinks,
+            index::index_tags,
+            index::index_links,
+            index::index_backlinks,
             s3::s3_configure,
             s3::s3_get_config,
             s3::s3_test_connection,
@@ -226,10 +231,6 @@ pub fn run() {
             sync::sync_upload_manifest,
             sync::sync_delete_files,
             sync::path_to_s3_key,
-            themes::load_themes,
-            themes::save_themes,
-            themes::export_theme,
-            themes::import_theme,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -246,7 +247,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         fs::set_vault_directory,
         fs::list_directory,
         fs::walk_directory,
-        fs::read_link_batch,
         fs::build_visible_tree,
         fs::build_subtree,
         fs::delete_entry,
@@ -262,11 +262,14 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         fs::watch_vault,
         fs::unwatch_vault,
         fs::search_files,
-        fs::search_file_contents,
         fs::replace_in_file,
-        fs::list_all_tags,
         fs::export_vault_zip,
         fs::has_unsynced_changes,
+        index::index_search,
+        index::index_rebuild,
+        index::index_tags,
+        index::index_links,
+        index::index_backlinks,
         s3::s3_configure,
         s3::s3_get_config,
         s3::s3_test_connection,
@@ -309,10 +312,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync::sync_upload_manifest,
         sync::sync_delete_files,
         sync::path_to_s3_key,
-        themes::load_themes,
-        themes::save_themes,
-        themes::export_theme,
-        themes::import_theme,
     ])
 }
 

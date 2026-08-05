@@ -1,2 +1,0 @@
-## ROADMAP:
-- [] MCP Server Integration

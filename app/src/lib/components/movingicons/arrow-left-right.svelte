@@ -1,0 +1,95 @@
+<script lang="ts">
+	interface IconProps {
+		color?: string;
+		size?: number;
+		strokeWidth?: number;
+		animate?: boolean;
+		class?: string;
+	}
+
+	let {
+		color = 'currentColor',
+		size = 24,
+		strokeWidth = 2,
+		animate: animateProp = false,
+		class: className = ''
+	}: IconProps = $props();
+
+	let hoverAnimate = $state(false);
+	let resetTimer: ReturnType<typeof setTimeout> | undefined;
+	const animate = $derived(animateProp || hoverAnimate);
+
+	function handleMouseEnter() {
+		if (animate) return;
+		hoverAnimate = true;
+		resetTimer = setTimeout(() => {
+			hoverAnimate = false;
+		}, 500);
+	}
+
+	$effect(() => () => clearTimeout(resetTimer));
+</script>
+
+<div class={className} aria-label="arrow-left-right" role="img" onmouseenter={handleMouseEnter}>
+	<svg
+		xmlns="http://www.w3.org/2000/svg"
+		width={size}
+		height={size}
+		viewBox="0 0 24 24"
+		fill="none"
+		stroke={color}
+		stroke-width={strokeWidth}
+		stroke-linecap="round"
+		stroke-linejoin="round"
+		class:animate
+	>
+		<path d="M8 3L4 7l4 4" class="left-arrow" class:animate />
+		<path d="M4 7h16" class="left-arrow" class:animate />
+		<path d="M16 21l4-4-4-4" class="right-arrow" class:animate />
+		<path d="M20 17H4" class="right-arrow" class:animate />
+	</svg>
+</div>
+
+<style>
+	div {
+		/* Local change from the upstream registry: inline-flex instead of
+		   inline-block, so the wrapper adds no line-height gap when it sits
+		   inside margin's flex button rows. */
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	.left-arrow,
+	.right-arrow {
+		transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+	}
+
+	.left-arrow.animate {
+		animation: moveLeft 0.5s;
+	}
+
+	.right-arrow.animate {
+		animation: moveRight 0.5s;
+	}
+
+	@keyframes moveLeft {
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		50% {
+			transform: translateX(-3px);
+		}
+	}
+
+	@keyframes moveRight {
+		0%,
+		100% {
+			transform: translateX(0);
+		}
+		50% {
+			transform: translateX(3px);
+		}
+	}
+</style>

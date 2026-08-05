@@ -1,21 +1,6 @@
-use super::path_to_string;
-use super::search::{collect_md_paths, MAX_WALK_DEPTH};
-use rayon::prelude::*;
-use serde::Serialize;
-use std::collections::{HashMap, HashSet};
-use std::fs;
-use std::path::Path;
-
-#[derive(Serialize, specta::Type)]
-pub struct TagInfo {
-    pub tag: String,
-    #[specta(type = u32)]
-    pub count: usize,
-    pub files: Vec<String>,
-}
-
-/// Extract `#tag` tokens from markdown content.
-fn extract_tags_from_content(content: &str) -> Vec<String> {
+/// Extract `#tag` tokens from markdown content. Called while a note is being
+/// indexed — the `tags` table is the only tag scan in the app.
+pub(crate) fn extract_tags_from_content(content: &str) -> Vec<String> {
     let mut tags = Vec::new();
     let mut in_code_block = false;
 
@@ -72,42 +57,4 @@ fn extract_tags_from_content(content: &str) -> Vec<String> {
     }
 
     tags
-}
-
-/// Scan all `.md` files under `root` and collect unique `#tag` tokens.
-#[tauri::command]
-#[specta::specta]
-pub fn list_all_tags(root: &str) -> Result<Vec<TagInfo>, String> {
-    let mut md_paths = Vec::new();
-    collect_md_paths(Path::new(root), &mut md_paths, 0, MAX_WALK_DEPTH);
-
-    let per_file: Vec<(String, Vec<String>)> = md_paths
-        .into_par_iter()
-        .filter_map(|path| {
-            let content = fs::read_to_string(&path).ok()?;
-            let tags = extract_tags_from_content(&content);
-            Some((path_to_string(path), tags))
-        })
-        .collect();
-
-    let mut tag_files: HashMap<String, Vec<String>> = HashMap::new();
-    for (path_str, tags) in per_file {
-        let mut seen: HashSet<String> = HashSet::new();
-        for tag in tags {
-            if seen.insert(tag.clone()) {
-                tag_files.entry(tag).or_default().push(path_str.clone());
-            }
-        }
-    }
-
-    let mut result: Vec<TagInfo> = tag_files
-        .into_iter()
-        .map(|(tag, files)| {
-            let count = files.len();
-            TagInfo { tag, count, files }
-        })
-        .collect();
-
-    result.sort_by(|a, b| b.count.cmp(&a.count).then(a.tag.cmp(&b.tag)));
-    Ok(result)
 }

@@ -1,76 +1,53 @@
 <script lang="ts">
-  interface Props {
-    icon: any;
-    onclick: (e: MouseEvent) => void;
-    title?: string;
-    size?: "sm" | "md";
-    active?: boolean;
-    disabled?: boolean;
-    extraClass?: string;
-  }
+	import type { Component } from 'svelte';
+	import { cn } from '$lib/utils';
 
-  let {
-    icon: Icon,
-    onclick,
-    title,
-    size = "md",
-    active = false,
-    disabled = false,
-    extraClass = "",
-  }: Props = $props();
-  let dim = $derived(size === "sm" ? 26 : 32);
-  let iconSize = $derived(size === "sm" ? 14 : 16);
+	interface Props {
+		/* Lucide-compatible icon — see the note in Button.svelte for why the type
+		   is the passed prop rather than `LucideProps`. */
+		icon: Component<{ size?: number }>;
+		onclick: (e: MouseEvent) => void;
+		title?: string;
+		size?: 'sm' | 'md';
+		active?: boolean;
+		disabled?: boolean;
+		extraClass?: string;
+	}
+
+	let {
+		icon: Icon,
+		onclick,
+		title,
+		size = 'md',
+		active = false,
+		disabled = false,
+		extraClass = ''
+	}: Props = $props();
+	let iconSize = $derived(size === 'sm' ? 14 : 16);
 </script>
 
+<!--
+  `p-0!` and `rounded-sm!` fight the unlayered `button { padding; border-radius }`
+  block in app.css, which outranks plain utilities regardless of specificity.
+
+  `[&.spin]:animate-spin` keeps the one caller-supplied class that carried
+  behaviour (StatusBar passes extraClass="spin" while syncing) working without a
+  scoped stylesheet — the class name comes from the call site, so it cannot be a
+  utility, but a self-referencing arbitrary variant can match it.
+-->
 <button
-  class="icon-btn {extraClass}"
-  class:active
-  style="width: {dim}px; height: {dim}px"
-  {onclick}
-  {title}
-  {disabled}
+	class={cn(
+		'inline-flex shrink-0 items-center justify-center rounded-sm bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out',
+		'hover:bg-muted hover:text-foreground',
+		'disabled:pointer-events-none disabled:opacity-40',
+		'[&.spin]:animate-spin',
+		size === 'sm' ? 'size-[26px]' : 'size-8',
+		active && 'bg-accent text-accent-foreground',
+		extraClass
+	)}
+	{onclick}
+	{title}
+	{disabled}
 >
-  <Icon size={iconSize} />
+	<Icon size={iconSize} />
 </button>
-
-<style>
-  .icon-btn {
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    padding: 0;
-    background: transparent;
-    color: var(--text-muted);
-    border-radius: var(--radius-xs);
-    transition: all 0.15s ease;
-    flex-shrink: 0;
-  }
-
-  .icon-btn:hover {
-    color: var(--text-primary);
-    background: var(--bg-hover);
-  }
-
-  .icon-btn.active {
-    color: var(--text-primary);
-    background: var(--bg-tertiary);
-  }
-
-  .icon-btn:disabled {
-    opacity: 0.5;
-    pointer-events: none;
-  }
-
-  :global(.icon-btn.spin) {
-    animation: spin 1s linear infinite;
-  }
-
-  @keyframes spin {
-    from {
-      transform: rotate(0deg);
-    }
-    to {
-      transform: rotate(360deg);
-    }
-  }
-</style>

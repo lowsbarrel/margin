@@ -1,109 +1,65 @@
 <script lang="ts">
-  import { untrack } from "svelte";
-  import { ChevronRight } from "lucide-svelte";
-  import type { Snippet } from "svelte";
+	import { untrack } from 'svelte';
+	import { ChevronRight } from '@lucide/svelte';
+	import type { Component, Snippet } from 'svelte';
+	import { cn } from '$lib/utils';
 
-  interface Props {
-    title?: string;
-    icon?: any;
-    children: Snippet;
-    collapsible?: boolean;
-    defaultOpen?: boolean;
-  }
+	interface Props {
+		title?: string;
+		/* Lucide-compatible icon — see the note in Button.svelte for why the type
+		   is the passed prop rather than `LucideProps`. */
+		icon?: Component<{ size?: number }>;
+		children: Snippet;
+		collapsible?: boolean;
+		defaultOpen?: boolean;
+	}
 
-  let {
-    title,
-    icon: Icon,
-    children,
-    collapsible = false,
-    defaultOpen = true,
-  }: Props = $props();
+	let { title, icon: Icon, children, collapsible = false, defaultOpen = true }: Props = $props();
 
-  let open = $state(untrack(() => defaultOpen));
+	let open = $state(untrack(() => defaultOpen));
 
-  function toggle() {
-    if (collapsible) open = !open;
-  }
+	function toggle() {
+		if (collapsible) open = !open;
+	}
 </script>
 
-<section class="section">
-  {#if title}
-    <!-- svelte-ignore a11y_click_events_have_key_events -->
-    <!-- svelte-ignore a11y_no_static_element_interactions -->
-    <div class="section-header" class:collapsible onclick={toggle}>
-      <h3 class="section-title">
-        {#if Icon}<Icon size={14} />{/if}
-        {title}
-      </h3>
-      {#if collapsible}
-        <span class="chevron" class:open>
-          <ChevronRight size={14} />
-        </span>
-      {/if}
-    </div>
-  {/if}
-  {#if !collapsible || open}
-    <div class="section-body">
-      {@render children()}
-    </div>
-  {/if}
+<!-- Flat card: a hairline border over the page surface, no shadow. -->
+<section class="flex flex-col overflow-hidden rounded-lg border border-border bg-background">
+	{#if title}
+		<!-- svelte-ignore a11y_click_events_have_key_events -->
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class={cn(
+				'flex items-center justify-between bg-surface-1 px-4 py-3',
+				/* The divider only earns its keep when there is content below it. */
+				(!collapsible || open) && 'border-b border-border',
+				collapsible &&
+					'cursor-pointer transition-colors duration-120 ease-out select-none hover:bg-surface-2'
+			)}
+			onclick={toggle}
+		>
+			<!-- `tracking-normal!` overrides the unlayered `h1..h6` rule in app.css,
+			     which forces tight tracking on every heading. -->
+			<h3 class="m-0 flex items-center gap-2 text-sm font-semibold tracking-normal text-foreground">
+				{#if Icon}<span class="flex items-center text-subtle-foreground"><Icon size={14} /></span
+					>{/if}
+				{title}
+			</h3>
+			{#if collapsible}
+				<span
+					class={cn(
+						'flex items-center text-subtle-foreground transition-transform duration-150 ease-out',
+						open && 'rotate-90'
+					)}
+				>
+					<ChevronRight size={14} />
+				</span>
+			{/if}
+		</div>
+	{/if}
+	{#if !collapsible || open}
+		<div class="flex flex-col gap-3 p-4">
+			{@render children()}
+		</div>
+	{/if}
 </section>
-
-<style>
-  .section {
-    display: flex;
-    flex-direction: column;
-    border: 1px solid var(--border-subtle);
-    border-radius: var(--radius-sm);
-    overflow: hidden;
-  }
-
-  .section-header {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    padding: var(--space-md) var(--space-lg);
-    background: var(--bg-secondary);
-    border-bottom: 1px solid var(--border-subtle);
-  }
-
-  .section-header.collapsible {
-    cursor: pointer;
-    user-select: none;
-    -webkit-user-select: none;
-  }
-
-  .section-header.collapsible:hover {
-    background: var(--bg-hover);
-  }
-
-  .section-title {
-    display: flex;
-    align-items: center;
-    gap: var(--space-sm);
-    font-family: var(--font-sans);
-    font-size: 0.8rem;
-    font-weight: 600;
-    color: var(--text-primary);
-    margin: 0;
-    letter-spacing: -0.01em;
-  }
-
-  .chevron {
-    display: flex;
-    align-items: center;
-    color: var(--text-muted);
-    transition: transform 0.2s ease;
-  }
-
-  .chevron.open {
-    transform: rotate(90deg);
-  }
-
-  .section-body {
-    padding: var(--space-lg);
-    display: flex;
-    flex-direction: column;
-    gap: var(--space-md);
-  }
-</style>
