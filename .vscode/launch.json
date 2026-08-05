@@ -1,0 +1,27 @@
+{
+	"version": "0.2.0",
+	"configurations": [
+		{
+			// Debugs the Rust side. `beforeDevCommand` in tauri.conf.json starts
+			// vite, so the frontend comes up on its own; use the webview's own
+			// devtools for the Svelte half.
+			"name": "Tauri: debug Rust",
+			"type": "lldb",
+			"request": "launch",
+			"cargo": {
+				"args": ["build", "--manifest-path=./app/src-tauri/Cargo.toml", "--no-default-features"]
+			},
+			"cwd": "${workspaceFolder}/app/src-tauri",
+			"preLaunchTask": "tauri: before dev"
+		},
+		{
+			"name": "Debug current Node script",
+			"type": "node",
+			"request": "launch",
+			"program": "${file}",
+			"cwd": "${workspaceFolder}/app",
+			"console": "integratedTerminal",
+			"skipFiles": ["<node_internals>/**", "**/node_modules/**"]
+		}
+	]
+}

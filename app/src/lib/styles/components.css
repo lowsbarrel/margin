@@ -1,0 +1,183 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Shared component classes
+   ───────────────────────────────────────────────────────────────────────
+   Svelte scopes every `<style>` block to its own component, which is the
+   right default — but it also means a pattern used by three components gets
+   written out three times and drifts three ways. Anything genuinely shared
+   lives here instead, as plain global classes, so there is exactly one place
+   to change it.
+
+   The rule of thumb: a pattern earns a place in this file once a *second*
+   component needs it. One-off layout stays local to its component.
+
+   Everything here is built from the tokens in `tokens.css` — no raw colours,
+   sizes, radii or durations below this line.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ─────────────────────────── Sidebar panels ───────────────────────────
+   Shared by the Explorer and Favourites panels. (The Search panel that used
+   to be the third consumer was replaced by the Spotlight palette.) */
+
+.panel-header {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: var(--space-sm);
+	padding: var(--space-md) var(--space-md) var(--space-sm) var(--space-lg);
+	min-height: 44px;
+	flex-shrink: 0;
+}
+
+/* Quiet structural label, not a heading competing with content. */
+.panel-title {
+	font-size: var(--text-size-xs);
+	font-weight: var(--font-weight-semibold);
+	text-transform: uppercase;
+	letter-spacing: var(--text-tracking-wide);
+	color: var(--color-text-tertiary);
+	white-space: nowrap;
+}
+
+.panel-actions {
+	display: flex;
+	align-items: center;
+	gap: var(--space-2xs);
+}
+
+.panel-content {
+	flex: 1;
+	overflow-y: auto;
+	padding: 0 var(--space-sm) var(--space-sm);
+}
+
+/* ──────────────────────────── List rows ───────────────────────────────
+   The entry row used by the Favourites panel and Spotlight's result list.
+   `.is-active` marks the row whose file is open in the editor — the one
+   place in a list that earns brand colour. */
+
+.list-row {
+	position: relative;
+	display: flex;
+	align-items: flex-start;
+	gap: var(--space-sm);
+	width: 100%;
+	padding: var(--space-sm) 10px;
+	background: none;
+	border: none;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-secondary);
+	font-family: var(--font-sans);
+	font-size: var(--text-size-sm);
+	letter-spacing: var(--text-tracking-normal);
+	text-align: left;
+	cursor: pointer;
+	transition:
+		background var(--transition-fast),
+		color var(--transition-fast);
+}
+
+.list-row > svg {
+	flex-shrink: 0;
+	margin-top: 2px;
+	color: var(--color-text-tertiary);
+}
+
+.list-row:hover {
+	background: var(--color-bg-secondary);
+	color: var(--color-text-primary);
+}
+
+.list-row.is-active {
+	background: var(--color-brand-12);
+	color: var(--color-text-primary);
+}
+
+.list-row.is-active::before {
+	content: '';
+	position: absolute;
+	left: 0;
+	top: var(--space-sm);
+	bottom: var(--space-sm);
+	width: 2px;
+	border-radius: var(--radius-full);
+	background: var(--color-bg-brand);
+}
+
+.list-row.is-active > svg {
+	color: var(--color-text-brand);
+}
+
+.list-row-text {
+	display: flex;
+	flex-direction: column;
+	gap: 2px;
+	min-width: 0;
+}
+
+.list-row-name {
+	font-size: var(--text-size-sm);
+	font-weight: var(--font-weight-medium);
+	color: var(--color-text-primary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+.list-row-meta {
+	font-size: var(--text-size-xs);
+	color: var(--color-text-tertiary);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+
+/* ───────────────────────────── Empty state ──────────────────────────── */
+
+.empty-note {
+	padding: var(--space-lg);
+	text-align: center;
+	color: var(--color-text-tertiary);
+	font-size: var(--text-size-sm);
+}
+
+/* ────────────────────────── Keyboard hint ───────────────────────────── */
+
+.kbd {
+	font-family: var(--font-sans);
+	font-size: var(--text-size-xs);
+	color: var(--color-text-tertiary);
+	background: var(--color-bg-secondary);
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-xs);
+	padding: 2px 6px;
+	flex-shrink: 0;
+}
+
+/* ─────────────────────────── Floating surface ───────────────────────────
+   Menus, popovers and dialogs are the only things in this UI that actually
+   float, so they are the only things that get a shadow. Everything else
+   builds depth from a hairline border over a solid surface. */
+
+.surface-popover {
+	background: var(--color-bg-primary);
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-md);
+	box-shadow: var(--shadow-lg);
+}
+
+/* ─────────────────────────── Utility ──────────────────────────────── */
+
+/* No `.truncate` or `.spin` here: Tailwind already ships both (`truncate`,
+   `animate-spin`), and redefining those exact names in a lower layer is a trap
+   — the built-in silently wins for the properties they share, so the two
+   definitions can drift without anything failing. The only thing our version
+   added was `min-width: 0`, which is now spelled out as `min-w-0` at the call
+   sites that need a flex child to shrink. */
+
+/* Opt an icon into brand colour — favourite stars, pinned markers. Wins over
+   the tertiary colour `.list-row > svg` gives icons by default. */
+.list-row > svg.icon-brand,
+.icon-brand {
+	color: var(--color-text-brand);
+	fill: currentColor;
+}

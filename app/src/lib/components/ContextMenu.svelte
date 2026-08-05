@@ -1,143 +1,98 @@
 <script lang="ts">
-  import { onMount, tick, untrack } from "svelte";
+	import { onMount, tick, untrack } from 'svelte';
 
-  export interface ContextMenuItem {
-    label: string;
-    onclick: () => void | Promise<void>;
-    destructive?: boolean;
-    disabled?: boolean;
-  }
+	export interface ContextMenuItem {
+		label: string;
+		onclick: () => void | Promise<void>;
+		destructive?: boolean;
+		disabled?: boolean;
+	}
 
-  interface Props {
-    x: number;
-    y: number;
-    items: ContextMenuItem[];
-    onclose: () => void;
-  }
+	interface Props {
+		x: number;
+		y: number;
+		items: ContextMenuItem[];
+		onclose: () => void;
+	}
 
-  let { x, y, items, onclose }: Props = $props();
-  let menuEl: HTMLDivElement;
-  let left = $state(untrack(() => x));
-  let top = $state(untrack(() => y));
+	let { x, y, items, onclose }: Props = $props();
+	let menuEl: HTMLDivElement;
+	let left = $state(untrack(() => x));
+	let top = $state(untrack(() => y));
 
-  async function positionMenu() {
-    await tick();
-    if (!menuEl) return;
-    const rect = menuEl.getBoundingClientRect();
-    left = Math.max(8, Math.min(x, window.innerWidth - rect.width - 8));
-    top = Math.max(8, Math.min(y, window.innerHeight - rect.height - 8));
-  }
+	// The anchor is passed in rather than read off `x`/`y` inside: the clamping
+	// happens after `await tick()`, and reads past an await are not tracked by
+	// the effect below. Taking them as arguments makes the dependency real.
+	async function positionMenu(anchorX: number, anchorY: number) {
+		await tick();
+		if (!menuEl) return;
+		const rect = menuEl.getBoundingClientRect();
+		left = Math.max(8, Math.min(anchorX, window.innerWidth - rect.width - 8));
+		top = Math.max(8, Math.min(anchorY, window.innerHeight - rect.height - 8));
+	}
 
-  $effect(() => {
-    x;
-    y;
-    positionMenu();
-  });
+	$effect(() => {
+		positionMenu(x, y);
+	});
 
-  onMount(() => {
-    positionMenu();
-    requestAnimationFrame(() => menuEl?.focus());
-  });
+	onMount(() => {
+		positionMenu(x, y);
+		requestAnimationFrame(() => menuEl?.focus());
+	});
 
-  function handleDocumentMouseDown(event: MouseEvent) {
-    if (!menuEl?.contains(event.target as Node)) {
-      onclose();
-    }
-  }
+	function handleDocumentMouseDown(event: MouseEvent) {
+		if (!menuEl?.contains(event.target as Node)) {
+			onclose();
+		}
+	}
 
-  function handleDocumentContextMenu(event: MouseEvent) {
-    if (!menuEl?.contains(event.target as Node)) {
-      onclose();
-    }
-  }
+	function handleDocumentContextMenu(event: MouseEvent) {
+		if (!menuEl?.contains(event.target as Node)) {
+			onclose();
+		}
+	}
 
-  function handleKeydown(event: KeyboardEvent) {
-    if (event.key === "Escape") {
-      onclose();
-    }
-  }
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			onclose();
+		}
+	}
 
-  async function runItem(item: ContextMenuItem) {
-    if (item.disabled) return;
-    onclose();
-    await item.onclick();
-  }
+	async function runItem(item: ContextMenuItem) {
+		if (item.disabled) return;
+		onclose();
+		await item.onclick();
+	}
 </script>
 
 <svelte:document
-  onmousedown={handleDocumentMouseDown}
-  oncontextmenu={handleDocumentContextMenu}
-  onkeydown={handleKeydown}
+	onmousedown={handleDocumentMouseDown}
+	oncontextmenu={handleDocumentContextMenu}
+	onkeydown={handleKeydown}
 />
 
+<!-- Surface (solid fill, hairline border, shadow) comes from the shared
+     `.surface-popover` class; the rest is utilities. The `!` modifiers counter
+     `src/app.css`'s unlayered bare-`button` rule, which outranks utilities on
+     the properties it sets (padding, weight, disabled cursor). -->
 <div
-  class="context-menu"
-  bind:this={menuEl}
-  style:left={`${left}px`}
-  style:top={`${top}px`}
-  tabindex={-1}
-  role="menu"
+	class="surface-popover fixed z-[200] min-w-44 p-1 outline-none"
+	bind:this={menuEl}
+	style:left={`${left}px`}
+	style:top={`${top}px`}
+	tabindex={-1}
+	role="menu"
 >
-  {#each items as item (item.label)}
-    <button
-      class="menu-item"
-      class:destructive={item.destructive}
-      disabled={item.disabled}
-      onclick={() => runItem(item)}
-      role="menuitem"
-    >
-      {item.label}
-    </button>
-  {/each}
+	{#each items as item (item.label)}
+		<button
+			class="block w-full rounded-sm px-2.5 py-[7px] text-left text-sm font-normal tracking-normal transition-colors disabled:cursor-default disabled:opacity-40 {item.destructive
+				? 'text-destructive enabled:hover:bg-destructive/10'
+				: 'text-muted-foreground enabled:hover:bg-surface-1 enabled:hover:text-foreground'}"
+			disabled={item.disabled}
+			onclick={() => runItem(item)}
+			role="menuitem"
+		>
+			{item.label}
+		</button>
+	{/each}
 </div>
-
-<style>
-  .context-menu {
-    position: fixed;
-    z-index: 200;
-    min-width: 160px;
-    padding: 4px;
-    background: var(--glass-bg);
-    backdrop-filter: blur(var(--glass-blur));
-    -webkit-backdrop-filter: blur(var(--glass-blur));
-    border: 1px solid var(--glass-border);
-    border-radius: var(--radius-sm);
-    box-shadow: var(--glass-shadow);
-    outline: none;
-  }
-
-  .menu-item {
-    display: block;
-    width: 100%;
-    padding: 6px 10px;
-    background: transparent;
-    border: none;
-    border-radius: var(--radius-xs);
-    color: var(--text-secondary);
-    font-size: 0.85rem;
-    text-align: left;
-    cursor: pointer;
-    transition:
-      background 0.1s,
-      color 0.1s;
-  }
-
-  .menu-item:hover:not(:disabled) {
-    background: var(--bg-hover);
-    color: var(--text-primary);
-  }
-
-  .menu-item.destructive {
-    color: var(--danger);
-  }
-
-  .menu-item.destructive:hover:not(:disabled) {
-    background: rgba(239, 68, 68, 0.1);
-    color: var(--danger-hover);
-  }
-
-  .menu-item:disabled {
-    opacity: 0.4;
-    cursor: default;
-  }
-</style>

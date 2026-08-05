@@ -1,70 +1,78 @@
 {
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Tauri Dev",
-      "type": "shell",
-      "command": "pnpm tauri dev",
-      "options": {
-        "cwd": "${workspaceFolder}/app"
-      },
-      "isBackground": true,
-      "problemMatcher": [],
-      "group": "build",
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Tauri Build Release",
-      "type": "shell",
-      "command": "pnpm tauri build",
-      "options": {
-        "cwd": "${workspaceFolder}/app"
-      },
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      },
-      "problemMatcher": ["$rustc", "$tsc"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "dedicated"
-      }
-    },
-    {
-      "label": "Lint: Svelte",
-      "type": "shell",
-      "command": "pnpm check",
-      "options": {
-        "cwd": "${workspaceFolder}/app"
-      },
-      "problemMatcher": ["$tsc"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Lint: Rust",
-      "type": "shell",
-      "command": "cargo clippy --all-targets --all-features",
-      "options": {
-        "cwd": "${workspaceFolder}/app/src-tauri"
-      },
-      "problemMatcher": ["$rustc"],
-      "presentation": {
-        "reveal": "always",
-        "panel": "shared"
-      }
-    },
-    {
-      "label": "Lint All",
-      "dependsOn": ["Lint: Svelte", "Lint: Rust"],
-      "dependsOrder": "parallel",
-      "problemMatcher": [],
-      "group": "test"
-    }
-  ]
+	"version": "2.0.0",
+	"options": {
+		"cwd": "${workspaceFolder}/app"
+	},
+	"tasks": [
+		{
+			"label": "tauri: dev",
+			"type": "shell",
+			"command": "pnpm tauri dev",
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
+			"label": "tauri: build",
+			"type": "shell",
+			"command": "pnpm tauri build",
+			"group": { "kind": "build", "isDefault": true },
+			"problemMatcher": ["$rustc", "$tsc"],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
+			"label": "pnpm: check",
+			"type": "shell",
+			"command": "pnpm check",
+			"problemMatcher": ["$tsc"]
+		},
+		{
+			"label": "pnpm: lint",
+			"type": "shell",
+			"command": "pnpm lint",
+			"problemMatcher": []
+		},
+		{
+			"label": "pnpm: format",
+			"type": "shell",
+			"command": "pnpm format",
+			"problemMatcher": []
+		},
+		{
+			"label": "pnpm: gen:bindings",
+			"type": "shell",
+			"command": "pnpm gen:bindings",
+			"problemMatcher": ["$rustc"]
+		},
+		{
+			"label": "cargo: fmt",
+			"type": "shell",
+			"command": "cargo fmt",
+			"options": { "cwd": "${workspaceFolder}/app/src-tauri" },
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo: clippy",
+			"type": "shell",
+			"command": "cargo clippy --all-targets -- -D warnings",
+			"options": { "cwd": "${workspaceFolder}/app/src-tauri" },
+			"problemMatcher": ["$rustc"]
+		},
+		{
+			// The pre-commit gate, minus the slow half CI owns.
+			"label": "gate: pre-commit",
+			"dependsOn": ["pnpm: lint", "cargo: fmt"],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			// Everything CI enforces, in one go.
+			"label": "gate: full",
+			"dependsOn": ["pnpm: lint", "pnpm: check", "cargo: fmt", "cargo: clippy"],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": { "kind": "test", "isDefault": true }
+		}
+	]
 }

@@ -66,6 +66,9 @@ impl VaultDebouncer {
             // Allow a new burst to schedule a fresh timer before we emit, so an
             // event arriving right after this point is not silently dropped.
             this.timer_active.store(false, Ordering::Release);
+            // Drop the cached vault tree *before* telling the frontend, so the
+            // refresh that follows can never be answered from a stale snapshot.
+            crate::index::tree::invalidate();
             let _ = this.app.emit("vault-fs-changed", ());
         });
     }
