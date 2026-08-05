@@ -30,6 +30,36 @@ pub struct SearchHit {
     pub snippet: String,
 }
 
+/// A `#tag` and the notes carrying it.
+#[derive(Serialize, specta::Type)]
+pub struct TagInfo {
+    pub tag: String,
+    #[specta(type = u32)]
+    pub count: usize,
+    pub files: Vec<String>,
+}
+
+/// Every `[[wiki-link]]` out of one note. Titles keep their original case —
+/// the graph uses them as node ids.
+#[derive(Serialize, specta::Type)]
+pub struct LinkEntry {
+    pub path: String,
+    pub links: Vec<String>,
+}
+
+/// A note that links *to* the one being viewed.
+#[derive(Debug, Serialize, specta::Type)]
+pub struct Backlink {
+    pub path: String,
+    pub name: String,
+}
+
+/// Bumping this wipes the index so the next rebuild re-reads every file. Tags
+/// and links are only written when a note is (re)indexed, so a vault built by
+/// an older schema would otherwise keep serving empty tag and backlink results
+/// forever — `rebuild` skips unchanged files, and every file is unchanged.
+const SCHEMA_VERSION: i64 = 2;
+
 fn db_path(root: &str) -> std::path::PathBuf {
     Path::new(root).join(".margin").join("index.sqlite")
 }
@@ -57,9 +87,37 @@ fn open_db(root: &str) -> Result<Connection, String> {
              name,
              body,
              tokenize = 'unicode61 remove_diacritics 2'
-         );",
+         );
+         CREATE TABLE IF NOT EXISTS tags (
+             path TEXT NOT NULL,
+             tag  TEXT NOT NULL,
+             PRIMARY KEY (path, tag)
+         );
+         CREATE INDEX IF NOT EXISTS tags_tag ON tags (tag);
+         CREATE TABLE IF NOT EXISTS links (
+             src       TEXT NOT NULL,
+             target    TEXT NOT NULL,
+             target_lc TEXT NOT NULL,
+             PRIMARY KEY (src, target)
+         );
+         CREATE INDEX IF NOT EXISTS links_target_lc ON links (target_lc);",
     )
     .map_err(|e| format!("Failed to init index schema: {e}"))?;
+
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap_or(0);
+    if version < SCHEMA_VERSION {
+        conn.execute_batch(
+            "DELETE FROM notes;
+             DELETE FROM notes_fts;
+             DELETE FROM tags;
+             DELETE FROM links;",
+        )
+        .map_err(|e| format!("Failed to reset index: {e}"))?;
+        conn.pragma_update(None, "user_version", SCHEMA_VERSION)
+            .map_err(|e| format!("Failed to stamp index schema: {e}"))?;
+    }
     Ok(conn)
 }
 
@@ -94,6 +152,37 @@ fn upsert(
         "INSERT INTO notes_fts (path, name, body) VALUES (?1, ?2, ?3)",
         params![path, name, body],
     )?;
+
+    // Tags and links are derived from the same read of the body, so indexing a
+    // note is the only walk of the vault any of these three features needs.
+    // `OR IGNORE` leans on the primary keys to drop repeats within one note.
+    conn.execute("DELETE FROM tags WHERE path = ?1", params![path])?;
+    for tag in crate::fs::tags::extract_tags_from_content(body) {
+        conn.execute(
+            "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
+            params![path, tag],
+        )?;
+    }
+
+    conn.execute("DELETE FROM links WHERE src = ?1", params![path])?;
+    for link in crate::text::parse_wiki_links(body) {
+        // Stored both ways: the graph keys nodes on the title as written, while
+        // backlink lookup has to be case-insensitive.
+        let lower = link.title.to_lowercase();
+        conn.execute(
+            "INSERT OR IGNORE INTO links (src, target, target_lc) VALUES (?1, ?2, ?3)",
+            params![path, link.title, lower],
+        )?;
+    }
+    Ok(())
+}
+
+/// Every table keyed by a note's path. Used wherever a note leaves the index.
+fn delete_note_rows(conn: &Connection, path: &str) -> rusqlite::Result<()> {
+    conn.execute("DELETE FROM notes WHERE path = ?1", params![path])?;
+    conn.execute("DELETE FROM notes_fts WHERE path = ?1", params![path])?;
+    conn.execute("DELETE FROM tags WHERE path = ?1", params![path])?;
+    conn.execute("DELETE FROM links WHERE src = ?1", params![path])?;
     Ok(())
 }
 
@@ -177,8 +266,7 @@ pub fn remove_path(root: &str, path: &Path) {
         return;
     };
     if let Ok(conn) = open_db(root) {
-        let _ = conn.execute("DELETE FROM notes WHERE path = ?1", params![path_str]);
-        let _ = conn.execute("DELETE FROM notes_fts WHERE path = ?1", params![path_str]);
+        let _ = delete_note_rows(&conn, &path_str);
     }
 }
 
@@ -199,14 +287,14 @@ pub fn remove_prefix(root: &str, dir: &Path) {
         .replace('_', r"\_");
     let pattern = format!("{escaped}%");
     if let Ok(conn) = open_db(root) {
-        let _ = conn.execute(
+        for sql in [
             r"DELETE FROM notes WHERE path LIKE ?1 ESCAPE '\'",
-            params![pattern],
-        );
-        let _ = conn.execute(
             r"DELETE FROM notes_fts WHERE path LIKE ?1 ESCAPE '\'",
-            params![pattern],
-        );
+            r"DELETE FROM tags WHERE path LIKE ?1 ESCAPE '\'",
+            r"DELETE FROM links WHERE src LIKE ?1 ESCAPE '\'",
+        ] {
+            let _ = conn.execute(sql, params![pattern]);
+        }
     }
 }
 
@@ -271,10 +359,7 @@ pub fn rebuild(root: &str) -> Result<u32, String> {
     // Drop rows for files that have disappeared since the last build.
     for path_str in existing.keys() {
         if !present.contains(path_str) {
-            tx.execute("DELETE FROM notes WHERE path = ?1", params![path_str])
-                .map_err(|e| e.to_string())?;
-            tx.execute("DELETE FROM notes_fts WHERE path = ?1", params![path_str])
-                .map_err(|e| e.to_string())?;
+            delete_note_rows(&tx, path_str).map_err(|e| e.to_string())?;
         }
     }
 
@@ -353,6 +438,111 @@ pub fn index_rebuild(root: &str) -> Result<u32, String> {
     rebuild(root)
 }
 
+/// Every `#tag` in the vault, most-used first. Served from the index rather
+/// than a second walk of every `.md`.
+#[tauri::command]
+#[specta::specta]
+pub fn index_tags(root: &str) -> Result<Vec<TagInfo>, String> {
+    let conn = open_db(root)?;
+    let mut stmt = conn
+        .prepare("SELECT tag, path FROM tags ORDER BY tag, path")
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+        .map_err(|e| e.to_string())?;
+
+    let mut by_tag: HashMap<String, Vec<String>> = HashMap::new();
+    for row in rows {
+        let (tag, path) = row.map_err(|e| e.to_string())?;
+        by_tag.entry(tag).or_default().push(path);
+    }
+
+    let mut out: Vec<TagInfo> = by_tag
+        .into_iter()
+        .map(|(tag, files)| TagInfo {
+            tag,
+            count: files.len(),
+            files,
+        })
+        .collect();
+    out.sort_by(|a, b| b.count.cmp(&a.count).then(a.tag.cmp(&b.tag)));
+    Ok(out)
+}
+
+/// Every wiki-link in the vault, grouped by source note — the whole graph in
+/// one query. Notes with no outgoing links are included so they still appear
+/// as nodes.
+#[tauri::command]
+#[specta::specta]
+pub fn index_links(root: &str) -> Result<Vec<LinkEntry>, String> {
+    let conn = open_db(root)?;
+
+    let mut by_src: HashMap<String, Vec<String>> = HashMap::new();
+    {
+        let mut stmt = conn
+            .prepare("SELECT path FROM notes")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| r.get::<_, String>(0))
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            by_src.entry(row.map_err(|e| e.to_string())?).or_default();
+        }
+    }
+    {
+        let mut stmt = conn
+            .prepare("SELECT src, target FROM links ORDER BY src")
+            .map_err(|e| e.to_string())?;
+        let rows = stmt
+            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
+            .map_err(|e| e.to_string())?;
+        for row in rows {
+            let (src, target) = row.map_err(|e| e.to_string())?;
+            by_src.entry(src).or_default().push(target);
+        }
+    }
+
+    Ok(by_src
+        .into_iter()
+        .map(|(path, links)| LinkEntry { path, links })
+        .collect())
+}
+
+/// The notes that link to `path`, by its filename stem — the same thing a
+/// `[[wiki-link]]` names. Matched case-insensitively, as link resolution is.
+#[tauri::command]
+#[specta::specta]
+pub fn index_backlinks(root: &str, path: &str) -> Result<Vec<Backlink>, String> {
+    let Some(stem) = Path::new(path).file_stem().and_then(|s| s.to_str()) else {
+        return Ok(vec![]);
+    };
+    let target = stem.to_lowercase();
+
+    let conn = open_db(root)?;
+    let mut stmt = conn
+        .prepare(
+            "SELECT notes.path, notes.name
+             FROM links JOIN notes ON notes.path = links.src
+             WHERE links.target_lc = ?1 AND links.src <> ?2
+             ORDER BY notes.name",
+        )
+        .map_err(|e| e.to_string())?;
+    let rows = stmt
+        .query_map(params![target, path], |r| {
+            Ok(Backlink {
+                path: r.get(0)?,
+                name: r.get(1)?,
+            })
+        })
+        .map_err(|e| e.to_string())?;
+
+    let mut out = Vec::new();
+    for row in rows {
+        out.push(row.map_err(|e| e.to_string())?);
+    }
+    Ok(out)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -422,6 +612,67 @@ mod tests {
         assert!(prefix.ends_with("notes_old/"), "got {prefix}");
         // The anchor is what keeps a sibling like `notes_older` out of the sweep.
         assert!(!format!("{}notes_older/x.md", &prefix[..prefix.len() - 10]).starts_with(&prefix));
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn rebuild_populates_tags_and_links() {
+        let root = temp_vault();
+        let root_str = crate::fs::path_to_string(root.clone());
+
+        std::fs::write(
+            root.join("alpha.md"),
+            "#work #work again\nsee [[Beta]] and ![[not-a-link.png]]\n",
+        )
+        .unwrap();
+        std::fs::write(root.join("beta.md"), "#work\nback to [[alpha]]\n").unwrap();
+
+        rebuild(&root_str).unwrap();
+
+        // A tag repeated inside one note counts once for that note.
+        let tags = index_tags(&root_str).unwrap();
+        let work = tags.iter().find(|t| t.tag == "work").expect("tag missing");
+        assert_eq!(work.count, 2, "one row per note, not per occurrence");
+
+        // Backlink lookup is by filename stem and case-insensitive: `[[Beta]]`
+        // in alpha.md must resolve to beta.md.
+        let beta = crate::fs::path_to_string(root.join("beta.md"));
+        let back = index_backlinks(&root_str, &beta).unwrap();
+        assert_eq!(back.len(), 1, "expected alpha.md, got {back:?}");
+        assert_eq!(back[0].name, "alpha.md");
+
+        // Image embeds are not links.
+        let links = index_links(&root_str).unwrap();
+        let alpha = crate::fs::path_to_string(root.join("alpha.md"));
+        let alpha_links = &links.iter().find(|e| e.path == alpha).unwrap().links;
+        assert_eq!(alpha_links, &vec!["Beta".to_string()]);
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn deleting_a_note_clears_its_tags_and_links() {
+        let root = temp_vault();
+        let root_str = crate::fs::path_to_string(root.clone());
+        let note = root.join("gamma.md");
+        std::fs::write(&note, "#orphan\n[[alpha]]\n").unwrap();
+        rebuild(&root_str).unwrap();
+        assert!(index_tags(&root_str)
+            .unwrap()
+            .iter()
+            .any(|t| t.tag == "orphan"));
+
+        std::fs::remove_file(&note).unwrap();
+        rebuild(&root_str).unwrap();
+
+        // Stale rows here would keep a deleted note showing up as a backlink.
+        assert!(!index_tags(&root_str)
+            .unwrap()
+            .iter()
+            .any(|t| t.tag == "orphan"));
+        let alpha = crate::fs::path_to_string(root.join("alpha.md"));
+        assert!(index_backlinks(&root_str, &alpha).unwrap().is_empty());
 
         std::fs::remove_dir_all(&root).ok();
     }

@@ -10,6 +10,7 @@
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import Settings from '$lib/components/Settings.svelte';
 	import HistoryPanel from '$lib/components/HistoryPanel.svelte';
+	import BacklinksPanel from '$lib/components/BacklinksPanel.svelte';
 	import {
 		readFileBytes,
 		onFileChanged,
@@ -26,7 +27,7 @@
 	import {
 		startAutoSync,
 		stopAutoSync,
-		runQuietSync,
+		runManualSync,
 		setSyncCredentials,
 		type ConflictStrategy
 	} from '$lib/sync/s3sync';
@@ -57,6 +58,7 @@
 	let showSettings = $state(false);
 	let showSpotlight = $state(false);
 	let showHistory = $state(false);
+	let showBacklinks = $state(false);
 	let sidebarOpen = $state(true);
 	let sidebarActiveView = $state<SidebarView>('files');
 	let sidebarWidth = $state(280);
@@ -510,6 +512,14 @@
 				{/each}
 			</div>
 
+			{#if showBacklinks && panes.activeTab && panes.activeTab.type === 'markdown'}
+				<BacklinksPanel
+					filePath={panes.activeTab.path}
+					onclose={() => (showBacklinks = false)}
+					onfileselect={handleFileSelect}
+				/>
+			{/if}
+
 			{#if showHistory && panes.activeTab && panes.activeTab.type === 'markdown'}
 				<HistoryPanel
 					filePath={panes.activeTab.path}
@@ -529,10 +539,12 @@
 		<StatusBar
 			onlogout={onLogout}
 			onsettings={() => (showSettings = true)}
-			onsync={runQuietSync}
+			onsync={runManualSync}
 			onswitchvault={onLogout}
 			onhistory={() => (showHistory = !showHistory)}
 			historyActive={showHistory}
+			onbacklinks={() => (showBacklinks = !showBacklinks)}
+			backlinksActive={showBacklinks}
 		/>
 	</div>
 

@@ -1,12 +1,11 @@
 mod export;
 mod search;
-mod tags;
+pub(crate) mod tags;
 mod walk;
 mod watch;
 
 pub use export::*;
 pub use search::*;
-pub use tags::*;
 pub use walk::*;
 pub use watch::*;
 
@@ -188,13 +187,6 @@ pub struct TreeEntry {
     /// Nesting depth (0 = vault root level).
     #[specta(type = u32)]
     pub depth: usize,
-}
-
-/// Returned by `read_link_batch`.
-#[derive(Serialize, specta::Type)]
-pub struct LinkEntry {
-    pub path: String,
-    pub links: Vec<String>,
 }
 
 #[tauri::command]
@@ -567,32 +559,4 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
         return Err(format!("File manager exited with status {exit_status}"));
     }
     Ok(())
-}
-
-/// Read multiple Markdown files and extract `[[wiki-links]]` from each — all
-/// in native Rust using a single IPC call.
-#[tauri::command]
-#[specta::specta]
-pub fn read_link_batch(paths: Vec<String>) -> Vec<LinkEntry> {
-    paths
-        .into_par_iter()
-        .map(|p| {
-            let links = extract_wiki_links(Path::new(&p));
-            LinkEntry { path: p, links }
-        })
-        .collect()
-}
-
-/// Parse `[[wiki-links]]` (but not `![[image embeds]]`) from a file, reusing
-/// the single shared parser in `text::wiki_links` so the file-based and
-/// PM-node-based extractors can never drift on parsing rules.
-fn extract_wiki_links(path: &Path) -> Vec<String> {
-    let content = match fs::read_to_string(path) {
-        Ok(c) => c,
-        Err(_) => return vec![],
-    };
-    crate::text::parse_wiki_links(&content)
-        .into_iter()
-        .map(|link| link.title)
-        .collect()
 }

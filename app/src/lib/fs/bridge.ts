@@ -15,6 +15,7 @@ export { flushWriteQueue };
  * so existing call sites that import them from this bridge keep working.
  */
 export type {
+	Backlink,
 	FsEntry,
 	LinkEntry,
 	TreeEntry,
@@ -25,6 +26,7 @@ export type {
 	WikiLinkMatch
 } from '$lib/bindings';
 import type {
+	Backlink,
 	FsEntry,
 	LinkEntry,
 	TreeEntry,
@@ -99,11 +101,6 @@ export async function walkDirectory(root: string, includeHidden = false): Promis
 	const r = await commands.walkDirectory(root, includeHidden);
 	if (r.status === 'error') throw r.error;
 	return r.data;
-}
-
-/** Extract [[wiki-links]] from multiple Markdown files in a single native call. */
-export async function readLinkBatch(paths: string[]): Promise<LinkEntry[]> {
-	return commands.readLinkBatch(paths);
 }
 
 /** Build a flat sorted list of visible tree rows in one native call. */
@@ -263,8 +260,26 @@ export async function setMtime(path: string, mtime: number): Promise<void> {
 	if (r.status === 'error') throw r.error;
 }
 
+/**
+ * Tags, wiki-links and backlinks all come out of the search index — a note is
+ * read once, when it is indexed, rather than once per feature that wants it.
+ */
 export async function listAllTags(root: string): Promise<TagInfo[]> {
-	const r = await commands.listAllTags(root);
+	const r = await commands.indexTags(root);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+/** Every note's outgoing [[wiki-links]] — the whole graph in one query. */
+export async function listAllLinks(root: string): Promise<LinkEntry[]> {
+	const r = await commands.indexLinks(root);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+/** Notes linking to `path`, matched on its filename stem. */
+export async function listBacklinks(root: string, path: string): Promise<Backlink[]> {
+	const r = await commands.indexBacklinks(root, path);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }

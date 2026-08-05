@@ -12,7 +12,7 @@
 	// The sync-status glyphs are indicators, not controls — they stay static, so
 	// brushing past them with the pointer doesn't set something wiggling.
 	// `Moon` has no animated counterpart in the registry.
-	import { CloudOff, Loader, Check, AlertCircle, Moon, FileDown } from '@lucide/svelte';
+	import { CloudOff, Loader, Check, AlertCircle, Moon, FileDown, Link2 } from '@lucide/svelte';
 	import {
 		Sun,
 		LogOut,
@@ -30,6 +30,8 @@
 		onswitchvault?: () => void;
 		onhistory?: () => void;
 		historyActive?: boolean;
+		onbacklinks?: () => void;
+		backlinksActive?: boolean;
 	}
 
 	let {
@@ -38,7 +40,9 @@
 		onsync,
 		onswitchvault,
 		onhistory,
-		historyActive = false
+		historyActive = false,
+		onbacklinks,
+		backlinksActive = false
 	}: Props = $props();
 	let exporting = $state(false);
 
@@ -126,6 +130,16 @@
 				size="sm"
 				onclick={handleExportPdf}
 				title={m.statusbar_export_pdf()}
+			/>
+		{/if}
+
+		{#if onbacklinks && editor.tiptap}
+			<IconButton
+				icon={Link2}
+				size="sm"
+				onclick={onbacklinks}
+				title={m.statusbar_backlinks()}
+				active={backlinksActive}
 			/>
 		{/if}
 

@@ -3,6 +3,7 @@
 	import { Editor } from '@tiptap/core';
 	import { common, createLowlight } from 'lowlight';
 	import { createEditorExtensions } from '$lib/editor/extensions';
+	import { splitFrontmatter, joinFrontmatter } from '$lib/editor/frontmatter';
 	import { unresolveImagePaths } from '$lib/editor/image-paths';
 	import { transformImagePaths } from '$lib/editor/text-transform-bridge';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
@@ -35,6 +36,29 @@
 	/** Read serialized Markdown from the editor's tiptap-markdown storage. */
 	function getEditorMarkdown(e: Editor): string {
 		return e.storage.markdown?.getMarkdown?.() ?? '';
+	}
+
+	/**
+	 * The note's YAML frontmatter, held verbatim while the body is edited —
+	 * TipTap would otherwise rewrite the block into a setext heading. Not `$state`:
+	 * nothing renders it, and it is only ever read inside editor callbacks.
+	 */
+	let frontmatter: string | null = null;
+
+	/**
+	 * The full document as it should hit disk: what the editor holds, with the
+	 * frontmatter put back. Everything downstream — save, history, sync, the
+	 * index — sees the complete note.
+	 */
+	function serializeDocument(e: Editor): string {
+		return joinFrontmatter(frontmatter, unresolveImagePaths(getEditorMarkdown(e), vault.vaultPath));
+	}
+
+	/** Take the frontmatter aside and hand back only the body for the editor. */
+	function takeFrontmatter(markdown: string): string {
+		const split = splitFrontmatter(markdown);
+		frontmatter = split.frontmatter;
+		return split.body;
 	}
 
 	interface Props {
@@ -126,20 +150,23 @@
 				flushPendingSave();
 				// Guard against out-of-order async resolution (mirror bubblePositionToken).
 				const token = ++externalUpdateToken;
-				transformImagePaths(initialContent, vault.vaultPath, attachmentFolder, 'resolve').then(
-					(resolved) => {
-						if (token !== externalUpdateToken || !tiptap) return;
-						// Preserve selection across the full-document replacement.
-						const prev = tiptap.state.selection;
-						const prevFrom = prev.from;
-						const prevTo = prev.to;
-						tiptap.commands.setContent(resolved, { emitUpdate: false });
-						const size = tiptap.state.doc.content.size;
-						const from = Math.min(prevFrom, size);
-						const to = Math.min(prevTo, size);
-						tiptap.commands.setTextSelection({ from, to });
-					}
-				);
+				transformImagePaths(
+					takeFrontmatter(initialContent),
+					vault.vaultPath,
+					attachmentFolder,
+					'resolve'
+				).then((resolved) => {
+					if (token !== externalUpdateToken || !tiptap) return;
+					// Preserve selection across the full-document replacement.
+					const prev = tiptap.state.selection;
+					const prevFrom = prev.from;
+					const prevTo = prev.to;
+					tiptap.commands.setContent(resolved, { emitUpdate: false });
+					const size = tiptap.state.doc.content.size;
+					const from = Math.min(prevFrom, size);
+					const to = Math.min(prevTo, size);
+					tiptap.commands.setTextSelection({ from, to });
+				});
 			}
 		}
 	});
@@ -416,10 +443,10 @@
 				}
 			},
 			onCreate: ({ editor: e }) => {
-				lastSavedMd = unresolveImagePaths(getEditorMarkdown(e), vault.vaultPath);
+				lastSavedMd = serializeDocument(e);
 			},
 			onUpdate: ({ editor: e }) => {
-				const text = unresolveImagePaths(getEditorMarkdown(e), vault.vaultPath);
+				const text = serializeDocument(e);
 				if (text === lastSavedMd) return;
 				lastSavedMd = text;
 				// Immediate UI feedback; debounce the actual write to coalesce typing.
@@ -458,12 +485,15 @@
 	}
 
 	onMount(() => {
-		transformImagePaths(initialContent, vault.vaultPath, attachmentFolder, 'resolve').then(
-			(resolved) => {
-				createEditor(resolved);
-				restoreCursorOnce();
-			}
-		);
+		transformImagePaths(
+			takeFrontmatter(initialContent),
+			vault.vaultPath,
+			attachmentFolder,
+			'resolve'
+		).then((resolved) => {
+			createEditor(resolved);
+			restoreCursorOnce();
+		});
 		container.addEventListener('paste', handlePaste as EventListener, true);
 		container.addEventListener('contextmenu', handleEditorContextMenu as EventListener, true);
 		// Find & Replace keyboard shortcuts

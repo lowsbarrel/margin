@@ -1,5 +1,5 @@
 import { vault } from '$lib/stores/vault.svelte';
-import { readFileBytes, writeFileBytes, walkDirectory, readLinkBatch } from '$lib/fs/bridge';
+import { walkDirectory, listAllLinks } from '$lib/fs/bridge';
 
 export interface GraphNode {
 	id: string;
@@ -28,50 +28,9 @@ const state = $state<GraphState>({
 	nodeToPath: new Map()
 });
 
-// Per-file {mtime, links[]} cache at .margin/graph-cache.json.
-// Only stale files are re-read from disk.
-
-interface CacheEntry {
-	mtime: number;
-	links: string[];
-}
-
-interface LinkCache {
-	version: number;
-	entries: Record<string, CacheEntry>;
-}
-
-const CACHE_VERSION = 1;
-
 // Set when build() is called while a build is already in flight, so the request
 // isn't lost (e.g. a vault-fs-changed during a build) — it re-runs once after.
 let rebuildRequested = false;
-
-async function loadLinkCache(vaultPath: string): Promise<LinkCache> {
-	const path = `${vaultPath}/.margin/graph-cache.json`;
-	try {
-		const bytes = await readFileBytes(path);
-		const parsed = JSON.parse(new TextDecoder().decode(bytes)) as LinkCache;
-		if (parsed?.version === CACHE_VERSION && typeof parsed.entries === 'object') {
-			return parsed;
-		}
-	} catch {
-		/* ignore */
-	}
-	return { version: CACHE_VERSION, entries: {} };
-}
-
-async function saveLinkCache(vaultPath: string, cache: LinkCache): Promise<void> {
-	const path = `${vaultPath}/.margin/graph-cache.json`;
-	try {
-		const bytes = new TextEncoder().encode(JSON.stringify(cache));
-		await writeFileBytes(path, bytes);
-	} catch (err) {
-		// Non-fatal: the next build just re-reads all files instead of using the
-		// cache. Log so a persistently failing cache write is diagnosable.
-		console.warn('Failed to save graph link cache:', err);
-	}
-}
 
 function fileNameToId(name: string): string {
 	return name.endsWith('.md') ? name.slice(0, -3) : name;
@@ -81,9 +40,9 @@ function fileNameToId(name: string): string {
  * Everything below builds plain `Map`/`Set` instances rather than the reactive
  * `SvelteMap`/`SvelteSet`, on purpose:
  *
- *  - `titleToAbs`, `staleByPath`, `existingPaths` and the node-id de-duplication
- *    are scratch collections local to one build. Nothing outside this function
- *    ever sees them, so there is nothing to make reactive.
+ *  - `titleToAbs`, `linksByPath` and the node-id de-duplication are scratch
+ *    collections local to one build. Nothing outside this function ever sees
+ *    them, so there is nothing to make reactive.
  *  - `state.nodeToPath` is only ever *replaced* wholesale at the end of a build,
  *    never mutated afterwards. Its single consumer does one `.get()` per node
  *    click, so per-key reactive sources for a vault-sized lookup table would be
@@ -110,8 +69,11 @@ async function _build(): Promise<void> {
 
 		const titleToAbs = new Map(mdFiles.map((f) => [fileNameToId(f.name).toLowerCase(), f.path]));
 
-		const cache = await loadLinkCache(vaultPath);
-		let cacheUpdated = false;
+		// One query for every link in the vault. This used to be a per-file
+		// {mtime, links} cache at .margin/graph-cache.json plus a re-read of each
+		// stale file; the search index already stores links, so both are gone.
+		const linkEntries = await listAllLinks(vaultPath);
+		const linksByPath = new Map(linkEntries.map((e) => [e.path, e.links]));
 
 		// Node ids in first-seen order, duplicates included; de-duplicated in one
 		// pass at the end. A Set built from this array keeps that same order, so
@@ -119,47 +81,13 @@ async function _build(): Promise<void> {
 		const nodeIds: string[] = [];
 		const edges: GraphEdge[] = [];
 
-		const stale: typeof mdFiles = [];
 		for (const f of mdFiles) {
 			const sourceId = fileNameToId(f.name);
 			nodeIds.push(sourceId);
-			const cached = cache.entries[f.path];
-			if (cached && cached.mtime === f.modified) {
-				for (const link of cached.links) {
-					nodeIds.push(link);
-					edges.push({ source: sourceId, target: link });
-				}
-			} else {
-				stale.push(f);
+			for (const link of linksByPath.get(f.path) ?? []) {
+				nodeIds.push(link);
+				edges.push({ source: sourceId, target: link });
 			}
-		}
-
-		if (stale.length > 0) {
-			const stalePaths = stale.map((f) => f.path);
-			const staleByPath = new Map(stale.map((f) => [f.path, f]));
-			const freshEntries = await readLinkBatch(stalePaths);
-			for (const { path, links } of freshEntries) {
-				const f = staleByPath.get(path);
-				const sourceId = f ? fileNameToId(f.name) : fileNameToId(path.split('/').pop() ?? path);
-				for (const link of links) {
-					nodeIds.push(link);
-					edges.push({ source: sourceId, target: link });
-				}
-				cache.entries[path] = { mtime: f?.modified ?? 0, links };
-				cacheUpdated = true;
-			}
-		}
-
-		const existingPaths = new Set(mdFiles.map((f) => f.path));
-		for (const p of Object.keys(cache.entries)) {
-			if (!existingPaths.has(p)) {
-				delete cache.entries[p];
-				cacheUpdated = true;
-			}
-		}
-
-		if (cacheUpdated) {
-			saveLinkCache(vaultPath, cache); // fire-and-forget
 		}
 
 		const nodes: GraphNode[] = [...new Set(nodeIds)].map((id) => ({ id, label: id }));
