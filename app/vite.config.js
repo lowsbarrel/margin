@@ -8,10 +8,14 @@ const host = process.env.TAURI_DEV_HOST;
 // https://vite.dev/config/
 export default defineConfig(async () => ({
 	plugins: [
-		// Must run before sveltekit() so utility classes in `<style>` blocks and
-		// component markup are picked up during the Svelte transform.
-		tailwindcss(),
+		// Must run *after* sveltekit(). Ordered first, Tailwind's plugin claims
+		// `foo.svelte?svelte&type=style&lang.css` before Svelte has split the
+		// component, then loads `foo.svelte` off disk and parses the whole file
+		// — script included — as CSS. Dev dies on the first `<style>` block in a
+		// component; the production build resolves those ids differently and
+		// hides it.
 		sveltekit(),
+		tailwindcss(),
 		paraglideVitePlugin({
 			project: './project.inlang',
 			outdir: './src/lib/paraglide',
