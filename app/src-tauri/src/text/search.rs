@@ -82,18 +82,15 @@ fn memchr_find(hay: &[u8], pat: &[u8], start: usize) -> Option<usize> {
     let hay = &hay[start..];
     let mut i = 0;
     while i + pat.len() <= hay.len() {
-        if let Some(j) = memchr::memchr(first, &hay[i..]) {
-            let pos = i + j;
-            if pos + pat.len() > hay.len() {
-                return None;
-            }
-            if &hay[pos..pos + pat.len()] == pat {
-                return Some(start + pos);
-            }
-            i = pos + 1;
-        } else {
+        let j = memchr::memchr(first, &hay[i..])?;
+        let pos = i + j;
+        if pos + pat.len() > hay.len() {
             return None;
         }
+        if &hay[pos..pos + pat.len()] == pat {
+            return Some(start + pos);
+        }
+        i = pos + 1;
     }
     None
 }

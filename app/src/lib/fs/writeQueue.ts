@@ -3,9 +3,9 @@
 type WriteFn = (path: string, content: Uint8Array) => Promise<void>;
 
 interface Pending {
-  content: Uint8Array;
-  resolve: () => void;
-  reject: (err: unknown) => void;
+	content: Uint8Array;
+	resolve: () => void;
+	reject: (err: unknown) => void;
 }
 
 const inflight = new Map<string, boolean>();
@@ -23,7 +23,7 @@ const settleResolvers = new Map<string, () => void>();
 let _rawWrite: WriteFn;
 
 export function initWriteQueue(rawWrite: WriteFn): void {
-  _rawWrite = rawWrite;
+	_rawWrite = rawWrite;
 }
 
 /**
@@ -39,23 +39,23 @@ export function initWriteQueue(rawWrite: WriteFn): void {
  * final write for all paths.
  */
 export function queuedWrite(path: string, content: Uint8Array): Promise<void> {
-  if (!_rawWrite) throw new Error("writeQueue not initialised");
+	if (!_rawWrite) throw new Error('writeQueue not initialised');
 
-  // If nothing is in flight, run immediately
-  if (!inflight.get(path)) {
-    return runWrite(path, content);
-  }
+	// If nothing is in flight, run immediately
+	if (!inflight.get(path)) {
+		return runWrite(path, content);
+	}
 
-  // A write is in flight — replace pending content (latest wins)
-  const prev = pending.get(path);
-  if (prev) {
-    // Resolve the old pending promise silently (its content was superseded)
-    prev.resolve();
-  }
+	// A write is in flight — replace pending content (latest wins)
+	const prev = pending.get(path);
+	if (prev) {
+		// Resolve the old pending promise silently (its content was superseded)
+		prev.resolve();
+	}
 
-  return new Promise<void>((resolve, reject) => {
-    pending.set(path, { content, resolve, reject });
-  });
+	return new Promise<void>((resolve, reject) => {
+		pending.set(path, { content, resolve, reject });
+	});
 }
 
 /**
@@ -65,48 +65,45 @@ export function queuedWrite(path: string, content: Uint8Array): Promise<void> {
  * Intended to be awaited on window close / before quitting.
  */
 export async function flushWriteQueue(): Promise<void> {
-  // A drain can chain a new write (and thus extend the settle window), so loop
-  // until no path has any outstanding work.
-  while (settled.size > 0) {
-    await Promise.allSettled(Array.from(settled.values()));
-  }
+	// A drain can chain a new write (and thus extend the settle window), so loop
+	// until no path has any outstanding work.
+	while (settled.size > 0) {
+		await Promise.allSettled(Array.from(settled.values()));
+	}
 }
 
 /** Mark `path` as having outstanding work, creating its settle promise once. */
 function beginSettle(path: string): void {
-  if (settled.has(path)) return;
-  settled.set(
-    path,
-    new Promise<void>((res) => settleResolvers.set(path, res)),
-  );
+	if (settled.has(path)) return;
+	settled.set(path, new Promise<void>((res) => settleResolvers.set(path, res)));
 }
 
 /** Mark `path` as fully drained: resolve and clear its settle promise. */
 function endSettle(path: string): void {
-  const res = settleResolvers.get(path);
-  settleResolvers.delete(path);
-  settled.delete(path);
-  res?.();
+	const res = settleResolvers.get(path);
+	settleResolvers.delete(path);
+	settled.delete(path);
+	res?.();
 }
 
 async function runWrite(path: string, content: Uint8Array): Promise<void> {
-  beginSettle(path);
-  inflight.set(path, true);
-  try {
-    await _rawWrite(path, content);
-  } finally {
-    inflight.delete(path);
-    drain(path);
-  }
+	beginSettle(path);
+	inflight.set(path, true);
+	try {
+		await _rawWrite(path, content);
+	} finally {
+		inflight.delete(path);
+		drain(path);
+	}
 }
 
 function drain(path: string): void {
-  const next = pending.get(path);
-  if (!next) {
-    // Chain fully drained — the final content for this path has landed.
-    endSettle(path);
-    return;
-  }
-  pending.delete(path);
-  runWrite(path, next.content).then(next.resolve, next.reject);
+	const next = pending.get(path);
+	if (!next) {
+		// Chain fully drained — the final content for this path has landed.
+		endSettle(path);
+		return;
+	}
+	pending.delete(path);
+	runWrite(path, next.content).then(next.resolve, next.reject);
 }

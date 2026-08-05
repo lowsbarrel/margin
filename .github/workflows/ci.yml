@@ -2,62 +2,210 @@ name: CI
 
 on:
   push:
-    branches: [master]
+    branches: [main]
   pull_request:
-    branches: [master]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  # Cancel superseded PR runs, but never a push to main.
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # ── App checks ───────────────────────────────────────────────────────────
-  app-lint:
-    name: App — Svelte Check & Cargo Check
+  # Conventional Commits, enforced (AGENTS.md "Naming"). PR titles matter
+  # because squash merges inherit them. Zero-dependency on purpose: an inline
+  # check keeps the supply chain closed. Titles go through env vars, never
+  # inline interpolation — PR titles are attacker-controlled input.
+  conventions:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0
+      - name: PR title follows Conventional Commits
+        env:
+          TITLE: ${{ github.event.pull_request.title }}
+        run: |
+          pattern='^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9./-]+\))?!?: .+'
+          echo "$TITLE" | grep -qE "$pattern" \
+            || { echo "PR title must be Conventional Commits, e.g. 'feat(editor): add table row menu'"; exit 1; }
+          [ "${#TITLE}" -le 72 ] || { echo "PR title over 72 characters"; exit 1; }
+      - name: Commit messages follow Conventional Commits
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: |
+          pattern='^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9./-]+\))?!?: .+'
+          bad=0
+          while IFS= read -r subject; do
+            case "$subject" in "Merge "*) continue ;; esac
+            echo "$subject" | grep -qE "$pattern" || { echo "not conventional: $subject"; bad=1; }
+            [ "${#subject}" -le 72 ] || { echo "over 72 characters: $subject"; bad=1; }
+          done < <(git log --format=%s "$BASE".."$HEAD")
+          exit "$bad"
+
+  # The frontend half: everything the pre-commit hook runs, plus the two gates
+  # deliberately left out of it for being slow.
+  test:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@v6
-
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
-          version: 9
-
-      - uses: actions/setup-node@v6
+          package_json_file: app/package.json
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
-          node-version: 22
+          node-version: 24
           cache: pnpm
           cache-dependency-path: app/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check:invariants
+      - run: pnpm run check:secrets
+      - run: pnpm run lint
+      - run: pnpm run check
+      - run: pnpm run build
 
-      - name: Install JS dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Svelte check (type check)
-        run: pnpm check
-
-      - name: Install system deps for Tauri build
-        uses: awalsh128/cache-apt-pkgs-action@v1
+  # Type-aware deprecation gate: fails on any use of an @deprecated symbol —
+  # renamed Lucide icons, deprecated Tiptap/SvelteKit/Tauri APIs, or your own
+  # @deprecated tags. Needs full type info, so it's slow and lives in its own
+  # job, deliberately kept out of `pnpm lint` and the pre-commit hook.
+  #
+  # "Slow" is not an exaggeration: the rule builds a type program over the whole
+  # SvelteKit tree and did not finish in 10 minutes on a warm local checkout.
+  # The timeout is here to cap it rather than because 20 minutes is expected —
+  # if it trips, scope the run to a subdirectory instead of raising it.
+  deprecations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
         with:
-          packages: libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev libgtk-3-dev libayatana-appindicator3-dev
-          version: 1.0
-
-      - uses: dtolnay/rust-toolchain@stable
+          package_json_file: app/package.json
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
         with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      # install runs `prepare` (svelte-kit sync + i18n:compile), so the type
+      # program the rule needs is generated before it runs.
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check:deprecated
+
+  # The Rust half, on every platform we ship. Margin is full of
+  # `#[cfg(target_os = "…")]` path and shell handling, so a single-platform lint
+  # proves nothing about the branch that only compiles on the other two — and
+  # the alternative is finding out at tag time, when the release build breaks.
+  rust:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: app/src-tauri
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      # Installed straight from apt rather than through a caching action: the
+      # cache only restores the packages named here, not the transitive `-dev`
+      # ones that carry the .pc files, so pkg-config could not find glib-2.0.
+      - name: Install Linux system deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev \
+            libgtk-3-dev libayatana-appindicator3-dev
+
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: stable
           components: clippy, rustfmt
 
-      - uses: Swatinem/rust-cache@v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           workspaces: app/src-tauri -> target
 
-      - name: Cargo fmt check
-        working-directory: app/src-tauri
+      - name: Cargo fmt
         run: cargo fmt -- --check
 
+      # --all-targets covers tests and benches; --all-features is deliberately
+      # absent, since it turns on Tauri's custom-protocol feature, which expects
+      # a bundled frontend that is not built at lint time.
       - name: Cargo clippy
-        working-directory: app/src-tauri
-        run: cargo clippy -- -D warnings
+        run: cargo clippy --all-targets -- -D warnings
 
+      - name: Cargo test
+        run: cargo test
+
+  # Known-vulnerable crates. One platform is enough — the advisory database is
+  # not OS-specific — and it is split out so a new CVE in a transitive crate
+  # fails on its own line instead of masking a real clippy regression.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: app/src-tauri -> target
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --locked
       - name: Cargo audit
-        run: cargo install cargo-audit && cargo audit
         working-directory: app/src-tauri
+        run: cargo audit
+
+  # Proves the thing we actually ship still bundles. `cargo clippy` compiles the
+  # Rust and `vite build` compiles the frontend, but neither exercises the Tauri
+  # bundler, its config, or the icon/capability wiring — and without this the
+  # release workflow only finds out at tag time, when a failure means a bad tag.
+  bundle:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      - uses: pnpm/action-setup@0ebf47130e4866e96fce0953f49152a61190b271 # v6.0.9
+        with:
+          package_json_file: app/package.json
+      - uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: app/pnpm-lock.yaml
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+        with:
+          toolchain: stable
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          workspaces: app/src-tauri -> target
+      - name: Install Linux system deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev \
+            libgtk-3-dev libayatana-appindicator3-dev
+      - name: Install JS dependencies
+        working-directory: app
+        run: pnpm install --frozen-lockfile
+      # No signing key on purpose: an unsigned bundle still proves the bundler
+      # config is sound, and the updater signature is the release workflow's job.
+      # `createUpdaterArtifacts` has to be turned off to mean it, though —
+      # tauri.conf.json carries the updater pubkey, and with the artifact enabled
+      # `tauri build` fails after bundling because it has no private key to sign
+      # with. Overridden here rather than in the config so releases keep it on.
+      - name: Build the bundle
+        working-directory: app
+        run: pnpm tauri build --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'

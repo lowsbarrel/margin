@@ -1,0 +1,19 @@
+#!/bin/sh
+# Enforced pre-commit gate — the fast half of "done" (AGENTS.md). Activated for
+# every commit once `pnpm install` has run in app/ (its package.json `prepare`
+# points core.hooksPath here), for any tool or human, not just AI agents.
+#
+# Deliberately fast: `svelte-check` and `cargo clippy` cost minutes on a cold
+# target dir, so they stay in CI, which enforces the full set on every PR.
+# For a genuine work-in-progress commit, bypass with:
+#   git commit --no-verify
+set -e
+
+echo "pre-commit ▸ pnpm check:secrets"
+(cd app && pnpm check:secrets)
+echo "pre-commit ▸ pnpm check:invariants"
+(cd app && pnpm check:invariants)
+echo "pre-commit ▸ pnpm lint"
+(cd app && pnpm lint)
+echo "pre-commit ▸ cargo fmt --check"
+(cd app/src-tauri && cargo fmt -- --check)

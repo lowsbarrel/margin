@@ -1,0 +1,363 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Margin design tokens — three-layer architecture
+   ───────────────────────────────────────────────────────────────────────
+   PRIMITIVE          SEMANTIC (per theme)         RESOLVED (used in CSS)
+   --neutral-100  →   --sem-text-primary       →   --color-text-primary
+   0 0% 8%            (light) neutral-100           hsl(0 0% 8%)
+                      (dark)  neutral-0
+
+   Primitives are bare HSL triples (`H S% L%`) and are never used directly.
+   Semantic aliases give them meaning and are the ONLY thing that differs
+   between light and dark. Resolved `--color-*` values wrap the semantic
+   triple in hsl(); because the wrap references the semantic var *by name*,
+   flipping `data-theme` on <html> re-resolves every colour with no extra CSS.
+
+   The semantic layer is namespaced `--sem-*` so it can never collide with
+   the resolved colour names or with the legacy aliases in app.css.
+
+   Storing colours as triples rather than hex is what makes the opacity ramps
+   work: `hsl(var(--opacity-black-8))` → `hsl(0 0% 25% / 8%)`. That one trick
+   powers every hairline border in the app.
+
+   House style: flat, not floating. Depth comes from hairline low-opacity
+   borders over solid surfaces, not drop shadows. Neutral-first, with colour
+   reserved for state. Orange is the brand accent.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+:root {
+	/* ═══════════════════ Layer 1 — primitives ═══════════════════ */
+
+	/* Neutral — the backbone */
+	--neutral-0: 0 0% 100%;
+	--neutral-5: 0 0% 96%;
+	--neutral-10: 0 0% 93%;
+	--neutral-20: 0 0% 86%;
+	--neutral-30: 0 0% 76%;
+	--neutral-40: 0 0% 68%;
+	--neutral-50: 0 0% 53%;
+	--neutral-60: 0 0% 44%;
+	--neutral-70: 0 0% 36%;
+	--neutral-80: 0 0% 25%;
+	--neutral-90: 0 0% 15%;
+	--neutral-95: 0 0% 12%;
+	--neutral-100: 0 0% 8%;
+
+	/* Orange — the brand ramp. -50 is #ff6633, margin's long-standing accent. */
+	--orange-5: 24 100% 97%;
+	--orange-10: 22 100% 94%;
+	--orange-20: 20 100% 87%;
+	--orange-30: 18 100% 78%;
+	--orange-40: 16 100% 70%;
+	--orange-50: 15 100% 60%;
+	--orange-60: 15 94% 52%;
+	--orange-70: 15 96% 45%;
+	--orange-80: 14 92% 36%;
+	--orange-90: 14 88% 26%;
+	--orange-95: 14 84% 18%;
+
+	/* Green — positive */
+	--green-5: 120 60% 96%;
+	--green-10: 120 55% 91%;
+	--green-20: 118 50% 80%;
+	--green-30: 116 45% 66%;
+	--green-40: 112 45% 52%;
+	--green-50: 110 60% 38%;
+	--green-60: 108 75% 31%;
+	--green-70: 107 88% 26%;
+	--green-80: 106 88% 21%;
+	--green-90: 105 85% 15%;
+	--green-95: 104 80% 11%;
+
+	/* Yellow — warning */
+	--yellow-5: 48 100% 96%;
+	--yellow-10: 46 100% 90%;
+	--yellow-20: 44 100% 78%;
+	--yellow-30: 42 100% 64%;
+	--yellow-40: 40 96% 52%;
+	--yellow-50: 38 96% 42%;
+	--yellow-60: 36 100% 33%;
+	--yellow-70: 34 100% 27%;
+	--yellow-80: 33 100% 22%;
+	--yellow-90: 32 96% 16%;
+	--yellow-95: 31 92% 11%;
+
+	/* Red — negative */
+	--red-5: 8 100% 97%;
+	--red-10: 8 100% 93%;
+	--red-20: 8 100% 85%;
+	--red-30: 9 100% 75%;
+	--red-40: 10 96% 64%;
+	--red-50: 11 92% 55%;
+	--red-60: 12 94% 47%;
+	--red-70: 12 96% 41%;
+	--red-80: 12 96% 33%;
+	--red-90: 12 92% 24%;
+	--red-95: 12 88% 16%;
+
+	/* Purple — accent */
+	--purple-5: 280 100% 98%;
+	--purple-10: 279 100% 95%;
+	--purple-20: 278 96% 88%;
+	--purple-30: 277 88% 79%;
+	--purple-40: 276 80% 68%;
+	--purple-50: 275 72% 58%;
+	--purple-60: 275 70% 53%;
+	--purple-70: 275 69% 49%;
+	--purple-80: 275 70% 40%;
+	--purple-90: 275 72% 29%;
+	--purple-95: 275 74% 20%;
+
+	/* Blue — informational */
+	--blue-5: 216 100% 97%;
+	--blue-10: 216 100% 93%;
+	--blue-20: 216 100% 85%;
+	--blue-30: 216 100% 74%;
+	--blue-40: 216 100% 64%;
+	--blue-50: 216 100% 56%;
+	--blue-60: 216 100% 52%;
+	--blue-70: 216 100% 50%;
+	--blue-80: 216 100% 40%;
+	--blue-90: 216 100% 29%;
+	--blue-95: 216 100% 20%;
+
+	/* Opacity ramps — translucent neutrals that adapt to whatever sits behind
+	   them. These are the hairline borders and subtle fills. */
+	--opacity-black-64: 0 0% 25% / 64%;
+	--opacity-black-48: 0 0% 25% / 48%;
+	--opacity-black-32: 0 0% 25% / 32%;
+	--opacity-black-24: 0 0% 25% / 24%;
+	--opacity-black-16: 0 0% 25% / 16%;
+	--opacity-black-12: 0 0% 25% / 12%;
+	--opacity-black-10: 0 0% 25% / 10%;
+	--opacity-black-8: 0 0% 25% / 8%;
+	--opacity-black-6: 0 0% 25% / 6%;
+	--opacity-black-4: 0 0% 25% / 4%;
+
+	--opacity-white-64: 0 0% 100% / 64%;
+	--opacity-white-48: 0 0% 100% / 48%;
+	--opacity-white-32: 0 0% 100% / 32%;
+	--opacity-white-24: 0 0% 100% / 24%;
+	--opacity-white-16: 0 0% 100% / 16%;
+	--opacity-white-12: 0 0% 100% / 12%;
+	--opacity-white-10: 0 0% 100% / 10%;
+	--opacity-white-8: 0 0% 100% / 8%;
+	--opacity-white-6: 0 0% 100% / 6%;
+	--opacity-white-4: 0 0% 100% / 4%;
+
+	/* ═══════════════ Layer 2 — semantic (light, default) ═══════════════ */
+
+	--sem-text-primary: var(--neutral-100);
+	--sem-text-secondary: var(--neutral-60);
+	--sem-text-tertiary: var(--neutral-40);
+	--sem-text-inverse: var(--neutral-0);
+	--sem-text-brand: var(--orange-70);
+	--sem-text-positive: var(--green-70);
+	--sem-text-warning: var(--yellow-70);
+	--sem-text-negative: var(--red-70);
+	--sem-text-code: var(--red-70);
+	--sem-text-disabled: var(--neutral-30);
+
+	/* Opaque surface steps. Menus, modals and popovers sit on these, so they
+	   must be solid — a translucent fill would let page content bleed through. */
+	--sem-surface-0: var(--neutral-0);
+	--sem-surface-1: 0 0% 97.5%;
+	--sem-surface-2: 0 0% 94.5%;
+	--sem-surface-3: 0 0% 91%;
+
+	--sem-bg-inverse: var(--neutral-100);
+	--sem-bg-brand: var(--orange-70);
+	--sem-bg-brand-hover: var(--orange-60);
+	--sem-bg-positive: var(--green-70);
+	--sem-bg-warning: var(--yellow-60);
+	--sem-bg-negative: var(--red-70);
+	--sem-bg-negative-hover: var(--red-60);
+	--sem-bg-overlay: 0 0% 8% / 32%;
+
+	--sem-border-secondary: var(--opacity-black-8);
+	--sem-border-divider: var(--neutral-10);
+	--sem-border-strong: var(--opacity-black-16);
+
+	/* Syntax highlighting. These were hardcoded One Dark values, which are tuned
+	   for a dark editor and washed out badly on a light page. Light mode gets a
+	   darker, higher-contrast set; dark mode keeps the familiar One Dark hues. */
+	--sem-syntax-keyword: var(--purple-70);
+	--sem-syntax-string: var(--green-70);
+	--sem-syntax-number: 22 90% 38%;
+	--sem-syntax-function: 216 100% 40%;
+	--sem-syntax-comment: var(--neutral-50);
+	--sem-syntax-attr: var(--red-70);
+
+	color-scheme: light;
+}
+
+[data-theme='dark'] {
+	/* ═══════════════════ Layer 2 — semantic (dark) ═══════════════════ */
+
+	--sem-text-primary: var(--neutral-0);
+	--sem-text-secondary: var(--neutral-40);
+	--sem-text-tertiary: var(--neutral-60);
+	--sem-text-inverse: var(--neutral-100);
+	--sem-text-brand: var(--orange-50);
+	--sem-text-positive: var(--green-40);
+	--sem-text-warning: var(--yellow-30);
+	--sem-text-negative: var(--red-40);
+	--sem-text-code: var(--orange-30);
+	--sem-text-disabled: var(--neutral-70);
+
+	--sem-surface-0: var(--neutral-100);
+	--sem-surface-1: 0 0% 10.5%;
+	--sem-surface-2: 0 0% 13.5%;
+	--sem-surface-3: 0 0% 17%;
+
+	--sem-bg-inverse: var(--neutral-0);
+	--sem-bg-brand: var(--orange-50);
+	--sem-bg-brand-hover: var(--orange-40);
+	--sem-bg-positive: var(--green-40);
+	--sem-bg-warning: var(--yellow-30);
+	--sem-bg-negative: var(--red-40);
+	--sem-bg-negative-hover: var(--red-30);
+	--sem-bg-overlay: 0 0% 0% / 56%;
+
+	--sem-border-secondary: var(--opacity-white-8);
+	--sem-border-divider: var(--neutral-80);
+	--sem-border-strong: var(--opacity-white-16);
+
+	/* One Dark hues, which is what these were before — but now only in the
+	   theme they were designed for. */
+	--sem-syntax-keyword: 286 60% 67%;
+	--sem-syntax-string: 95 38% 62%;
+	--sem-syntax-number: 39 67% 69%;
+	--sem-syntax-function: 187 47% 55%;
+	--sem-syntax-comment: var(--neutral-50);
+	--sem-syntax-attr: 5 74% 66%;
+
+	color-scheme: dark;
+}
+
+:root {
+	/* ═══════════ Layer 3 — resolved colours (what CSS uses) ═══════════ */
+
+	--color-text-primary: hsl(var(--sem-text-primary));
+	--color-text-secondary: hsl(var(--sem-text-secondary));
+	--color-text-tertiary: hsl(var(--sem-text-tertiary));
+	--color-text-inverse: hsl(var(--sem-text-inverse));
+	--color-text-brand: hsl(var(--sem-text-brand));
+	--color-text-positive: hsl(var(--sem-text-positive));
+	--color-text-warning: hsl(var(--sem-text-warning));
+	--color-text-negative: hsl(var(--sem-text-negative));
+	--color-text-code: hsl(var(--sem-text-code));
+	--color-text-disabled: hsl(var(--sem-text-disabled));
+
+	--color-bg-primary: hsl(var(--sem-surface-0));
+	--color-bg-secondary: hsl(var(--sem-surface-1));
+	--color-bg-tertiary: hsl(var(--sem-surface-2));
+	--color-bg-hover: hsl(var(--sem-surface-3));
+	--color-bg-inverse: hsl(var(--sem-bg-inverse));
+	--color-bg-brand: hsl(var(--sem-bg-brand));
+	--color-bg-brand-hover: hsl(var(--sem-bg-brand-hover));
+	--color-bg-positive: hsl(var(--sem-bg-positive));
+	--color-bg-warning: hsl(var(--sem-bg-warning));
+	--color-bg-negative: hsl(var(--sem-bg-negative));
+	--color-bg-negative-hover: hsl(var(--sem-bg-negative-hover));
+	--color-bg-overlay: hsl(var(--sem-bg-overlay));
+
+	/* Highlighter-pen palette for `<mark>`. Alpha-blended over the page so the
+	   text underneath stays readable in both themes. */
+	--color-highlight-yellow: hsl(var(--yellow-40) / 45%);
+	--color-highlight-blue: hsl(var(--blue-50) / 40%);
+	--color-highlight-green: hsl(var(--green-40) / 40%);
+	--color-highlight-purple: hsl(var(--purple-50) / 40%);
+	--color-highlight-red: hsl(var(--red-50) / 38%);
+	--color-highlight-orange: hsl(var(--orange-50) / 42%);
+
+	--color-syntax-keyword: hsl(var(--sem-syntax-keyword));
+	--color-syntax-string: hsl(var(--sem-syntax-string));
+	--color-syntax-number: hsl(var(--sem-syntax-number));
+	--color-syntax-function: hsl(var(--sem-syntax-function));
+	--color-syntax-comment: hsl(var(--sem-syntax-comment));
+	--color-syntax-attr: hsl(var(--sem-syntax-attr));
+
+	--color-border-secondary: hsl(var(--sem-border-secondary));
+	--color-border-divider: hsl(var(--sem-border-divider));
+	--color-border-strong: hsl(var(--sem-border-strong));
+	--color-border-focus: hsl(var(--sem-bg-brand));
+
+	/* Brand tints for selection fills, highlights and focus rings. Derived
+	   from the same triple, so they track the brand colour automatically. */
+	--color-brand-8: hsl(var(--sem-bg-brand) / 8%);
+	--color-brand-12: hsl(var(--sem-bg-brand) / 12%);
+	--color-brand-16: hsl(var(--sem-bg-brand) / 16%);
+	--color-brand-24: hsl(var(--sem-bg-brand) / 24%);
+	--color-brand-32: hsl(var(--sem-bg-brand) / 32%);
+
+	/* ═══════════════════════════ Radius ═══════════════════════════ */
+	--radius-xs: 4px;
+	--radius-sm: 8px;
+	--radius-md: 12px;
+	--radius-lg: 16px;
+	--radius-xl: 20px;
+	--radius-2xl: 24px;
+	--radius-full: 9999px;
+
+	/* ═══════════════════════════ Spacing ══════════════════════════ */
+	--space-2xs: 2px;
+	--space-xs: 4px;
+	--space-sm: 8px;
+	--space-md: 12px;
+	--space-lg: 16px;
+	--space-xl: 24px;
+	--space-2xl: 32px;
+
+	/* ══════════════════════════ Typography ════════════════════════ */
+	--text-size-xs: 12px;
+	--text-size-sm: 14px;
+	--text-size-md: 16px;
+	--text-size-lg: 18px;
+	--text-size-xl: 20px;
+	--text-size-2xl: 24px;
+	--text-size-3xl: 32px;
+
+	--text-leading-xs: 16px;
+	--text-leading-sm: 20px;
+	--text-leading-md: 22px;
+	--text-leading-lg: 26px;
+	--text-leading-xl: 28px;
+	--text-leading-2xl: 30px;
+	--text-leading-3xl: 38px;
+
+	--text-tracking-tight: -0.02em;
+	--text-tracking-normal: -0.01em;
+	--text-tracking-wide: 0.06em;
+
+	--font-weight-normal: 400;
+	--font-weight-medium: 500;
+	--font-weight-semibold: 600;
+
+	/* ══════════════ Elevation — deliberately restrained ═══════════
+	   Reserved for genuinely floating surfaces: menus, modals, the active
+	   segment of a segmented control. Everything else uses a hairline border. */
+	--shadow-sm: 0 1px 2px hsl(0 0% 0% / 6%);
+	--shadow-md: 0 4px 12px hsl(0 0% 0% / 8%), 0 1px 2px hsl(0 0% 0% / 4%);
+	--shadow-lg: 0 12px 32px hsl(0 0% 0% / 12%), 0 2px 6px hsl(0 0% 0% / 6%);
+
+	/* ═══════════════════════════ Motion ═══════════════════════════ */
+	--ease-out: cubic-bezier(0, 0, 0.2, 1);
+	--duration-fast: 120ms;
+	--duration-base: 150ms;
+	--transition-fast: var(--duration-fast) var(--ease-out);
+	--transition-base: var(--duration-base) var(--ease-out);
+}
+
+[data-theme='dark'] {
+	/* Shadows need more weight on dark surfaces to stay perceptible. */
+	--shadow-sm: 0 1px 2px hsl(0 0% 0% / 32%);
+	--shadow-md: 0 4px 12px hsl(0 0% 0% / 40%), 0 1px 2px hsl(0 0% 0% / 24%);
+	--shadow-lg: 0 12px 32px hsl(0 0% 0% / 52%), 0 2px 6px hsl(0 0% 0% / 32%);
+}
+
+@media (prefers-reduced-motion: reduce) {
+	:root {
+		--duration-fast: 0ms;
+		--duration-base: 0ms;
+	}
+}
