@@ -5,7 +5,6 @@
 	import { drag } from '$lib/stores/drag.svelte';
 	import Editor from '$lib/components/Editor.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
-	import PdfViewer from '$lib/components/PdfViewer.svelte';
 	import CanvasEditor from '$lib/components/CanvasEditor.svelte';
 	import GraphView from '$lib/components/GraphView.svelte';
 	import { X, ChevronRight, Pin } from '@lucide/svelte';
@@ -188,7 +187,11 @@
 			{/key}
 		{:else if paneActiveTab.type === 'pdf' && paneActiveTab.pdfData}
 			{#key paneActiveTab.id}
-				<PdfViewer data={paneActiveTab.pdfData} />
+				<!-- pdfjs-dist is the heaviest viewer dependency and most sessions never
+				     open a PDF, so its chunk is fetched on demand. -->
+				{#await import('$lib/components/PdfViewer.svelte') then { default: PdfViewer }}
+					<PdfViewer data={paneActiveTab.pdfData} />
+				{/await}
 			{/key}
 		{:else if paneActiveTab.type === 'canvas'}
 			{#key paneActiveTab.id}

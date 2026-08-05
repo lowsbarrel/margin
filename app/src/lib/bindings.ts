@@ -17,11 +17,6 @@ export const commands = {
 	 */
 	walkDirectory: (root: string, includeHidden: boolean) => typedError<FsEntry[], string>(__TAURI_INVOKE("walk_directory", { root, includeHidden })),
 	/**
-	 *  Read multiple Markdown files and extract `[[wiki-links]]` from each — all
-	 *  in native Rust using a single IPC call.
-	 */
-	readLinkBatch: (paths: string[]) => __TAURI_INVOKE<LinkEntry[]>("read_link_batch", { paths }),
-	/**
 	 *  Build a flat, sorted, depth-annotated list of every currently-visible
 	 *  tree row in a single native call.
 	 */
@@ -65,8 +60,6 @@ export const commands = {
 	 */
 	searchFiles: (root: string, query: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("search_files", { root, query })),
 	replaceInFile: (path: string, search: string, replace: string, caseSensitive: boolean) => typedError<number, string>(__TAURI_INVOKE("replace_in_file", { path, search, replace, caseSensitive })),
-	/**  Scan all `.md` files under `root` and collect unique `#tag` tokens. */
-	listAllTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("list_all_tags", { root })),
 	exportVaultZip: (vaultPath: string, destPath: string) => typedError<null, string>(__TAURI_INVOKE("export_vault_zip", { vaultPath, destPath })),
 	/**
 	 *  Check whether the vault has local changes compared to the last-synced
@@ -86,6 +79,22 @@ export const commands = {
 	 *  Called by the frontend on vault open and on `vault-fs-changed`.
 	 */
 	indexRebuild: (root: string) => typedError<number, string>(__TAURI_INVOKE("index_rebuild", { root })),
+	/**
+	 *  Every `#tag` in the vault, most-used first. Served from the index rather
+	 *  than a second walk of every `.md`.
+	 */
+	indexTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("index_tags", { root })),
+	/**
+	 *  Every wiki-link in the vault, grouped by source note — the whole graph in
+	 *  one query. Notes with no outgoing links are included so they still appear
+	 *  as nodes.
+	 */
+	indexLinks: (root: string) => typedError<LinkEntry[], string>(__TAURI_INVOKE("index_links", { root })),
+	/**
+	 *  The notes that link to `path`, by its filename stem — the same thing a
+	 *  `[[wiki-link]]` names. Matched case-insensitively, as link resolution is.
+	 */
+	indexBacklinks: (root: string, path: string) => typedError<Backlink[], string>(__TAURI_INVOKE("index_backlinks", { root, path })),
 	s3Configure: (config: S3Config) => typedError<null, string>(__TAURI_INVOKE("s3_configure", { config })),
 	s3GetConfig: () => typedError<{
 	endpoint: string,
@@ -244,6 +253,12 @@ export type AppSettings = {
 	conflict_strategy?: string | null,
 };
 
+/**  A note that links *to* the one being viewed. */
+export type Backlink = {
+	path: string,
+	name: string,
+};
+
 export type FsEntry = {
 	name: string,
 	is_dir: boolean,
@@ -257,7 +272,10 @@ export type FuzzyEntry = {
 	path: string,
 };
 
-/**  Returned by `read_link_batch`. */
+/**
+ *  Every `[[wiki-link]]` out of one note. Titles keep their original case —
+ *  the graph uses them as node ids.
+ */
 export type LinkEntry = {
 	path: string,
 	links: string[],
@@ -324,6 +342,7 @@ export type SyncAction = {
 	path: string,
 };
 
+/**  A `#tag` and the notes carrying it. */
 export type TagInfo = {
 	tag: string,
 	count: number,

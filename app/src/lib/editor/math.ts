@@ -1,6 +1,5 @@
 import { Node, nodeInputRule, mergeAttributes } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import katex from 'katex';
 
 /**
  * Minimal structural types for the tiptap-markdown serializer state and the
@@ -53,11 +52,35 @@ interface MarkdownIt {
 	inline: { ruler: { push(name: string, rule: MdInlineRule): void } };
 	renderer: { rules: Record<string, MdRenderRule> };
 }
+/**
+ * KaTeX is ~280 KB of the boot chunk and most notes contain no math, so it is
+ * fetched the first time an expression is actually rendered. Until it lands,
+ * renderers show the raw source and re-render once it does.
+ */
+type Katex = typeof import('katex').default;
+
+let katexModule: Katex | null = null;
+let katexLoad: Promise<void> | null = null;
+
+/** Resolves when KaTeX is available, or when it has definitively failed. */
+function loadKatex(): Promise<void> {
+	katexLoad ??= import('katex').then(
+		(mod) => {
+			katexModule = mod.default;
+		},
+		(err) => {
+			console.error('KaTeX failed to load:', err);
+		}
+	);
+	return katexLoad;
+}
+
 // Avoids re-rendering identical expressions (20-100ms each).
 const katexCache = new Map<string, string>();
 const KATEX_CACHE_MAX = 512;
 
-function cachedKatex(text: string, displayMode: boolean): string {
+/** Rendered HTML, or null while KaTeX is still loading. */
+function cachedKatex(text: string, displayMode: boolean): string | null {
 	const key = `${displayMode ? 'D' : 'I'}:${text}`;
 	const cached = katexCache.get(key);
 	if (cached !== undefined) {
@@ -66,13 +89,29 @@ function cachedKatex(text: string, displayMode: boolean): string {
 		katexCache.set(key, cached);
 		return cached;
 	}
-	const html = katex.renderToString(text, { displayMode, throwOnError: false });
+	if (!katexModule) {
+		void loadKatex();
+		return null;
+	}
+	const html = katexModule.renderToString(text, { displayMode, throwOnError: false });
 	if (katexCache.size >= KATEX_CACHE_MAX) {
 		const first = katexCache.keys().next().value;
 		if (first !== undefined) katexCache.delete(first);
 	}
 	katexCache.set(key, html);
 	return html;
+}
+
+/**
+ * Re-run `paint` once KaTeX arrives, for a renderer that had to settle for the
+ * raw source. Guarded on `katexModule` rather than repainting blindly: a failed
+ * load resolves too, and an unconditional retry would spin forever.
+ */
+function renderWhenReady(paint: () => void): void {
+	if (katexModule) return;
+	void loadKatex().then(() => {
+		if (katexModule) paint();
+	});
 }
 declare module '@tiptap/core' {
 	interface Commands<ReturnType> {
@@ -113,7 +152,9 @@ export const MathBlock = Node.create({
 		const text = HTMLAttributes.text || '';
 		let rendered: string;
 		try {
-			rendered = cachedKatex(text, true);
+			// Static render (getHTML, export). No re-render hook here, so an
+			// expression seen before KaTeX loads falls back to its source.
+			rendered = cachedKatex(text, true) ?? escapeHtml(text);
 		} catch {
 			rendered = `<code class="math-error">${escapeHtml(text)}</code>`;
 		}
@@ -149,7 +190,13 @@ export const MathBlock = Node.create({
 
 			function renderMath(text: string) {
 				try {
-					renderArea.innerHTML = cachedKatex(text, true);
+					const html = cachedKatex(text, true);
+					if (html === null) {
+						renderArea.textContent = text;
+						renderWhenReady(() => renderMath(text));
+					} else {
+						renderArea.innerHTML = html;
+					}
 				} catch {
 					renderArea.textContent = text || 'Empty math block';
 				}
@@ -295,7 +342,9 @@ export const MathInline = Node.create({
 		const text = HTMLAttributes.text || '';
 		let rendered: string;
 		try {
-			rendered = text ? cachedKatex(text, false) : '<span class="math-placeholder">math</span>';
+			rendered = text
+				? (cachedKatex(text, false) ?? escapeHtml(text))
+				: '<span class="math-placeholder">math</span>';
 		} catch {
 			rendered = `<code class="math-error">${escapeHtml(text)}</code>`;
 		}
@@ -320,6 +369,9 @@ export const MathInline = Node.create({
 			dom.contentEditable = 'false';
 
 			let currentText = node.attrs.text || '';
+			// The input replaces the whole node DOM, so a late KaTeX load must not
+			// repaint over an editor the user has open.
+			let editing = false;
 
 			function renderMath(text: string) {
 				if (!text) {
@@ -328,7 +380,15 @@ export const MathInline = Node.create({
 					return;
 				}
 				try {
-					dom.innerHTML = cachedKatex(text, false);
+					const html = cachedKatex(text, false);
+					if (html === null) {
+						dom.textContent = text;
+						renderWhenReady(() => {
+							if (!editing) renderMath(text);
+						});
+					} else {
+						dom.innerHTML = html;
+					}
 				} catch {
 					dom.textContent = text;
 				}
@@ -350,6 +410,7 @@ export const MathInline = Node.create({
 			}
 
 			function openEditor() {
+				editing = true;
 				const input = document.createElement('input');
 				input.type = 'text';
 				input.className = 'math-inline-input';
@@ -361,6 +422,7 @@ export const MathInline = Node.create({
 				input.focus();
 
 				function commit() {
+					editing = false;
 					const newText = input.value.trim();
 					currentText = newText;
 

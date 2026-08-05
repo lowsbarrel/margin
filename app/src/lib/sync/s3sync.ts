@@ -11,6 +11,7 @@ import {
 import { editor } from '$lib/stores/editor.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { toast } from '$lib/stores/toast.svelte';
+import * as m from '$lib/paraglide/messages.js';
 import type { ManifestEntry, Manifest } from './s3sync-manifest';
 import { validateManifest } from './s3sync-manifest';
 import { nowSeconds } from './s3sync-diff';
@@ -55,6 +56,11 @@ export function isSyncing(): boolean {
 
 function checkAbort(signal: AbortSignal): void {
 	if (signal.aborted) throw new Error('Sync cancelled');
+}
+
+/** A cause fit to show a user: an Error's message, without the `Error:` prefix. */
+function errorText(err: unknown): string {
+	return err instanceof Error ? err.message : String(err);
 }
 
 // ── Helpers ──
@@ -514,9 +520,7 @@ async function doSyncToS3(
 		editor.setSyncStatus('synced');
 
 		if (conflicts.length > 0) {
-			toast.info(
-				`Sync complete — ${conflicts.length} conflict(s). Conflict copies saved as .sync-conflict files.`
-			);
+			toast.info(m.toast_sync_conflicts({ count: String(conflicts.length) }));
 		}
 	} catch (err) {
 		if (signal.aborted) {
@@ -524,7 +528,9 @@ async function doSyncToS3(
 			return;
 		}
 		console.error('[s3sync] Sync failed:', err);
-		editor.setSyncStatus('error');
+		// Carry the cause into the store — the status-bar chip shows it on hover,
+		// which is the only place a background failure can explain itself.
+		editor.setSyncStatus('error', errorText(err));
 		throw err;
 	} finally {
 		if (activeSyncAbort === abortController) {
@@ -591,12 +597,52 @@ export function stopAutoSync(): void {
 	}
 }
 
+/**
+ * Background sync. Stays silent about everything, including not running at all:
+ * it fires on a timer, so a toast here would interrupt work the user isn't doing.
+ * A failure still reaches the status-bar chip via `setSyncStatus`.
+ */
 export async function runQuietSync(): Promise<void> {
-	if (!syncCredentials || isSyncing()) return;
+	const creds = syncCredentials;
+	if (!creds || isSyncing()) return;
 	try {
-		const { vaultPath, vaultId, encryptionKey, s3Config, options } = syncCredentials;
-		await syncToS3(vaultPath, vaultId, encryptionKey, s3Config, options);
+		await syncToS3(
+			creds.vaultPath,
+			creds.vaultId,
+			creds.encryptionKey,
+			creds.s3Config,
+			creds.options
+		);
 	} catch {
-		// Background sync failures are silent — status bar shows error state
+		// Already reported through the store; nothing to add for a timer tick.
+	}
+}
+
+/**
+ * Sync the user asked for (the status-bar button). Unlike the background run it
+ * always accounts for itself — including the case where it can't start, which
+ * otherwise looks exactly like a button that does nothing.
+ */
+export async function runManualSync(): Promise<void> {
+	const creds = syncCredentials;
+	if (!creds) {
+		toast.info(m.toast_sync_not_configured());
+		return;
+	}
+	if (isSyncing()) {
+		toast.info(m.toast_sync_in_progress());
+		return;
+	}
+	try {
+		await syncToS3(
+			creds.vaultPath,
+			creds.vaultId,
+			creds.encryptionKey,
+			creds.s3Config,
+			creds.options
+		);
+		toast.success(m.toast_sync_complete());
+	} catch (err) {
+		toast.error(m.toast_sync_failed({ error: errorText(err) }));
 	}
 }
