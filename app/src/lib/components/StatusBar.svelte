@@ -12,7 +12,7 @@
 	// The sync-status glyphs are indicators, not controls — they stay static, so
 	// brushing past them with the pointer doesn't set something wiggling.
 	// `Moon` has no animated counterpart in the registry.
-	import { CloudOff, Loader, Check, AlertCircle, Moon, FileDown, Link2 } from '@lucide/svelte';
+	import { CloudOff, Loader, Check, CircleAlert, Moon, FileDown, Link2 } from '@lucide/svelte';
 	import {
 		Sun,
 		LogOut,
@@ -105,7 +105,7 @@
 							.syncProgress.done}/{editor.syncProgress.total}){/if}</span
 				>
 			{:else if editor.syncStatus === 'error'}
-				<AlertCircle size={12} />
+				<CircleAlert size={12} />
 				<span>{m.statusbar_sync_error()}</span>
 			{:else}
 				<CloudOff size={12} />
