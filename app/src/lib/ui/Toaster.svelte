@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toast } from '$lib/stores/toast.svelte';
-	import { Check, AlertCircle, Info, X } from '@lucide/svelte';
+	import { Check, CircleAlert, Info, X } from '@lucide/svelte';
 	import { cn } from '$lib/utils';
 </script>
 
@@ -24,7 +24,7 @@
 					{#if item.type === 'success'}
 						<Check size={14} />
 					{:else if item.type === 'error'}
-						<AlertCircle size={14} />
+						<CircleAlert size={14} />
 					{:else}
 						<Info size={14} />
 					{/if}

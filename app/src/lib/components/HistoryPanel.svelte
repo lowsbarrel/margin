@@ -12,7 +12,7 @@
 	import { writeFileBytes, readFileBytes } from '$lib/fs/bridge';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
 	import { IconButton } from '$lib/ui';
-	import { History, Trash2, RotateCcw, X, Clock } from '@lucide/svelte';
+	import { RotateCcwClock, Trash2, RotateCcw, X, Clock } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
@@ -212,7 +212,7 @@
 <div class="flex h-full w-75 max-w-100 min-w-60 flex-col border-l border-border bg-surface-1">
 	<div class="flex shrink-0 items-center justify-between border-b border-border px-3 py-2">
 		<div class="flex items-center gap-2 text-muted-foreground">
-			<History size={14} />
+			<RotateCcwClock size={14} />
 			<span class="text-sm font-semibold tracking-wide uppercase">{m.history_title()}</span>
 			{#if snapshots.length > 0}
 				<span
