@@ -42,7 +42,7 @@ say **it's Rust based** at parties. Nobody at parties cares. I still say it.
 ## Features
 
 | Area       | What you get                                                                                                                         |
-| ---------- | ----------------------------------------------------------------------------------------------------------------------------------- -|
+| ---------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | Storage    | Plain Markdown `.md` files in a folder you choose. No proprietary format, no lock-in                                                 |
 | Editor     | Tiptap WYSIWYG: tables, task lists, code blocks, KaTeX math, callouts, wiki-links, slash menu, `@` mentions, find & replace          |
 | Encryption | AES-256-GCM-SIV in Rust with 96-bit random nonces. JavaScript never touches keys or plaintext                                        |
@@ -60,7 +60,7 @@ say **it's Rust based** at parties. Nobody at parties cares. I still say it.
 <summary>The full editor list</summary>
 
 Tables with resizable columns · nested task lists · syntax-highlighted code
-blocks · inline `$…$` and block `$$$…$$$` math via KaTeX · `[[wiki-links]]` with
+blocks · inline `$…$` and block `$$…$$` math via KaTeX · `[[wiki-links]]` with
 click-to-navigate · `info` / `note` / `success` / `warning` / `danger` callouts ·
 file embeds and image attachments · slash command menu · `@` mention menu for
 inline wiki-links · bubble formatting toolbar · find & replace · highlight,
@@ -104,7 +104,7 @@ pnpm tauri build   # release binary for the current platform
 ## Security
 
 | Concern         | How it's handled                                                                                               |
-| --------------- | ------------------------------------------------------------------------------------------------------------ --|
+| --------------- | -------------------------------------------------------------------------------------------------------------- |
 | Cipher          | AES-256-GCM-SIV, authenticated, nonce-misuse resistant, 96-bit random nonces                                   |
 | Key derivation  | BIP-39: 128-bit entropy → 512-bit seed (PBKDF2-HMAC-SHA512) → SHA-256, split into vault ID + encryption key    |
 | Crypto boundary | All encryption lives in Rust behind Tauri commands; the frontend passes paths and receives plaintext, no keys  |
@@ -116,7 +116,7 @@ pnpm tauri build   # release binary for the current platform
 ## Stack
 
 | Layer          | Choice                                                                      |
-| -------------- | -------------------------------------------------------------------------- -|
+| -------------- | --------------------------------------------------------------------------- |
 | Shell          | Tauri 2: Rust core, system webview, no bundled browser                      |
 | Frontend       | SvelteKit 2 with Svelte 5 runes + TypeScript, static-adapter prerendered    |
 | Editor         | Tiptap 3 on ProseMirror, with custom extensions per feature                 |
