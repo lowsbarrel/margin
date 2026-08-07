@@ -35,7 +35,7 @@ sha2 = "0.10"
 hmac = "0.12"
 rand = "0.8"
 hex = "0.4"
-rust-s3 = { version = "0.35", default-features = false, features = ["tokio-rustls-tls"] }
+rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
 base64 = "0.22"
 percent-encoding = "2"
 notify = { version = "7", default-features = false, features = ["macos_fsevent"] }
