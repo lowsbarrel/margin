@@ -5,9 +5,11 @@
 
 const isWindowsLike = (() => {
 	if (typeof navigator === 'undefined') return false;
-	// `navigator.userAgentData` is Chromium-only and absent from the DOM lib.
+	// `navigator.userAgentData` is Chromium-only and absent from the DOM lib; the
+	// user-agent string is the fallback for the WebKit webviews (`navigator.platform`
+	// is deprecated).
 	const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-	const platform = nav.userAgentData?.platform ?? navigator.platform ?? '';
+	const platform = nav.userAgentData?.platform ?? '';
 	// Android and Windows both use the http.localhost form in Tauri 2.
 	return /Win|Android/i.test(platform) || /Windows|Android/i.test(navigator.userAgent);
 })();

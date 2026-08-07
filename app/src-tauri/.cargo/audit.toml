@@ -1,0 +1,13 @@
+# Read by `cargo audit` (CI runs it from this directory).
+#
+# Both advisories are denial-of-service bugs in quick-xml's tag parser, fixed in
+# 0.41.0. Nothing in the tree can reach that version: rust-s3 0.37 and aws-creds
+# 0.39 require ^0.38, plist 1.9 (via tauri) requires ^0.39.2. No `cargo update`
+# resolves it — it needs a release from one of those three crates.
+#
+# Reachable input is an S3 endpoint's XML responses; a hostile bucket could stall
+# a sync. It cannot leak plaintext: the blobs are already ciphertext by then.
+#
+# Re-check on the next tauri or rust-s3 bump and delete this file when it lifts.
+[advisories]
+ignore = ["RUSTSEC-2026-0194", "RUSTSEC-2026-0195"]
