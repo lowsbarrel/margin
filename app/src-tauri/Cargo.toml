@@ -33,7 +33,7 @@ bip39 = "2"
 aes-gcm-siv = "0.11"
 sha2 = "0.10"
 hmac = "0.12"
-rand = "0.8"
+rand = "0.10"
 hex = "0.4"
 rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
 base64 = "0.22"
