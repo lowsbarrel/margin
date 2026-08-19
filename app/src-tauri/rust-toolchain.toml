@@ -1,0 +1,12 @@
+# The toolchain every contributor and every CI job uses.
+#
+# `channel = "stable"`, not a pinned patch version: pinning would force a second
+# toolchain download on every clone for no benefit. CI already tracks stable
+# (`dtolnay/rust-toolchain@stable` in `.github/workflows/ci.yml`).
+#
+# The components are the ones the quality gates need: `cargo fmt --check` and
+# `cargo clippy -D warnings` must run straight after a clone with no extra
+# `rustup component add` step, or the gate becomes something people work around.
+[toolchain]
+channel = "stable"
+components = ["rustfmt", "clippy"]

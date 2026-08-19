@@ -120,5 +120,8 @@ A fact is defined once and imported everywhere else.
   `pnpm check:secrets`, `cargo fmt --check` and `cargo clippy -- -D warnings`
   all pass. CI additionally runs clippy on macOS and Windows, because much of
   the path handling is `#[cfg(target_os = ...)]`-gated.
+- For a live Rust inner loop, run `bacon` in `app/src-tauri`
+  (`brew install bacon`): it re-runs the clippy/test/fmt gates on save, and its
+  jobs mirror CI one-for-one, so a green bacon means a green CI.
 - `pnpm check:deprecated` is a type-aware gate for `@deprecated` symbols. It is
   very slow — minutes, not seconds — so it runs in CI only, on a timeout.

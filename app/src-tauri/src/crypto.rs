@@ -1,6 +1,6 @@
 use aes_gcm_siv::{
-    aead::{Aead, KeyInit, OsRng},
     Aes256GcmSiv, Nonce,
+    aead::{Aead, KeyInit, OsRng},
 };
 use bip39::Mnemonic;
 use rand::RngCore;

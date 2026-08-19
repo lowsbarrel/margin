@@ -3,7 +3,7 @@ name = "app"
 version = "0.1.22"
 description = "A Tauri App"
 authors = ["you"]
-edition = "2021"
+edition = "2024"
 # Two binaries exist (app, gen_bindings); tell `cargo run` (used by `tauri dev`)
 # which one to launch by default.
 default-run = "app"
@@ -49,4 +49,9 @@ tauri-plugin-drag = "2.1.0"
 specta = { version = "2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "2.0.0-rc.25", features = ["derive", "typescript"] }
+
+# Plaintext and keys live only in Rust (AGENTS.md invariants); `forbid` makes
+# turning that off a visible manifest edit, not a local `#[allow]`.
+[lints.rust]
+unsafe_code = "forbid"
 

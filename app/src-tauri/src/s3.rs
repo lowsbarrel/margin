@@ -3,8 +3,8 @@ use s3::{Bucket, Region};
 use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Mutex;
-use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::State;
+use tauri::ipc::{InvokeBody, Request, Response};
 
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct S3Config {
