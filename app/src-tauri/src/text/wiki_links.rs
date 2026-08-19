@@ -49,16 +49,15 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
                 if !title_bytes
                     .iter()
                     .any(|&b| b == b'[' || b == b']' || b == b'\n')
+                    && let Ok(title) = std::str::from_utf8(title_bytes)
                 {
-                    if let Ok(title) = std::str::from_utf8(title_bytes) {
-                        let title = title.trim();
-                        if !title.is_empty() {
-                            results.push(ParsedWikiLink {
-                                start: i,
-                                end: close + 2, // past the ]]
-                                title: title.to_string(),
-                            });
-                        }
+                    let title = title.trim();
+                    if !title.is_empty() {
+                        results.push(ParsedWikiLink {
+                            start: i,
+                            end: close + 2, // past the ]]
+                            title: title.to_string(),
+                        });
                     }
                 }
                 i = close + 2;

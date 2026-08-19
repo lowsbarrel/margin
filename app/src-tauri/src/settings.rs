@@ -1,6 +1,6 @@
 use crate::crypto;
 use crate::s3::S3Config;
-use base64::{engine::general_purpose::STANDARD as B64, Engine};
+use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -87,10 +87,11 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
             return Err("S3 secret key must not be empty".into());
         }
     }
-    if let Some(ref strategy) = settings.conflict_strategy {
-        if strategy != "local_wins" && strategy != "keep_newer" {
-            return Err(format!("Unknown conflict strategy: {strategy}"));
-        }
+    if let Some(ref strategy) = settings.conflict_strategy
+        && strategy != "local_wins"
+        && strategy != "keep_newer"
+    {
+        return Err(format!("Unknown conflict strategy: {strategy}"));
     }
     Ok(())
 }

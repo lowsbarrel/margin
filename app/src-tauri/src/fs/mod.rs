@@ -15,8 +15,8 @@ use std::fs;
 use std::io::Write;
 use std::path::{Component, Path, PathBuf};
 use std::process::Command;
-use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::ipc::{InvokeBody, Request, Response};
 
 static TMP_COUNTER: AtomicU64 = AtomicU64::new(0);
@@ -73,10 +73,10 @@ pub(crate) fn atomic_write(dest: &Path, content: &[u8]) -> Result<(), String> {
     // Best-effort fsync of the parent directory so the rename entry is durable.
     // On Windows opening/fsyncing a directory is not supported and is a no-op;
     // ignore any error here — the file's own sync_all already covers its data.
-    if let Some(parent) = dest.parent() {
-        if let Ok(dir) = fs::File::open(parent) {
-            let _ = dir.sync_all();
-        }
+    if let Some(parent) = dest.parent()
+        && let Ok(dir) = fs::File::open(parent)
+    {
+        let _ = dir.sync_all();
     }
 
     Ok(())

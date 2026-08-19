@@ -1,4 +1,4 @@
-use crate::fs::{walk_dir, WalkAction};
+use crate::fs::{WalkAction, walk_dir};
 use crate::sync::Manifest;
 use std::collections::HashMap;
 use std::fs;
@@ -9,8 +9,8 @@ use std::time::Instant;
 #[tauri::command]
 #[specta::specta]
 pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String> {
-    use zip::write::SimpleFileOptions;
     use zip::ZipWriter;
+    use zip::write::SimpleFileOptions;
 
     let root = Path::new(vault_path);
     if !root.is_dir() {
@@ -123,15 +123,13 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
         .map(|d| d.as_secs())
         .unwrap_or(0);
 
-    if let Ok(guard) = CACHE.lock() {
-        if let Some(ref cached) = *guard {
-            if cached.vault_path == vault_path
-                && cached.manifest_mtime == manifest_mtime
-                && cached.checked_at.elapsed().as_secs() < CACHE_TTL_SECS
-            {
-                return Ok(cached.result);
-            }
-        }
+    if let Ok(guard) = CACHE.lock()
+        && let Some(ref cached) = *guard
+        && cached.vault_path == vault_path
+        && cached.manifest_mtime == manifest_mtime
+        && cached.checked_at.elapsed().as_secs() < CACHE_TTL_SECS
+    {
+        return Ok(cached.result);
     }
 
     let manifest: Manifest = if manifest_path.exists() {

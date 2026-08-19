@@ -176,7 +176,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
             return Ok(Manifest {
                 version: 3,
                 files: vec![],
-            })
+            });
         }
     };
     let dec = match crate::crypto::decrypt_blob(enc, encryption_key) {
@@ -185,7 +185,7 @@ pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Mani
             return Ok(Manifest {
                 version: 3,
                 files: vec![],
-            })
+            });
         }
     };
     let manifest: Manifest =

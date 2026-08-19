@@ -1,4 +1,4 @@
-use super::{path_to_string, FsEntry, TreeEntry};
+use super::{FsEntry, TreeEntry, path_to_string};
 use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};

@@ -88,11 +88,11 @@ pub fn run() {
             //    escapes the vault after resolution.
             let vault_root = {
                 let state = _app.app_handle().state::<VaultPathState>();
-                let x = match state.0.lock() {
+
+                match state.0.lock() {
                     Ok(vp) if !vp.is_empty() => vp.as_str().to_owned(),
                     _ => String::new(),
-                };
-                x
+                }
             };
 
             if vault_root.is_empty() {
