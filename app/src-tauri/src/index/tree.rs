@@ -21,7 +21,7 @@
 //! next query, so a burst of N keystrokes between two edits costs one walk, not
 //! N.
 
-use crate::fs::{path_to_string, walk_dir, FsEntry, WalkAction, WalkItem};
+use crate::fs::{FsEntry, WalkAction, WalkItem, path_to_string, walk_dir};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::collections::HashMap;
@@ -73,16 +73,16 @@ fn interior_tokens(name: &str) -> Vec<&str> {
             if start.is_none() {
                 start = Some(i);
             }
-        } else if let Some(s) = start.take() {
-            if s > 0 {
-                out.push(&name[s..i]);
-            }
+        } else if let Some(s) = start.take()
+            && s > 0
+        {
+            out.push(&name[s..i]);
         }
     }
-    if let Some(s) = start {
-        if s > 0 {
-            out.push(&name[s..]);
-        }
+    if let Some(s) = start
+        && s > 0
+    {
+        out.push(&name[s..]);
     }
     out
 }
@@ -282,29 +282,29 @@ pub fn search(root: &str, query: &str, limit: usize) -> Vec<FsEntry> {
     let query_fully_consumed = q_prefix.len() == q.len();
     let mut satisfied = false;
 
-    if !q_prefix.is_empty() {
-        if let Some(ids) = tree.candidates(&q_prefix) {
-            for &id in ids {
-                let entry = &tree.entries[id as usize];
-                if entry.is_dir {
-                    continue;
-                }
-                let rank = rank_of(entry, &q, query_fully_consumed);
-                buf.clear();
-                let score = pattern.score(Utf32Str::new(&entry.name_lc, &mut buf), &mut matcher);
-                if rank == RANK_FUZZY && score.is_none() {
-                    continue;
-                }
-                scored.push(Scored {
-                    rank,
-                    score: score.unwrap_or(0),
-                    id,
-                });
+    if !q_prefix.is_empty()
+        && let Some(ids) = tree.candidates(&q_prefix)
+    {
+        for &id in ids {
+            let entry = &tree.entries[id as usize];
+            if entry.is_dir {
+                continue;
             }
-            // Trust the trie only when it filled the page. Otherwise `proj`
-            // would silently miss `myproject.md`, whose one token starts `my`.
-            satisfied = scored.len() >= limit;
+            let rank = rank_of(entry, &q, query_fully_consumed);
+            buf.clear();
+            let score = pattern.score(Utf32Str::new(&entry.name_lc, &mut buf), &mut matcher);
+            if rank == RANK_FUZZY && score.is_none() {
+                continue;
+            }
+            scored.push(Scored {
+                rank,
+                score: score.unwrap_or(0),
+                id,
+            });
         }
+        // Trust the trie only when it filled the page. Otherwise `proj`
+        // would silently miss `myproject.md`, whose one token starts `my`.
+        satisfied = scored.len() >= limit;
     }
 
     // ── Fallback ──

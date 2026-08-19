@@ -1,5 +1,5 @@
 use super::{VaultWatcherState, WatcherState};
-use notify::{recommended_watcher, Event, EventKind, RecursiveMode, Watcher};
+use notify::{Event, EventKind, RecursiveMode, Watcher, recommended_watcher};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};

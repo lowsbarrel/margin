@@ -1,0 +1,49 @@
+# bacon — the background code checker (https://dystroy.org/bacon).
+#
+# The jobs below mirror Margin's Rust CI gates one-for-one (`.github/workflows/
+# ci.yml`, job `rust`), so a green bacon means the same thing a green CI does.
+# `--all-features` is deliberately ABSENT everywhere: it turns on Tauri's
+# custom-protocol feature, which expects a bundled frontend that does not exist
+# at check time — the same reason CI omits it.
+#
+#   brew install bacon         # or: cargo install --locked bacon
+#   cd app/src-tauri && bacon  # runs default_job, re-runs it on every save
+#   bacon clippy               # run a named job; keybindings below switch live
+#
+# Tauri note: bacon and `tauri dev` both drive cargo against ./target and take
+# the same build lock, so running both at once serialises them. If that bites,
+# give one its own dir, e.g. `CARGO_TARGET_DIR=target/bacon bacon`.
+
+default_job = "check"
+
+# The fast inner loop: lib + bins + tests, no lints.
+[jobs.check]
+command = ["cargo", "check", "--all-targets"]
+need_stdout = false
+
+# The merge gate — clippy with warnings as errors, exactly as CI runs it.
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
+
+# The test gate.
+[jobs.test]
+command = ["cargo", "test"]
+need_stdout = true
+
+# The formatting gate — the pre-commit hook and CI both run exactly this.
+[jobs.fmt]
+command = ["cargo", "fmt", "--", "--check"]
+need_stdout = true
+
+# Run one test by name from inside bacon: hit `!` then type a pattern.
+[jobs.test-one]
+command = ["cargo", "test"]
+need_stdout = true
+
+# Keybindings: switch job live without leaving the loop.
+[keybindings]
+c = "job:check"
+shift-c = "job:clippy"
+t = "job:test"
+f = "job:fmt"

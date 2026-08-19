@@ -109,16 +109,17 @@ fn unescape_image_markdown(md: &str) -> String {
             }
         };
 
-        if after_close < md.len() && bytes[after_close] == b'(' {
-            if let Some(paren) = md[after_close + 1..].find(')') {
-                let url_start = after_close + 1;
-                let url_end = url_start + paren;
-                let alt = &md[alt_start..alt_end];
-                let url = &md[url_start..url_end];
-                result.push_str(&format!("![{}]({})", alt, url));
-                pos = url_end + 1;
-                continue;
-            }
+        if after_close < md.len()
+            && bytes[after_close] == b'('
+            && let Some(paren) = md[after_close + 1..].find(')')
+        {
+            let url_start = after_close + 1;
+            let url_end = url_start + paren;
+            let alt = &md[alt_start..alt_end];
+            let url = &md[url_start..url_end];
+            result.push_str(&format!("![{}]({})", alt, url));
+            pos = url_end + 1;
+            continue;
         }
 
         result.push_str("!\\[");
@@ -209,24 +210,24 @@ pub(super) fn resolve_image_paths(md: &str, vault_path: &str) -> String {
 
                 if alt_end + 1 < md.len() && md.as_bytes()[alt_end + 1] == b'(' {
                     let url_start = alt_end + 2;
-                    if let Some(close_paren) = md[url_start..].find(')') {
-                        if close_paren > 0 {
-                            let url = &md[url_start..url_start + close_paren];
-                            if !url.starts_with("http://")
-                                && !url.starts_with("https://")
-                                && !url.starts_with("data:")
-                                && !url.starts_with("localfile://")
-                            {
-                                result.push_str(&md[pos..abs_start]);
-                                let sep = if vault_path.starts_with('/') { "" } else { "/" };
-                                let full = format!("{}/{}", vault_path, url).replace(' ', "%20");
-                                result.push_str(&format!(
-                                    "![{}]({}{}{})",
-                                    alt, LOCALFILE_URL_PREFIX, sep, full
-                                ));
-                                pos = url_start + close_paren + 1;
-                                continue;
-                            }
+                    if let Some(close_paren) = md[url_start..].find(')')
+                        && close_paren > 0
+                    {
+                        let url = &md[url_start..url_start + close_paren];
+                        if !url.starts_with("http://")
+                            && !url.starts_with("https://")
+                            && !url.starts_with("data:")
+                            && !url.starts_with("localfile://")
+                        {
+                            result.push_str(&md[pos..abs_start]);
+                            let sep = if vault_path.starts_with('/') { "" } else { "/" };
+                            let full = format!("{}/{}", vault_path, url).replace(' ', "%20");
+                            result.push_str(&format!(
+                                "![{}]({}{}{})",
+                                alt, LOCALFILE_URL_PREFIX, sep, full
+                            ));
+                            pos = url_start + close_paren + 1;
+                            continue;
                         }
                     }
                 }

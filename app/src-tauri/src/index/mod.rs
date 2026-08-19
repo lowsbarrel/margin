@@ -15,7 +15,7 @@
 
 pub mod tree;
 
-use rusqlite::{params, Connection};
+use rusqlite::{Connection, params};
 use serde::Serialize;
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
@@ -341,10 +341,11 @@ pub fn rebuild(root: &str) -> Result<u32, String> {
         let mtime = mtime_nanos(&meta);
         let size = meta.len() as i64;
 
-        if let Some(&(emt, esz)) = existing.get(&path_str) {
-            if emt == mtime && esz == size {
-                continue; // unchanged — leave the existing FTS row in place
-            }
+        if let Some(&(emt, esz)) = existing.get(&path_str)
+            && emt == mtime
+            && esz == size
+        {
+            continue; // unchanged — leave the existing FTS row in place
         }
 
         let body = std::fs::read_to_string(path).unwrap_or_default();
@@ -658,19 +659,23 @@ mod tests {
         let note = root.join("gamma.md");
         std::fs::write(&note, "#orphan\n[[alpha]]\n").unwrap();
         rebuild(&root_str).unwrap();
-        assert!(index_tags(&root_str)
-            .unwrap()
-            .iter()
-            .any(|t| t.tag == "orphan"));
+        assert!(
+            index_tags(&root_str)
+                .unwrap()
+                .iter()
+                .any(|t| t.tag == "orphan")
+        );
 
         std::fs::remove_file(&note).unwrap();
         rebuild(&root_str).unwrap();
 
         // Stale rows here would keep a deleted note showing up as a backlink.
-        assert!(!index_tags(&root_str)
-            .unwrap()
-            .iter()
-            .any(|t| t.tag == "orphan"));
+        assert!(
+            !index_tags(&root_str)
+                .unwrap()
+                .iter()
+                .any(|t| t.tag == "orphan")
+        );
         let alpha = crate::fs::path_to_string(root.join("alpha.md"));
         assert!(index_backlinks(&root_str, &alpha).unwrap().is_empty());
 

@@ -1,4 +1,4 @@
-use super::{atomic_write, walk_dir, FsEntry, WalkAction};
+use super::{FsEntry, WalkAction, atomic_write, walk_dir};
 use std::fs;
 use std::path::Path;
 

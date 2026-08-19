@@ -160,26 +160,26 @@ fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, Strin
     let legacy_path = legacy_session_path(app)?;
     if legacy_path.exists() {
         let encrypted = fs::read(&legacy_path).map_err(|e| format!("Read failed: {e}"))?;
-        if let Ok(decrypted) = crypto::decrypt_blob(encrypted, key.clone()) {
-            if let Ok(legacy) = serde_json::from_slice::<LegacySession>(&decrypted) {
-                let folder_name = std::path::Path::new(&legacy.vault_path)
-                    .file_name()
-                    .and_then(|n| n.to_str())
-                    .unwrap_or("Vault")
-                    .to_string();
-                let profile = VaultProfile {
-                    name: folder_name,
-                    mnemonic: legacy.mnemonic,
-                    vault_path: normalise_vault_path(&legacy.vault_path),
-                };
-                let profiles = VaultProfiles {
-                    last_used: Some(profile.vault_path.clone()),
-                    profiles: vec![profile],
-                };
-                save_profiles_internal(app, &profiles)?;
-                let _ = fs::remove_file(&legacy_path);
-                return Ok(profiles);
-            }
+        if let Ok(decrypted) = crypto::decrypt_blob(encrypted, key.clone())
+            && let Ok(legacy) = serde_json::from_slice::<LegacySession>(&decrypted)
+        {
+            let folder_name = std::path::Path::new(&legacy.vault_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Vault")
+                .to_string();
+            let profile = VaultProfile {
+                name: folder_name,
+                mnemonic: legacy.mnemonic,
+                vault_path: normalise_vault_path(&legacy.vault_path),
+            };
+            let profiles = VaultProfiles {
+                last_used: Some(profile.vault_path.clone()),
+                profiles: vec![profile],
+            };
+            save_profiles_internal(app, &profiles)?;
+            let _ = fs::remove_file(&legacy_path);
+            return Ok(profiles);
         }
     }
 
