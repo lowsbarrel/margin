@@ -17,8 +17,7 @@ pub struct WikiLinkMatch {
 /// A single parsed `[[title]]` wiki-link: byte offsets into the source text
 /// (`start` points at the first `[`, `end` is just past the closing `]]`) plus
 /// the trimmed title. This is the single source of truth for wiki-link parsing
-/// rules, shared by the PM-node extractor here and the file-based scan in
-/// `fs/mod.rs::read_link_batch`.
+/// rules, shared by every caller that scans note text for links.
 pub struct ParsedWikiLink {
     pub start: usize,
     pub end: usize,

@@ -1,8 +1,6 @@
 import { listDirectory } from '$lib/fs/bridge';
-import { validateName, displayName } from '$lib/utils/filename';
+import { validateName } from '$lib/utils/filename';
 import { toast } from '$lib/stores/toast.svelte';
-
-export { displayName };
 
 export function normalizeFileName(input: string): string | null {
 	const name = input.trim();
@@ -24,6 +22,57 @@ export function normalizeDirName(input: string): string | null {
 	return name;
 }
 
+export type CollisionSuffix = 'numeric' | 'copy';
+
+/**
+ * Pick a name that is free in `existing`. `numeric` gives "name 1", `copy`
+ * gives "name copy" / "name copy 2" — the two schemes the sidebar used to
+ * reimplement inline, kept here so a duplicate and a paste cannot drift apart.
+ */
+function uniqueName(name: string, existing: Set<string>, suffix: CollisionSuffix): string {
+	const extIndex = name.lastIndexOf('.');
+	const stem = extIndex > 0 ? name.slice(0, extIndex) : name;
+	const ext = extIndex > 0 ? name.slice(extIndex) : '';
+
+	// A duplicate always suffixes: the name it copies is by definition taken.
+	if (suffix === 'copy') {
+		for (let i = 1; ; i++) {
+			const candidate = `${stem} copy${i > 1 ? ` ${i}` : ''}${ext}`;
+			if (!existing.has(candidate)) return candidate;
+		}
+	}
+
+	if (!existing.has(name)) return name;
+	for (let i = 1; ; i++) {
+		const candidate = `${stem} ${i}${ext}`;
+		if (!existing.has(candidate)) return candidate;
+	}
+}
+
+/**
+ * Resolve a free path for `name` inside `dir`. Takes the name as final — a
+ * paste, an OS drop or a duplicate, directories included, so no extension is
+ * assumed.
+ */
+export async function createUniquePath(
+	dir: string,
+	name: string,
+	suffix: CollisionSuffix = 'numeric'
+): Promise<string> {
+	// List the parent directory once and resolve the free name client-side
+	// instead of issuing one fileExists IPC call per candidate.
+	let existing: Set<string>;
+	try {
+		const entries = await listDirectory(dir);
+		existing = new Set(entries.map((entry) => entry.name));
+	} catch {
+		// Directory not yet listable (e.g. just created) — assume it is empty.
+		existing = new Set();
+	}
+
+	return `${dir}/${uniqueName(name, existing, suffix)}`;
+}
+
 export async function createUniqueFilePath(
 	base: string,
 	desiredName?: string
@@ -31,29 +80,7 @@ export async function createUniqueFilePath(
 	const name = desiredName ? normalizeFileName(desiredName) : 'Untitled.md';
 	if (!name) return null;
 
-	const extIndex = name.lastIndexOf('.');
-	const stem = extIndex > 0 ? name.slice(0, extIndex) : name;
-	const ext = extIndex > 0 ? name.slice(extIndex) : '.md';
-
-	// List the parent directory once and resolve the free name client-side
-	// instead of issuing one fileExists IPC call per candidate.
-	let existing: Set<string>;
-	try {
-		const entries = await listDirectory(base);
-		existing = new Set(entries.map((entry) => entry.name));
-	} catch {
-		// Directory not yet listable (e.g. just created) — assume it is empty.
-		existing = new Set();
-	}
-
-	if (!existing.has(name)) return `${base}/${name}`;
-	let i = 1;
-	let candidateName = `${stem} ${i}${ext}`;
-	while (existing.has(candidateName)) {
-		i++;
-		candidateName = `${stem} ${i}${ext}`;
-	}
-	return `${base}/${candidateName}`;
+	return createUniquePath(base, name);
 }
 
 export function displayPath(fullPath: string, vaultPath: string | null): string {

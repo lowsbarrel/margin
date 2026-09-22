@@ -9,6 +9,9 @@ pub(crate) struct WalkItem {
     pub name: String,
     pub path: PathBuf,
     pub is_dir: bool,
+    /// The entry itself is a symlink (never followed; `is_dir` is false for a
+    /// symlink even when its target is a directory).
+    pub is_symlink: bool,
     /// Seconds since UNIX epoch (modification time). 0 if unavailable.
     pub modified: u64,
 }
@@ -21,8 +24,8 @@ pub(crate) enum WalkAction {
     Skip,
 }
 
-/// Single shared recursive directory walker. Reads `dir`, and for each non-…
-/// (hidden filtering is left to the visitor) entry computes a [`WalkItem`] and
+/// Single shared recursive directory walker. Reads `dir`, and for each entry
+/// (hidden filtering is left to the visitor) computes a [`WalkItem`] and
 /// hands it to `visit`. The visitor returns a [`WalkAction`] controlling whether
 /// the walker descends into directory entries.
 ///
@@ -58,6 +61,7 @@ where
             name,
             path: entry.path(),
             is_dir,
+            is_symlink,
             modified,
         };
         let action = visit(&item);
@@ -65,6 +69,31 @@ where
         if is_dir && !is_symlink && matches!(action, WalkAction::Recurse) {
             walk_dir(&item.path, visit);
         }
+    }
+}
+
+/// Depth-bounded recursive walk built on [`walk_dir`]. Descent is driven here
+/// rather than by `walk_dir`'s own recursion so `max_depth` and the symlink
+/// guard both apply; the visitor still chooses whether to descend by returning
+/// [`WalkAction::Recurse`]. Depth counts directory levels — 0 descends nowhere.
+/// Callers bound vault walks with `fs::MAX_WALK_DEPTH`.
+pub(crate) fn walk_dir_capped<F>(dir: &Path, depth: usize, max_depth: usize, visit: &mut F)
+where
+    F: FnMut(&WalkItem) -> WalkAction,
+{
+    if depth >= max_depth {
+        return;
+    }
+    let mut children: Vec<PathBuf> = Vec::new();
+    walk_dir(dir, &mut |item| {
+        let action = visit(item);
+        if item.is_dir && !item.is_symlink && matches!(action, WalkAction::Recurse) {
+            children.push(item.path.clone());
+        }
+        WalkAction::Skip
+    });
+    for child in children {
+        walk_dir_capped(&child, depth + 1, max_depth, visit);
     }
 }
 

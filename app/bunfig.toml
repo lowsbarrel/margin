@@ -1,0 +1,27 @@
+# Bun configuration. Package-manager settings mirror the supply-chain hardening
+# that used to live in pnpm-workspace.yaml.
+
+[install]
+# New releases must age before Bun resolves them, giving malware scanners and the
+# npm registry time to catch compromised versions. 604800s = 7 days (was pnpm
+# minimumReleaseAge: 10080 minutes).
+minimumReleaseAge = 604800
+# The Tauri toolchain ships often with exact-pinned platform binaries, so the age
+# gate would block every fresh resolution outright (an exact pin can't back off
+# to an older release). Trusting these is equivalent to trusting the shell the
+# app runs in. Bun matches exact names here, so every @tauri-apps/* package used
+# is listed explicitly.
+minimumReleaseAgeExcludes = [
+	"@tauri-apps/api",
+	"@tauri-apps/cli",
+	"@tauri-apps/plugin-dialog",
+	"@tauri-apps/plugin-opener",
+	"@tauri-apps/plugin-process",
+	"@tauri-apps/plugin-updater",
+	"@crabnebula/tauri-plugin-drag"
+]
+
+# Optional next layer: a pre-install vulnerability/malware scanner (Bun 1.3+).
+# Enable by adding the scanner package as a devDependency and uncommenting:
+# [install.security]
+# scanner = "@socketsecurity/bun-security-scanner"

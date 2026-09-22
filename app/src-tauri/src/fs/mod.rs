@@ -39,6 +39,72 @@ pub(crate) fn path_to_string(p: std::path::PathBuf) -> String {
     }
 }
 
+/// Normalise path separators to `/` on a `&str`. Unlike [`path_to_string`] this
+/// is unconditional: it is applied to path strings that may have been recorded
+/// on another platform (a vault path stored in a profile, a path echoed by the
+/// webview), where a literal `\` is a separator rather than a filename byte.
+pub(crate) fn normalise_slashes(p: &str) -> String {
+    p.replace('\\', "/")
+}
+
+/// Reject a vault-relative path that is empty, contains a backslash, or has a
+/// component that is absolute / `..` / hidden (leading `.`). Guard for paths
+/// received over IPC before they are joined onto a base directory.
+pub(crate) fn valid_rel_path(rel: &str) -> bool {
+    !rel.is_empty()
+        && !rel.contains('\\')
+        && Path::new(rel).components().all(|c| match c {
+            Component::Normal(name) => name
+                .to_str()
+                .map(|s| !s.is_empty() && !s.starts_with('.'))
+                .unwrap_or(false),
+            _ => false,
+        })
+}
+
+/// Strip `vault` from `candidate` when `candidate` lies inside it, returning the
+/// vault-relative path with forward slashes (`None` when not inside). Both are
+/// normalised first. On Windows the check is case-insensitive — a drive letter
+/// may differ in case between the vault root and the path the frontend sends —
+/// so a `strip_prefix` miss falls back to a component-wise, case-folded compare.
+pub(crate) fn rel_under_vault(vault: &str, candidate: &str) -> Option<String> {
+    let vault = vault.trim_end_matches('/');
+    let candidate = candidate.trim_end_matches('/');
+    let vault_path = Path::new(vault);
+
+    let Ok(rel) = Path::new(candidate).strip_prefix(vault_path) else {
+        #[cfg(target_os = "windows")]
+        return rel_under_vault_case_folded(vault_path, candidate);
+        #[cfg(not(target_os = "windows"))]
+        return None;
+    };
+    if rel.as_os_str().is_empty() {
+        return None;
+    }
+    Some(rel.to_string_lossy().replace('\\', "/"))
+}
+
+/// Case-insensitive fallback for [`rel_under_vault`]: Windows drive letters may
+/// differ in case between the stored vault root and the path the frontend sends.
+#[cfg(target_os = "windows")]
+fn rel_under_vault_case_folded(vault_path: &Path, candidate: &str) -> Option<String> {
+    let v: Vec<&std::ffi::OsStr> = vault_path.components().map(|c| c.as_os_str()).collect();
+    let c: Vec<&std::ffi::OsStr> = Path::new(candidate)
+        .components()
+        .map(|c| c.as_os_str())
+        .collect();
+    if c.len() <= v.len()
+        || !v
+            .iter()
+            .zip(&c)
+            .all(|(a, b)| a.to_string_lossy().to_lowercase() == b.to_string_lossy().to_lowercase())
+    {
+        return None;
+    }
+    let rel: PathBuf = c[v.len()..].iter().copied().collect();
+    Some(rel.to_string_lossy().replace('\\', "/"))
+}
+
 /// Write `content` to `dest` atomically AND durably by writing to a sibling
 /// temp file, fsyncing the file's data to disk, renaming it into place, and
 /// finally fsyncing the parent directory so the rename itself survives a
@@ -399,8 +465,10 @@ pub fn create_directory(
 
 #[tauri::command]
 #[specta::specta]
-pub fn file_exists(path: &str) -> bool {
-    Path::new(path).exists()
+pub fn file_exists(path: &str, vault_path_state: tauri::State<'_, VaultPathState>) -> bool {
+    ensure_in_vault(path, &vault_path_state)
+        .map(|p| p.exists())
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -427,9 +495,9 @@ pub fn copy_file(
 /// the user explicitly brings an external file (e.g. an image on the Desktop)
 /// into a note as an attachment. Only the *destination* is containment-checked;
 /// the source is user-chosen and may live anywhere — mirroring `save_file_bytes`,
-/// which writes to a user-picked path outside the vault. Plain command (not in
-/// the specta bindings); invoked directly from `bridge.ts`, kept in sync.
+/// which writes to a user-picked path outside the vault.
 #[tauri::command]
+#[specta::specta]
 pub fn import_external_file(
     from: &str,
     to: &str,
@@ -448,48 +516,59 @@ pub fn import_external_file(
 
 #[tauri::command]
 #[specta::specta]
-pub fn copy_directory(
-    from: &str,
-    to: &str,
+pub async fn copy_directory(
+    from: String,
+    to: String,
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
-    let src = ensure_in_vault(from, &vault_path_state)?;
-    let dst = ensure_in_vault(to, &vault_path_state)?;
-    copy_dir_recursive(&src, &dst)?;
+    let src = ensure_in_vault(&from, &vault_path_state)?;
+    let dst = ensure_in_vault(&to, &vault_path_state)?;
+    // Blocking recursive I/O; paths are resolved first since State cannot cross threads.
+    tokio::task::spawn_blocking(move || copy_dir_recursive(&src, &dst))
+        .await
+        .map_err(|e| e.to_string())??;
     // A directory copy adds an unknown number of notes; the watcher-driven
     // rebuild picks them up, and it skips every file it has already indexed.
     crate::index::tree::invalidate();
     Ok(())
 }
 
+/// Copy a directory tree. Walks with [`walk_dir_capped`] so symlinks are never
+/// followed and the depth cap applies — a symlinked subdirectory can neither
+/// escape the vault nor recurse without bound.
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     fs::create_dir_all(dst).map_err(|e| format!("Failed to create directory: {e}"))?;
 
-    let mut dirs: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
-    let mut files_to_copy: Vec<(std::path::PathBuf, std::path::PathBuf)> = Vec::new();
+    let mut files: Vec<(PathBuf, PathBuf)> = Vec::new();
+    let mut error: Option<String> = None;
 
-    let entries = fs::read_dir(src).map_err(|e| format!("Failed to read directory: {e}"))?;
-    for entry in entries {
-        let entry = entry.map_err(|e| format!("Failed to read entry: {e}"))?;
-        let src_path = entry.path();
-        let dst_path = dst.join(entry.file_name());
-        if src_path.is_dir() {
-            dirs.push((src_path, dst_path));
-        } else {
-            files_to_copy.push((src_path, dst_path));
+    walk_dir_capped(src, 0, MAX_WALK_DEPTH, &mut |item| {
+        if error.is_some() || item.is_symlink {
+            return WalkAction::Skip;
         }
+        let Ok(rel) = item.path.strip_prefix(src) else {
+            error = Some("Failed to resolve copy destination".into());
+            return WalkAction::Skip;
+        };
+        if item.is_dir {
+            if let Err(e) = fs::create_dir_all(dst.join(rel)) {
+                error = Some(format!("Failed to create directory: {e}"));
+            }
+            WalkAction::Recurse
+        } else {
+            files.push((item.path.clone(), dst.join(rel)));
+            WalkAction::Skip
+        }
+    });
+    if let Some(e) = error {
+        return Err(e);
     }
 
-    files_to_copy.par_iter().try_for_each(|(s, d)| {
+    files.par_iter().try_for_each(|(s, d)| {
         fs::copy(s, d)
             .map(|_| ())
             .map_err(|e| format!("Failed to copy file: {e}"))
-    })?;
-
-    for (src_child, dst_child) in dirs {
-        copy_dir_recursive(&src_child, &dst_child)?;
-    }
-    Ok(())
+    })
 }
 
 /// Set the modification time of a file to a specific unix timestamp (seconds).
@@ -499,8 +578,12 @@ fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
 /// widened to i64 for `filetime` below.
 #[tauri::command]
 #[specta::specta]
-pub fn set_mtime(path: &str, mtime: u32) -> Result<(), String> {
-    let p = Path::new(path);
+pub fn set_mtime(
+    path: &str,
+    mtime: u32,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let p = ensure_in_vault(path, &vault_path_state)?;
     if !p.exists() {
         return Err("File does not exist".into());
     }

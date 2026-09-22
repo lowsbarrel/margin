@@ -1,6 +1,6 @@
-use super::{FsEntry, WalkAction, atomic_write, walk_dir};
+use super::{FsEntry, VaultPathState, WalkAction, atomic_write, ensure_in_vault, walk_dir_capped};
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 /// Maximum directory nesting that file/content search and tag scanning will
 /// recurse into. Centralized here (was duplicated as a literal `10` across
@@ -36,8 +36,10 @@ pub fn replace_in_file(
     search: &str,
     replace: &str,
     case_sensitive: bool,
+    vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<u32, String> {
-    let content = fs::read_to_string(path).map_err(|e| format!("Failed to read file: {e}"))?;
+    let p = ensure_in_vault(path, &vault_path_state)?;
+    let content = fs::read_to_string(&p).map_err(|e| format!("Failed to read file: {e}"))?;
     let (new_content, count) = if case_sensitive {
         let count = content.matches(search).count();
         (content.replace(search, replace), count)
@@ -63,34 +65,23 @@ pub fn replace_in_file(
         (result, count)
     };
     if count > 0 {
-        atomic_write(Path::new(path), new_content.as_bytes())?;
+        atomic_write(&p, new_content.as_bytes())?;
     }
     Ok(count as u32)
 }
 
-pub(crate) fn collect_md_paths(
-    dir: &Path,
-    out: &mut Vec<std::path::PathBuf>,
-    depth: usize,
-    max_depth: usize,
-) {
-    if depth >= max_depth {
-        return;
-    }
-    // One level via the shared walker; recursion (and the depth cap) stays here.
-    let mut child_dirs: Vec<std::path::PathBuf> = Vec::new();
-    walk_dir(dir, &mut |item| {
+/// Collect every non-hidden `.md` file under `dir`, bounded by `MAX_WALK_DEPTH`.
+pub(crate) fn collect_md_paths(dir: &Path, out: &mut Vec<PathBuf>) {
+    walk_dir_capped(dir, 0, MAX_WALK_DEPTH, &mut |item| {
         if item.name.starts_with('.') {
             return WalkAction::Skip;
         }
         if item.is_dir {
-            child_dirs.push(item.path.clone());
-        } else if item.name.ends_with(".md") {
+            return WalkAction::Recurse;
+        }
+        if item.name.ends_with(".md") {
             out.push(item.path.clone());
         }
         WalkAction::Skip
     });
-    for child in child_dirs {
-        collect_md_paths(&child, out, depth + 1, max_depth);
-    }
 }

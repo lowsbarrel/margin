@@ -12,7 +12,7 @@ updates:
       prefix: chore
       include: scope
 
-  # npm updates observe the same one-week cooldown as pnpm's minimumReleaseAge.
+  # npm updates observe the same one-week cooldown as bunfig's minimumReleaseAge.
   - package-ecosystem: npm
     directory: /app
     schedule:

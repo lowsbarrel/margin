@@ -4,6 +4,7 @@ import { favourites } from '$lib/stores/favourites.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { vault } from '$lib/stores/vault.svelte';
 import { toast } from '$lib/stores/toast.svelte';
+import * as m from '$lib/paraglide/messages.js';
 import { deleteEntry, unwatchFile, unwatchVault, renameEntry, searchFiles } from '$lib/fs/bridge';
 import { clearHistoryTree, renameHistory } from '$lib/history/bridge';
 import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
@@ -103,7 +104,7 @@ export async function handleWikiLink(title: string) {
 	if (match) {
 		await panes.openFile(match.path);
 	} else {
-		toast.info(`Note not found: ${title}`);
+		toast.info(m.toast_note_not_found({ title }));
 	}
 }
 

@@ -54,7 +54,7 @@
 		} catch (err) {
 			if (generation !== loadGeneration) return;
 			console.error('Failed to list snapshots:', err);
-			toast.error(`${m.history_load_failed()}`);
+			toast.error(m.history_load_failed());
 		} finally {
 			if (generation === loadGeneration) loading = false;
 		}
@@ -77,7 +77,7 @@
 			previewFilename = snapshot.filename;
 		} catch (err) {
 			console.error('Failed to read snapshot:', err);
-			toast.error(`${m.history_read_failed()}`);
+			toast.error(m.history_read_failed());
 		}
 	}
 
@@ -102,7 +102,7 @@
 			toast.success(m.history_restored());
 		} catch (err) {
 			console.error('Restore failed:', err);
-			toast.error(`${m.history_restore_failed()}`);
+			toast.error(m.history_restore_failed());
 		}
 	}
 
@@ -117,7 +117,7 @@
 			}
 		} catch (err) {
 			console.error('Delete failed:', err);
-			toast.error(`${m.history_delete_failed()}`);
+			toast.error(m.history_delete_failed());
 		}
 	}
 
@@ -128,7 +128,7 @@
 			snapshots = [];
 			previewContent = null;
 			previewFilename = null;
-			toast.success(`${m.history_cleared({ count: String(count) })}`);
+			toast.success(m.history_cleared({ count: String(count) }));
 		} catch (err) {
 			console.error('Clear failed:', err);
 		}

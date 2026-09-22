@@ -38,6 +38,16 @@ const state = $state<EditorState>({
 
 let tiptapInstance = $state<Editor | null>(null);
 
+// Shared transition: a local edit clears 'synced' and flags a sync that is mid-flight.
+function noteLocalEdit() {
+	if (state.syncStatus === 'synced') {
+		state.syncStatus = 'idle';
+	}
+	if (state.syncStatus === 'syncing') {
+		state.localChangeDuringSync = true;
+	}
+}
+
 export const editor = {
 	get syncStatus() {
 		return state.syncStatus;
@@ -89,20 +99,10 @@ export const editor = {
 	},
 	setDirty(dirty: boolean) {
 		state.dirty = dirty;
-		if (dirty && state.syncStatus === 'synced') {
-			state.syncStatus = 'idle';
-		}
-		if (dirty && state.syncStatus === 'syncing') {
-			state.localChangeDuringSync = true;
-		}
+		if (dirty) noteLocalEdit();
 	},
 	markLocalChange() {
-		if (state.syncStatus === 'synced') {
-			state.syncStatus = 'idle';
-		}
-		if (state.syncStatus === 'syncing') {
-			state.localChangeDuringSync = true;
-		}
+		noteLocalEdit();
 	},
 	setTiptap(instance: Editor | null) {
 		tiptapInstance = instance;

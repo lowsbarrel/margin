@@ -74,14 +74,14 @@ the current note to PDF.
 
 ```bash
 cd app
-pnpm install
-pnpm tauri dev
+bun install
+bun run tauri dev
 ```
 
 If that works on the first try, buy a lottery ticket.
 
 ```bash
-pnpm tauri build   # release binary for the current platform
+bun run tauri build   # release binary for the current platform
 ```
 
 ## How it works
@@ -100,6 +100,59 @@ pnpm tauri build   # release binary for the current platform
    `file.sync-conflict-<timestamp>.md`.
 6. **History.** Snapshots are written automatically to `.margin/history/<file>/`.
    The history panel browses and restores them.
+
+## Keyboard shortcuts
+
+`Mod` is `⌘` on macOS and `Ctrl` on Windows/Linux.
+
+**App**
+
+| Shortcut              | Action                                          |
+| --------------------- | ----------------------------------------------- |
+| `Mod`+`K` / `Mod`+`P` | Open/close Spotlight (command palette + search) |
+| `Mod`+`Shift`+`F`     | Open Spotlight straight into search             |
+| `Mod`+`Shift`+`T`     | Reopen the last closed tab                       |
+| `Mod`+`F`             | Find in the current note                         |
+| `Mod`+`H`             | Find & replace in the current note              |
+
+**Spotlight**
+
+| Shortcut    | Action                                     |
+| ----------- | ------------------------------------------ |
+| `↑` / `↓`   | Move the selection                          |
+| `Enter`     | Open or run the selected result             |
+| `Mod`+`H`   | Toggle replace-across-vault mode            |
+| `Esc`       | Leave the current tag, then close the palette |
+
+**File tree**
+
+| Shortcut          | Action                     |
+| ----------------- | -------------------------- |
+| `Mod`+`C`         | Copy the selection          |
+| `Mod`+`X`         | Cut the selection           |
+| `Mod`+`V`         | Paste into the target folder |
+| `Mod`+`A`         | Select all                   |
+| `Mod`+`Click`     | Add/remove one entry         |
+| `Shift`+`Click`   | Select a range               |
+| `Enter` / `Esc`   | Confirm / cancel a rename    |
+
+**Editor**
+
+Formatting follows the usual Markdown-editor keys: `Mod`+`B` bold, `Mod`+`I`
+italic, `Mod`+`Shift`+`S` strikethrough, `Mod`+`E` inline code, `Mod`+`Alt`+`1`–`6`
+headings, `Mod`+`Shift`+`7` / `Mod`+`Shift`+`8` / `Mod`+`Shift`+`9` ordered /
+bullet / task list, `Mod`+`Shift`+`B` blockquote, `Mod`+`Alt`+`C` code block,
+`Mod`+`Alt`+`D` collapsible toggle, `Shift`+`Enter` hard break, `Mod`+`Z` /
+`Mod`+`Shift`+`Z` undo / redo. Type `/` for the slash menu, `[[` to link a note,
+and `:` for emoji.
+
+**Canvas**
+
+| Shortcut            | Action              |
+| ------------------- | ------------------- |
+| `Space`+drag        | Pan the canvas       |
+| `Mod`+scroll        | Zoom in/out          |
+| `Mod`+`Z`           | Undo the last stroke |
 
 ## Security
 
@@ -163,7 +216,7 @@ Do it. You're probably less lazy than I am, and the bar is underground.
 
 ## Requirements
 
-Node ≥ 24 · pnpm · a Rust toolchain · the
+Bun ≥ 1.3 · a Rust toolchain · the
 [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your
 platform.
 

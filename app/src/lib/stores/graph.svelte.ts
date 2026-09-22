@@ -95,12 +95,11 @@ async function _build(): Promise<void> {
 		state.nodeToPath = titleToAbs;
 	} finally {
 		state.loading = false;
-	}
-
-	// A rebuild was requested while this build was running — run it now.
-	if (rebuildRequested) {
-		rebuildRequested = false;
-		await _build();
+		// Drains a rebuild queued mid-flight even when this build threw.
+		if (rebuildRequested) {
+			rebuildRequested = false;
+			await _build();
+		}
 	}
 }
 

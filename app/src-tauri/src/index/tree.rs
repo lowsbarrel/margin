@@ -21,15 +21,12 @@
 //! next query, so a burst of N keystrokes between two edits costs one walk, not
 //! N.
 
-use crate::fs::{FsEntry, WalkAction, WalkItem, path_to_string, walk_dir};
+use crate::fs::{FsEntry, WalkAction, WalkItem, path_to_string, walk_dir_capped};
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Mutex, OnceLock};
-
-/// Directory nesting the vault walk descends into. Mirrors `fs::MAX_WALK_DEPTH`.
-const MAX_DEPTH: usize = 10;
 
 /// How many leading characters of each token are indexed. Longer queries still
 /// work — the trie is walked as far as it goes and the rest is verified during
@@ -97,36 +94,50 @@ impl VaultTree {
 
         // `path_to_string` normalises separators, so the prefix must too before
         // it can be stripped to yield a vault-relative path.
-        let root_prefix = format!("{}/", root.replace('\\', "/").to_lowercase());
+        let root_prefix = format!("{}/", crate::fs::normalise_slashes(root).to_lowercase());
 
-        collect(Path::new(root), 0, &mut |item: &WalkItem| {
-            let path = path_to_string(item.path.clone());
-            let path_lc = path.to_lowercase();
-            let rel_lc = path_lc
-                .strip_prefix(&root_prefix)
-                .unwrap_or(&path_lc)
-                .to_string();
-            let name_lc = item.name.to_lowercase();
+        walk_dir_capped(
+            Path::new(root),
+            0,
+            crate::fs::MAX_WALK_DEPTH,
+            &mut |item: &WalkItem| {
+                if item.name.starts_with('.') {
+                    return WalkAction::Skip;
+                }
+                let path = path_to_string(item.path.clone());
+                let path_lc = path.to_lowercase();
+                let rel_lc = path_lc
+                    .strip_prefix(&root_prefix)
+                    .unwrap_or(&path_lc)
+                    .to_string();
+                let name_lc = item.name.to_lowercase();
 
-            let id = tree.entries.len() as u32;
+                let id = tree.entries.len() as u32;
 
-            // Index before moving `name_lc` into the arena: the whole name, so
-            // `my-project.md` is reachable by typing it verbatim, plus each
-            // interior token so `project` and `md` reach it too.
-            tree.insert(&name_lc, id);
-            for token in interior_tokens(&name_lc) {
-                tree.insert(token, id);
-            }
+                // Index before moving `name_lc` into the arena: the whole name, so
+                // `my-project.md` is reachable by typing it verbatim, plus each
+                // interior token so `project` and `md` reach it too.
+                tree.insert(&name_lc, id);
+                for token in interior_tokens(&name_lc) {
+                    tree.insert(token, id);
+                }
 
-            tree.entries.push(Entry {
-                name: item.name.clone(),
-                name_lc,
-                rel_lc,
-                path,
-                is_dir: item.is_dir,
-                modified: item.modified,
-            });
-        });
+                tree.entries.push(Entry {
+                    name: item.name.clone(),
+                    name_lc,
+                    rel_lc,
+                    path,
+                    is_dir: item.is_dir,
+                    modified: item.modified,
+                });
+
+                if item.is_dir {
+                    WalkAction::Recurse
+                } else {
+                    WalkAction::Skip
+                }
+            },
+        );
 
         for node in &mut tree.trie {
             node.ids.shrink_to_fit();
@@ -166,28 +177,6 @@ impl VaultTree {
             node = *self.trie[node].children.get(&ch)? as usize;
         }
         Some(&self.trie[node].ids)
-    }
-}
-
-/// Recursive vault walk. Hidden entries (`.git`, `.margin`, …) are skipped, and
-/// symlinks are never followed — both inherited from the shared `walk_dir`.
-fn collect<F: FnMut(&WalkItem)>(dir: &Path, depth: usize, visit: &mut F) {
-    if depth >= MAX_DEPTH {
-        return;
-    }
-    let mut child_dirs: Vec<std::path::PathBuf> = Vec::new();
-    walk_dir(dir, &mut |item| {
-        if item.name.starts_with('.') {
-            return WalkAction::Skip;
-        }
-        visit(item);
-        if item.is_dir {
-            child_dirs.push(item.path.clone());
-        }
-        WalkAction::Skip
-    });
-    for child in child_dirs {
-        collect(&child, depth + 1, visit);
     }
 }
 

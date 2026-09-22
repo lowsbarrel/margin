@@ -4,7 +4,8 @@
 	import { vault } from '$lib/stores/vault.svelte';
 	import { Star } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
-	import { displayPath, displayName } from '$lib/utils/sidebar-ops';
+	import { displayPath } from '$lib/utils/sidebar-ops';
+	import { displayName } from '$lib/utils/filename';
 	import type { MenuTarget } from '$lib/utils/sidebar-menu';
 
 	interface Props {
