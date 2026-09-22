@@ -1,3 +1,4 @@
+use crate::fs::{normalise_slashes, rel_under_vault};
 use serde::Serialize;
 use std::fs;
 use std::path::{Component, Path};
@@ -30,29 +31,13 @@ pub struct Snapshot {
 /// Build the history directory path for a given file.
 /// e.g. vault/.margin/history/notes/foo.md/
 fn history_dir(vault_path: &str, file_path: &str) -> Result<String, String> {
-    // Normalize separators so Windows back-slashes don't break the prefix check
-    let vault = vault_path.replace('\\', "/");
-    let file = file_path.replace('\\', "/");
+    let vault = normalise_slashes(vault_path);
+    let file = normalise_slashes(file_path);
+    let rel =
+        rel_under_vault(&vault, &file).ok_or_else(|| "File is not inside the vault".to_string())?;
+    reject_parent_dir(&rel)?;
     let vault = vault.trim_end_matches('/');
-    let file = file.trim_end_matches('/');
-
-    // file_path must be inside vault_path (check with trailing slash to prevent prefix confusion)
-    // Use case-insensitive comparison on Windows where drive letters may differ in case.
-    let vault_prefix = format!("{vault}/");
-    #[cfg(target_os = "windows")]
-    let inside = file
-        .to_lowercase()
-        .starts_with(&vault_prefix.to_lowercase());
-    #[cfg(not(target_os = "windows"))]
-    let inside = file.starts_with(&vault_prefix);
-    if !inside {
-        return Err("File is not inside the vault".into());
-    }
-
-    let rel = &file[vault.len()..].trim_start_matches('/');
-    reject_parent_dir(rel)?;
-    let history = format!("{vault}/.margin/history/{rel}");
-    Ok(history)
+    Ok(format!("{vault}/.margin/history/{rel}"))
 }
 
 /// Maximum number of snapshots kept per file. Oldest are pruned on save.
@@ -249,18 +234,12 @@ pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u32, String>
 #[tauri::command]
 #[specta::specta]
 pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), String> {
-    let vault = vault_path.replace('\\', "/");
-    let entry = entry_path.replace('\\', "/");
+    let vault = normalise_slashes(vault_path);
+    let entry = normalise_slashes(entry_path);
+    let rel = rel_under_vault(&vault, &entry)
+        .ok_or_else(|| "Path is not inside the vault".to_string())?;
+    reject_parent_dir(&rel)?;
     let vault = vault.trim_end_matches('/');
-    let entry = entry.trim_end_matches('/');
-
-    let vault_prefix = format!("{vault}/");
-    if !entry.starts_with(&vault_prefix) {
-        return Err("Path is not inside the vault".into());
-    }
-
-    let rel = &entry[vault.len()..].trim_start_matches('/');
-    reject_parent_dir(rel)?;
     let history_path = format!("{vault}/.margin/history/{rel}");
     let p = Path::new(&history_path);
 
@@ -279,23 +258,18 @@ pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), Stri
 #[tauri::command]
 #[specta::specta]
 pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Result<(), String> {
-    let vault = vault_path.replace('\\', "/");
-    let old = old_path.replace('\\', "/");
-    let new_ = new_path.replace('\\', "/");
+    let vault = normalise_slashes(vault_path);
+    let old = normalise_slashes(old_path);
+    let new_ = normalise_slashes(new_path);
+
+    let old_rel = rel_under_vault(&vault, &old)
+        .ok_or_else(|| "Paths must be inside the vault".to_string())?;
+    let new_rel = rel_under_vault(&vault, &new_)
+        .ok_or_else(|| "Paths must be inside the vault".to_string())?;
+    reject_parent_dir(&old_rel)?;
+    reject_parent_dir(&new_rel)?;
+
     let vault = vault.trim_end_matches('/');
-    let old = old.trim_end_matches('/');
-    let new_ = new_.trim_end_matches('/');
-
-    let vault_prefix = format!("{vault}/");
-    if !old.starts_with(&vault_prefix) || !new_.starts_with(&vault_prefix) {
-        return Err("Paths must be inside the vault".into());
-    }
-
-    let old_rel = &old[vault.len()..].trim_start_matches('/');
-    let new_rel = &new_[vault.len()..].trim_start_matches('/');
-    reject_parent_dir(old_rel)?;
-    reject_parent_dir(new_rel)?;
-
     let old_history = format!("{vault}/.margin/history/{old_rel}");
     let new_history = format!("{vault}/.margin/history/{new_rel}");
 

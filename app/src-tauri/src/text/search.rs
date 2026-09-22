@@ -47,13 +47,16 @@ pub fn search_in_text(
 
     let hay = haystack.as_bytes();
     let pat = pattern.as_bytes();
+    if pat.is_empty() {
+        return Vec::new();
+    }
     let pat_len = pat.len();
     let mut results = Vec::new();
     let mut start = 0usize;
 
     while start + pat_len <= hay.len() {
-        let idx = match memchr_find(hay, pat, start) {
-            Some(i) => i,
+        let idx = match memchr::memmem::find(&hay[start..], pat) {
+            Some(i) => start + i,
             None => break,
         };
 
@@ -73,26 +76,6 @@ pub fn search_in_text(
     }
 
     results
-}
-
-/// Simple byte-level substring search (no allocations beyond the input).
-/// For short patterns this is competitive with more complex algorithms.
-fn memchr_find(hay: &[u8], pat: &[u8], start: usize) -> Option<usize> {
-    let first = pat[0];
-    let hay = &hay[start..];
-    let mut i = 0;
-    while i + pat.len() <= hay.len() {
-        let j = memchr::memchr(first, &hay[i..])?;
-        let pos = i + j;
-        if pos + pat.len() > hay.len() {
-            return None;
-        }
-        if &hay[pos..pos + pat.len()] == pat {
-            return Some(start + pos);
-        }
-        i = pos + 1;
-    }
-    None
 }
 
 /// Binary-search check: is there any gap value g where lo <= g < hi?

@@ -28,8 +28,6 @@ pub struct FuzzyEntry {
     pub path: String,
 }
 
-#[tauri::command]
-#[specta::specta]
 // `limit` is u32 (not usize) so specta can export it; a result cap never
 // approaches u32::MAX.
 //
@@ -37,6 +35,8 @@ pub struct FuzzyEntry {
 // crate (the engine behind helix/nucleo) instead of a hand-rolled scorer.
 // The display `name` has its `.md` suffix stripped before matching so the
 // extension never skews scores.
+#[tauri::command]
+#[specta::specta]
 pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: u32) -> Vec<FuzzyEntry> {
     let limit = limit as usize;
 

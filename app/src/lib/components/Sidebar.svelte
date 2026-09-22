@@ -54,7 +54,8 @@
 	import {
 		normalizeFileName,
 		normalizeDirName,
-		createUniqueFilePath
+		createUniqueFilePath,
+		createUniquePath
 	} from '$lib/utils/sidebar-ops';
 	import { buildMenuItems, type MenuTarget } from '$lib/utils/sidebar-menu';
 
@@ -169,25 +170,9 @@
 	}
 
 	// ─── File / folder creation ────────────────────────────────────────
-	async function handleNewFile(base = getBasePath(), desiredName?: string) {
+	async function handleNewDocument(base = getBasePath(), desiredName?: string) {
 		if (!vault.vaultPath) return;
 		const path = await createUniqueFilePath(base, desiredName);
-		if (!path) return;
-
-		const encoder = new TextEncoder();
-		await writeFileBytes(path, encoder.encode(''));
-
-		await ensureFolderExpanded(base);
-		await files.refresh(vault.vaultPath);
-		editor.markLocalChange();
-		files.requestTreeReveal(path);
-		onfileselect(path);
-		activeView = 'files';
-	}
-
-	async function handleNewCanvas(base = getBasePath()) {
-		if (!vault.vaultPath) return;
-		const path = await createUniqueFilePath(base, 'Untitled.canvas');
 		if (!path) return;
 
 		const encoder = new TextEncoder();
@@ -273,17 +258,7 @@
 	async function handleDuplicate(entry: FsEntry) {
 		if (!vault.vaultPath) return;
 		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
-		const name = entry.name;
-		const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-		const stem = ext ? name.slice(0, name.lastIndexOf('.')) : name;
-
-		let candidate: string;
-		let i = 1;
-		do {
-			const newName = `${stem} copy${i > 1 ? ` ${i}` : ''}${ext}`;
-			candidate = `${parent}/${newName}`;
-			i++;
-		} while (await fileExists(candidate));
+		const candidate = await createUniquePath(parent, entry.name, 'copy');
 
 		try {
 			if (entry.is_dir) await copyDirectory(entry.path, candidate);
@@ -352,18 +327,7 @@
 			const srcPath = data.paths[i];
 			const isDir = data.isDirs[i];
 			const name = srcPath.split('/').pop() ?? '';
-			let dest = `${targetDir}/${name}`;
-
-			if (await fileExists(dest)) {
-				const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-				const stem = ext ? name.slice(0, name.lastIndexOf('.')) : name;
-				let j = 1;
-				do {
-					const newName = `${stem} ${j}${ext}`;
-					dest = `${targetDir}/${newName}`;
-					j++;
-				} while (await fileExists(dest));
-			}
+			const dest = await createUniquePath(targetDir, name);
 
 			try {
 				if (data.operation === 'copy') {
@@ -439,18 +403,7 @@
 
 		for (const srcPath of paths) {
 			const name = srcPath.replace(/\\/g, '/').split('/').pop() ?? '';
-			let dest = `${targetDir}/${name}`;
-
-			if (await fileExists(dest)) {
-				const ext = name.includes('.') ? name.slice(name.lastIndexOf('.')) : '';
-				const stem = ext ? name.slice(0, name.lastIndexOf('.')) : name;
-				let j = 1;
-				do {
-					const newName = `${stem} ${j}${ext}`;
-					dest = `${targetDir}/${newName}`;
-					j++;
-				} while (await fileExists(dest));
-			}
+			const dest = await createUniquePath(targetDir, name);
 
 			try {
 				await copyFile(srcPath, dest).catch(async () => {
@@ -492,14 +445,13 @@
 	let menuItems = $derived.by((): ContextMenuItem[] => {
 		if (!menuTarget) return [];
 		return buildMenuItems(menuTarget, {
-			onNewFile: (base) => handleNewFile(base),
-			onNewCanvas: (base) => handleNewCanvas(base),
+			onNewFile: (base) => handleNewDocument(base),
+			onNewCanvas: (base) => handleNewDocument(base, 'Untitled.canvas'),
 			onNewFolder: (base) => handleStartNewFolder(base),
 			onPaste: (dir) => handlePaste(dir),
 			onOpenInFinder: (path) => handleOpenInFinder(path),
 			onCopy: (entry) => handleCopy(entry),
 			onCut: (entry) => handleCut(entry),
-			onRename: (path) => files.startRename(path),
 			onDuplicate: (entry) => handleDuplicate(entry),
 			onDelete: (entry) => handleDeleteRequest(entry)
 		});
@@ -584,13 +536,13 @@
 						<IconButton
 							icon={FilePlus}
 							size="sm"
-							onclick={() => handleNewFile()}
+							onclick={() => handleNewDocument()}
 							title={m.sidebar_new_file()}
 						/>
 						<IconButton
 							icon={PenLine}
 							size="sm"
-							onclick={() => handleNewCanvas()}
+							onclick={() => handleNewDocument(getBasePath(), 'Untitled.canvas')}
 							title={m.sidebar_new_canvas()}
 						/>
 						<IconButton

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import * as pdfjsLib from 'pdfjs-dist';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		data: Uint8Array;
@@ -55,7 +56,7 @@
 			pages = slots;
 		} catch (err) {
 			console.error('Failed to load PDF:', err);
-			errorMessage = `Failed to load PDF: ${err instanceof Error ? err.message : String(err)}`;
+			errorMessage = m.pdf_load_failed({ error: err instanceof Error ? err.message : String(err) });
 		}
 	});
 

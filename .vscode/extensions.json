@@ -10,7 +10,7 @@
 		"dbaeumer.vscode-eslint",
 		// Validates .github/workflows/*.yml (needs GitHub sign-in to resolve actions)
 		"github.vscode-github-actions",
-		// Schema validation for ci.yml, dependabot.yml, pnpm-workspace.yaml
+		// Schema validation for ci.yml, dependabot.yml, bunfig.toml
 		"redhat.vscode-yaml",
 		// Claude Code
 		"anthropic.claude-code"

@@ -6,7 +6,10 @@ import { invoke as __TAURI_INVOKE } from "@tauri-apps/api/core";
 export const commands = {
 	/**  Generate a new BIP-39 12-word mnemonic (128-bit entropy). */
 	generateMnemonic: () => typedError<string, string>(__TAURI_INVOKE("generate_mnemonic")),
-	/**  Derive vault_id and encryption_key from a BIP-39 mnemonic. */
+	/**
+	 *  Derive vault_id and encryption_key from a BIP-39 mnemonic.
+	 *  The derived key is intentionally held in JS (plaintext never is).
+	 */
 	deriveVaultKeys: (mnemonic: string) => typedError<VaultKeys, string>(__TAURI_INVOKE("derive_vault_keys", { mnemonic })),
 	setVaultDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("set_vault_directory", { path })),
 	listDirectory: (path: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("list_directory", { path })),
@@ -31,6 +34,15 @@ export const commands = {
 	createDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_directory", { path })),
 	fileExists: (path: string) => __TAURI_INVOKE<boolean>("file_exists", { path }),
 	copyFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_file", { from, to })),
+	/**
+	 *  Copy a file from an arbitrary source **outside** the vault into a
+	 *  vault-contained destination. Used by drag-drop / paste import flows where
+	 *  the user explicitly brings an external file (e.g. an image on the Desktop)
+	 *  into a note as an attachment. Only the *destination* is containment-checked;
+	 *  the source is user-chosen and may live anywhere — mirroring `save_file_bytes`,
+	 *  which writes to a user-picked path outside the vault.
+	 */
+	importExternalFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_file", { from, to })),
 	copyDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_directory", { from, to })),
 	revealInFileManager: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_in_file_manager", { path })),
 	/**
@@ -205,7 +217,7 @@ export const commands = {
 	loadManifest: (vaultPath: string, encryptionKey: number[]) => typedError<Manifest_Serialize, string>(__TAURI_INVOKE("load_manifest", { vaultPath, encryptionKey })),
 	/**  Encrypt and atomically save the base manifest to disk. */
 	saveManifest: (vaultPath: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("save_manifest", { vaultPath, encryptionKey, manifest })),
-	/**  3-way diff: compare base, local , and remote manifests to produce sync actions. */
+	/**  3-way diff: compare base, local, and remote manifests to produce sync actions. */
 	computeSyncActions: (baseFiles: ManifestEntry_Deserialize[], localFiles: ManifestEntry_Deserialize[], remoteFiles: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<SyncAction[]>("compute_sync_actions", { baseFiles, localFiles, remoteFiles }),
 	/**  Return only entries that have a `deleted_at` timestamp. */
 	collectTombstones: (files: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("collect_tombstones", { files }),

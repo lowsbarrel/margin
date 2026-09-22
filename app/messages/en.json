@@ -129,6 +129,7 @@
 	"backlinks_loading": "Loading…",
 	"backlinks_empty": "No notes link here yet.",
 	"backlinks_load_failed": "Failed to load backlinks",
+	"graph_load_failed": "Failed to load graph",
 	"statusbar_backlinks": "Backlinks",
 	"toast_sync_complete": "Sync complete",
 	"toast_sync_failed": "Sync failed: {error}",
@@ -147,6 +148,7 @@
 	"settings_attachments_none": "— None —",
 
 	"toast_file_read_failed": "Failed to read file: {error}",
+	"pdf_load_failed": "Failed to load PDF: {error}",
 
 	"statusbar_history": "File history",
 
@@ -215,6 +217,7 @@
 	"toast_replaced": "Replaced {count} occurrences",
 	"toast_replaced_in_files": "Replaced {count} occurrences in {files} files",
 	"toast_replace_failed": "Replace failed: {error}",
+	"toast_replace_failed_count": "Replace failed in {count} files",
 	"toast_path_exists": "Path already exists: {name}",
 	"toast_rename_failed": "Rename failed: {error}",
 	"toast_delete_failed": "Delete failed: {error}",
@@ -236,6 +239,7 @@
 	"toast_cannot_open_file": "Cannot open file: {error}",
 	"toast_cannot_open_url": "Cannot open URL: {error}",
 	"toast_cannot_reveal_file": "Cannot reveal file: {error}",
+	"toast_note_not_found": "Note not found: {title}",
 
 	"editor_view_image": "View Image",
 	"editor_open_default_app": "Open with Default App",

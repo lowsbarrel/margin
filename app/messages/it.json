@@ -129,6 +129,7 @@
 	"backlinks_loading": "Caricamento…",
 	"backlinks_empty": "Nessuna nota collega ancora questa.",
 	"backlinks_load_failed": "Caricamento dei collegamenti fallito",
+	"graph_load_failed": "Impossibile caricare il grafo",
 	"statusbar_backlinks": "Collegamenti in entrata",
 	"toast_sync_complete": "Sincronizzazione completata",
 	"toast_sync_failed": "Sincronizzazione fallita: {error}",
@@ -147,6 +148,7 @@
 	"settings_attachments_none": "— Nessuna —",
 
 	"toast_file_read_failed": "Impossibile leggere il file: {error}",
+	"pdf_load_failed": "Impossibile caricare il PDF: {error}",
 
 	"statusbar_history": "Cronologia file",
 
@@ -215,6 +217,7 @@
 	"toast_replaced": "{count} occorrenze sostituite",
 	"toast_replaced_in_files": "{count} occorrenze sostituite in {files} file",
 	"toast_replace_failed": "Sostituzione fallita: {error}",
+	"toast_replace_failed_count": "Sostituzione non riuscita in {count} file",
 	"toast_path_exists": "Il percorso esiste già: {name}",
 	"toast_rename_failed": "Rinomina fallita: {error}",
 	"toast_delete_failed": "Eliminazione fallita: {error}",
@@ -236,6 +239,7 @@
 	"toast_cannot_open_file": "Impossibile aprire il file: {error}",
 	"toast_cannot_open_url": "Impossibile aprire l'URL: {error}",
 	"toast_cannot_reveal_file": "Impossibile mostrare il file: {error}",
+	"toast_note_not_found": "Nota non trovata: {title}",
 
 	"editor_view_image": "Visualizza immagine",
 	"editor_open_default_app": "Apri con app predefinita",

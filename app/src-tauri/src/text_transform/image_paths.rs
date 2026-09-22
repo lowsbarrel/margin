@@ -137,15 +137,13 @@ fn encode_spaces_in_localfile_urls(md: &str) -> String {
     let mut result = String::with_capacity(md.len());
     let mut pos = 0;
     while pos < md.len() {
-        let next = md[pos..]
-            .find("](localfile://")
-            .map(|s| (pos + s, "](localfile://".len()))
-            .or_else(|| {
-                md[pos..]
-                    .find("](http://localfile.localhost")
-                    .map(|s| (pos + s, "](http://localfile.localhost".len()))
-            });
-        if let Some((abs_start, _)) = next {
+        let mut next = md[pos..].find("](localfile://").map(|s| pos + s);
+        if next.is_none() {
+            next = md[pos..]
+                .find("](http://localfile.localhost")
+                .map(|s| pos + s);
+        }
+        if let Some(abs_start) = next {
             let url_start = abs_start + 2;
             if let Some(close) = md[url_start..].find(')') {
                 let url = &md[url_start..url_start + close];
@@ -177,129 +175,102 @@ pub(super) fn rewrite_legacy_localfile_urls(md: &str) -> String {
     md.to_string()
 }
 
+/// Scan markdown image syntax `![alt](url)` and rewrite each occurrence for
+/// which `transform` returns `Some`. `None` leaves the image untouched, so the
+/// caller owns every URL rule while this owns the scanning/`![[]]` handling.
+fn map_image_links(md: &str, transform: &mut impl FnMut(&str, &str) -> Option<String>) -> String {
+    let mut result = String::with_capacity(md.len());
+    let mut pos = 0;
+
+    while pos < md.len() {
+        let Some(start) = md[pos..].find("![") else {
+            result.push_str(&md[pos..]);
+            break;
+        };
+        let abs_start = pos + start;
+
+        if abs_start + 2 < md.len() && md.as_bytes()[abs_start + 2] == b'[' {
+            result.push_str(&md[pos..abs_start + 2]);
+            pos = abs_start + 2;
+            continue;
+        }
+
+        if let Some(close_bracket) = md[abs_start + 2..].find(']') {
+            let alt_end = abs_start + 2 + close_bracket;
+            let alt = &md[abs_start + 2..alt_end];
+
+            if alt_end + 1 < md.len() && md.as_bytes()[alt_end + 1] == b'(' {
+                let url_start = alt_end + 2;
+                if let Some(close_paren) = md[url_start..].find(')') {
+                    let url = &md[url_start..url_start + close_paren];
+                    if let Some(replacement) = transform(alt, url) {
+                        result.push_str(&md[pos..abs_start]);
+                        result.push_str(&replacement);
+                        pos = url_start + close_paren + 1;
+                        continue;
+                    }
+                }
+            }
+        }
+
+        result.push_str(&md[pos..abs_start + 2]);
+        pos = abs_start + 2;
+    }
+
+    result
+}
+
 pub(super) fn resolve_image_paths(md: &str, vault_path: &str) -> String {
     // Fix previously-saved malformed localfile:// URLs where the slash between
     // "localhost" and the drive letter was missing (Windows bug).
     // e.g. localfile://localhostC: → localfile://localhost/C:
-    let md = if md.contains("localfile://localhost") && !md.contains("localfile://localhost/") {
-        md.replace("localfile://localhost", "localfile://localhost/")
+    let legacy_with_slash = format!("{LEGACY_LOCALFILE_PREFIX}/");
+    let md = if md.contains(LEGACY_LOCALFILE_PREFIX) && !md.contains(&legacy_with_slash) {
+        md.replace(LEGACY_LOCALFILE_PREFIX, &legacy_with_slash)
     } else {
         md.to_string()
     };
     let md = unescape_image_markdown(&md);
     let md = rewrite_legacy_localfile_urls(&md);
     let md = encode_spaces_in_localfile_urls(&md);
-    let md = md.as_str();
 
-    let mut result = String::with_capacity(md.len());
-    let mut pos = 0;
-
-    while pos < md.len() {
-        if let Some(start) = md[pos..].find("![") {
-            let abs_start = pos + start;
-
-            if abs_start + 2 < md.len() && md.as_bytes()[abs_start + 2] == b'[' {
-                result.push_str(&md[pos..abs_start + 2]);
-                pos = abs_start + 2;
-                continue;
-            }
-
-            if let Some(close_bracket) = md[abs_start + 2..].find(']') {
-                let alt_end = abs_start + 2 + close_bracket;
-                let alt = &md[abs_start + 2..alt_end];
-
-                if alt_end + 1 < md.len() && md.as_bytes()[alt_end + 1] == b'(' {
-                    let url_start = alt_end + 2;
-                    if let Some(close_paren) = md[url_start..].find(')')
-                        && close_paren > 0
-                    {
-                        let url = &md[url_start..url_start + close_paren];
-                        if !url.starts_with("http://")
-                            && !url.starts_with("https://")
-                            && !url.starts_with("data:")
-                            && !url.starts_with("localfile://")
-                        {
-                            result.push_str(&md[pos..abs_start]);
-                            let sep = if vault_path.starts_with('/') { "" } else { "/" };
-                            let full = format!("{}/{}", vault_path, url).replace(' ', "%20");
-                            result.push_str(&format!(
-                                "![{}]({}{}{})",
-                                alt, LOCALFILE_URL_PREFIX, sep, full
-                            ));
-                            pos = url_start + close_paren + 1;
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            result.push_str(&md[pos..abs_start + 2]);
-            pos = abs_start + 2;
-        } else {
-            result.push_str(&md[pos..]);
-            break;
+    map_image_links(&md, &mut |alt, url| {
+        if url.is_empty()
+            || url.starts_with("http://")
+            || url.starts_with("https://")
+            || url.starts_with("data:")
+            || url.starts_with("localfile://")
+        {
+            return None;
         }
-    }
-
-    result
+        let sep = if vault_path.starts_with('/') { "" } else { "/" };
+        let full = format!("{}/{}", vault_path, url).replace(' ', "%20");
+        Some(format!(
+            "![{}]({}{}{})",
+            alt, LOCALFILE_URL_PREFIX, sep, full
+        ))
+    })
 }
 
 pub(super) fn unresolve_image_paths(md: &str, vault_path: &str) -> String {
-    let mut result = String::with_capacity(md.len());
-    let mut pos = 0;
-
-    while pos < md.len() {
-        if let Some(start) = md[pos..].find("![") {
-            let abs_start = pos + start;
-
-            if abs_start + 2 < md.len() && md.as_bytes()[abs_start + 2] == b'[' {
-                result.push_str(&md[pos..abs_start + 2]);
-                pos = abs_start + 2;
-                continue;
-            }
-
-            if let Some(close_bracket) = md[abs_start + 2..].find(']') {
-                let alt_end = abs_start + 2 + close_bracket;
-                let alt = &md[abs_start + 2..alt_end];
-
-                if alt_end + 1 < md.len() && md.as_bytes()[alt_end + 1] == b'(' {
-                    let url_start = alt_end + 2;
-                    if let Some(close_paren) = md[url_start..].find(')') {
-                        let url = &md[url_start..url_start + close_paren];
-                        let stripped = url
-                            .strip_prefix("http://localfile.localhost")
-                            .or_else(|| url.strip_prefix(LEGACY_LOCALFILE_PREFIX));
-                        if let Some(abs_path) = stripped {
-                            // On Windows abs_path may be "/C:/Users/..." while
-                            // vault_path is "C:/Users/...". Strip the leading /.
-                            let norm_abs = abs_path.strip_prefix('/').unwrap_or(abs_path);
-                            // Spaces may be %20-encoded in the URL
-                            let decoded_abs = norm_abs.replace("%20", " ");
-                            let vault_prefix = format!("{}/", vault_path);
-                            let rel_path = if decoded_abs.starts_with(&vault_prefix) {
-                                decoded_abs[vault_prefix.len()..].to_string()
-                            } else if norm_abs.starts_with(&vault_prefix.replace(' ', "%20")) {
-                                let enc_prefix = vault_prefix.replace(' ', "%20");
-                                norm_abs[enc_prefix.len()..].to_string()
-                            } else {
-                                decoded_abs
-                            };
-                            result.push_str(&md[pos..abs_start]);
-                            result.push_str(&format!("![{}]({})", alt, rel_path));
-                            pos = url_start + close_paren + 1;
-                            continue;
-                        }
-                    }
-                }
-            }
-
-            result.push_str(&md[pos..abs_start + 2]);
-            pos = abs_start + 2;
+    map_image_links(md, &mut |alt, url| {
+        let abs_path = url
+            .strip_prefix("http://localfile.localhost")
+            .or_else(|| url.strip_prefix(LEGACY_LOCALFILE_PREFIX))?;
+        // On Windows abs_path may be "/C:/Users/..." while vault_path is
+        // "C:/Users/...". Strip the leading /.
+        let norm_abs = abs_path.strip_prefix('/').unwrap_or(abs_path);
+        // Spaces may be %20-encoded in the URL
+        let decoded_abs = norm_abs.replace("%20", " ");
+        let vault_prefix = format!("{}/", vault_path);
+        let rel_path = if decoded_abs.starts_with(&vault_prefix) {
+            decoded_abs[vault_prefix.len()..].to_string()
+        } else if norm_abs.starts_with(&vault_prefix.replace(' ', "%20")) {
+            let enc_prefix = vault_prefix.replace(' ', "%20");
+            norm_abs[enc_prefix.len()..].to_string()
         } else {
-            result.push_str(&md[pos..]);
-            break;
-        }
-    }
-
-    result
+            decoded_abs
+        };
+        Some(format!("![{}]({})", alt, rel_path))
+    })
 }

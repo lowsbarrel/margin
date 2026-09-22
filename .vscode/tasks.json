@@ -7,7 +7,7 @@
 		{
 			"label": "tauri: dev",
 			"type": "shell",
-			"command": "pnpm tauri dev",
+			"command": "bun run tauri dev",
 			"isBackground": true,
 			"problemMatcher": [],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
@@ -15,33 +15,33 @@
 		{
 			"label": "tauri: build",
 			"type": "shell",
-			"command": "pnpm tauri build",
+			"command": "bun run tauri build",
 			"group": { "kind": "build", "isDefault": true },
 			"problemMatcher": ["$rustc", "$tsc"],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
-			"label": "pnpm: check",
+			"label": "bun: check",
 			"type": "shell",
-			"command": "pnpm check",
+			"command": "bun run check",
 			"problemMatcher": ["$tsc"]
 		},
 		{
-			"label": "pnpm: lint",
+			"label": "bun: lint",
 			"type": "shell",
-			"command": "pnpm lint",
+			"command": "bun run lint",
 			"problemMatcher": []
 		},
 		{
-			"label": "pnpm: format",
+			"label": "bun: format",
 			"type": "shell",
-			"command": "pnpm format",
+			"command": "bun run format",
 			"problemMatcher": []
 		},
 		{
-			"label": "pnpm: gen:bindings",
+			"label": "bun: gen:bindings",
 			"type": "shell",
-			"command": "pnpm gen:bindings",
+			"command": "bun run gen:bindings",
 			"problemMatcher": ["$rustc"]
 		},
 		{
@@ -61,7 +61,7 @@
 		{
 			// The pre-commit gate, minus the slow half CI owns.
 			"label": "gate: pre-commit",
-			"dependsOn": ["pnpm: lint", "cargo: fmt"],
+			"dependsOn": ["bun: lint", "cargo: fmt"],
 			"dependsOrder": "sequence",
 			"problemMatcher": [],
 			"group": "test"
@@ -69,7 +69,7 @@
 		{
 			// Everything CI enforces, in one go.
 			"label": "gate: full",
-			"dependsOn": ["pnpm: lint", "pnpm: check", "cargo: fmt", "cargo: clippy"],
+			"dependsOn": ["bun: lint", "bun: check", "cargo: fmt", "cargo: clippy"],
 			"dependsOrder": "sequence",
 			"problemMatcher": [],
 			"group": { "kind": "test", "isDefault": true }

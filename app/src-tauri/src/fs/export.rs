@@ -1,4 +1,4 @@
-use crate::fs::{WalkAction, walk_dir};
+use crate::fs::{WalkAction, path_to_string, walk_dir, walk_dir_capped};
 use crate::sync::Manifest;
 use std::collections::HashMap;
 use std::fs;
@@ -8,7 +8,13 @@ use std::time::Instant;
 
 #[tauri::command]
 #[specta::specta]
-pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String> {
+pub async fn export_vault_zip(vault_path: String, dest_path: String) -> Result<(), String> {
+    tokio::task::spawn_blocking(move || export_vault_zip_blocking(&vault_path, &dest_path))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn export_vault_zip_blocking(vault_path: &str, dest_path: &str) -> Result<(), String> {
     use zip::ZipWriter;
     use zip::write::SimpleFileOptions;
 
@@ -22,44 +28,48 @@ pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String>
     let mut zip = ZipWriter::new(file);
     let options = SimpleFileOptions::default().compression_method(zip::CompressionMethod::Deflated);
 
-    fn walk_zip(
-        base: &Path,
-        dir: &Path,
+    fn add_file(
         zip: &mut ZipWriter<std::fs::File>,
+        path: &Path,
+        relative: &str,
         options: SimpleFileOptions,
     ) -> Result<(), String> {
-        let entries =
-            std::fs::read_dir(dir).map_err(|e| format!("Failed to read directory: {e}"))?;
-        for entry in entries.flatten() {
-            let name = entry
-                .file_name()
-                .into_string()
-                .unwrap_or_else(|s| s.to_string_lossy().into_owned());
-            if name.starts_with('.') {
-                continue;
-            }
-            let path = entry.path();
-            let relative = path
-                .strip_prefix(base)
-                .map_err(|e| format!("Path error: {e}"))?
-                .to_string_lossy()
-                .into_owned();
-            if path.is_dir() {
-                zip.add_directory(format!("{relative}/"), options)
-                    .map_err(|e| format!("Failed to add directory to zip: {e}"))?;
-                walk_zip(base, &path, zip, options)?;
-            } else {
-                zip.start_file(&relative, options)
-                    .map_err(|e| format!("Failed to start file in zip: {e}"))?;
-                let mut f =
-                    std::fs::File::open(&path).map_err(|e| format!("Failed to open file: {e}"))?;
-                std::io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {e}"))?;
-            }
-        }
+        zip.start_file(relative, options)
+            .map_err(|e| format!("Failed to start file in zip: {e}"))?;
+        let mut f = std::fs::File::open(path).map_err(|e| format!("Failed to open file: {e}"))?;
+        std::io::copy(&mut f, zip).map_err(|e| format!("Failed to write to zip: {e}"))?;
         Ok(())
     }
 
-    walk_zip(root, root, &mut zip, options)?;
+    // Walk errors cannot cross `walk_dir`'s visitor, so capture the first one.
+    let mut error: Option<String> = None;
+    walk_dir(root, &mut |item| {
+        if item.name.starts_with('.') || error.is_some() {
+            return WalkAction::Skip;
+        }
+        let relative = match item.path.strip_prefix(root) {
+            Ok(rel) => path_to_string(rel.to_path_buf()),
+            Err(_) => {
+                error = Some("Failed to resolve path for zip".into());
+                return WalkAction::Skip;
+            }
+        };
+        if item.is_dir {
+            if let Err(e) = zip.add_directory(format!("{relative}/"), options) {
+                error = Some(format!("Failed to add directory to zip: {e}"));
+                return WalkAction::Skip;
+            }
+            return WalkAction::Recurse;
+        }
+        if let Err(e) = add_file(&mut zip, &item.path, &relative, options) {
+            error = Some(e);
+        }
+        WalkAction::Skip
+    });
+    if let Some(e) = error {
+        return Err(e);
+    }
+
     zip.finish()
         .map_err(|e| format!("Failed to finalize zip: {e}"))?;
     Ok(())
@@ -70,26 +80,19 @@ pub fn export_vault_zip(vault_path: &str, dest_path: &str) -> Result<(), String>
 /// Collect all non-hidden files in the vault, returning (relative_path, mtime_secs).
 fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
     let mut result = Vec::new();
-    walk_vault_impl(root, root, &mut result);
-    result
-}
-
-fn walk_vault_impl(base: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
-    walk_dir(dir, &mut |item| {
+    walk_dir_capped(root, 0, crate::fs::MAX_WALK_DEPTH, &mut |item| {
         if item.name.starts_with('.') {
             return WalkAction::Skip;
         }
         if item.is_dir {
             return WalkAction::Recurse;
         }
-        if let Ok(rel) = item.path.strip_prefix(base) {
-            let rel_str = rel.to_string_lossy().into_owned();
-            #[cfg(target_os = "windows")]
-            let rel_str = rel_str.replace('\\', "/");
-            out.push((rel_str, item.modified));
+        if let Ok(rel) = item.path.strip_prefix(root) {
+            result.push((path_to_string(rel.to_path_buf()), item.modified));
         }
         WalkAction::Skip
     });
+    result
 }
 
 /// Check whether the vault has local changes compared to the last-synced
@@ -99,7 +102,19 @@ fn walk_vault_impl(base: &Path, dir: &Path, out: &mut Vec<(String, u64)>) {
 /// when called in quick succession (e.g. on every vault-fs-changed event).
 #[tauri::command]
 #[specta::specta]
-pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result<bool, String> {
+pub async fn has_unsynced_changes(
+    vault_path: String,
+    encryption_key: Vec<u8>,
+) -> Result<bool, String> {
+    tokio::task::spawn_blocking(move || has_unsynced_changes_blocking(&vault_path, encryption_key))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn has_unsynced_changes_blocking(
+    vault_path: &str,
+    encryption_key: Vec<u8>,
+) -> Result<bool, String> {
     struct CachedResult {
         /// Vault this result belongs to — without it, switching vaults within
         /// the TTL window could return a stale result from the previous vault
@@ -137,10 +152,7 @@ pub fn has_unsynced_changes(vault_path: &str, encryption_key: Vec<u8>) -> Result
         let dec = crate::crypto::decrypt_blob(enc, encryption_key)?;
         serde_json::from_slice(&dec).map_err(|e| format!("Failed to parse manifest: {e}"))?
     } else {
-        Manifest {
-            version: 2,
-            files: Vec::new(),
-        }
+        Manifest::empty()
     };
 
     let base: HashMap<&str, u64> = manifest

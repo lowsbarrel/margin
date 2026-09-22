@@ -1,7 +1,7 @@
 * text=auto eol=lf
 
 # Generated — collapse in diffs and exclude from language stats.
-app/pnpm-lock.yaml        -diff linguist-generated
+app/bun.lock              -diff linguist-generated
 app/src-tauri/Cargo.lock  -diff linguist-generated
 app/src/lib/bindings.ts   linguist-generated
 

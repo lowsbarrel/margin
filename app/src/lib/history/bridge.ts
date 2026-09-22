@@ -1,8 +1,7 @@
-import { commands } from '$lib/bindings';
+import { commands, type Snapshot } from '$lib/bindings';
 import { toBytes, fromBytes } from '$lib/ipc';
 
-export type { Snapshot } from '$lib/bindings';
-import type { Snapshot } from '$lib/bindings';
+export type { Snapshot };
 
 export async function saveSnapshot(
 	vaultPath: string,
