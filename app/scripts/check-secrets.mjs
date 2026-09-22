@@ -11,10 +11,7 @@ const files = execSync('git ls-files', { cwd: ROOT, encoding: 'utf8' })
 	.split('\n')
 	.filter(Boolean)
 	.filter(
-		(f) =>
-			!/(pnpm-lock\.yaml$)|(Cargo\.lock$)|(\.(png|jpe?g|gif|ico|icns|svg|woff2?|lock)$)|(paraglide\/)/.test(
-				f
-			)
+		(f) => !/(Cargo\.lock$)|(\.(png|jpe?g|gif|ico|icns|svg|woff2?|lock)$)|(paraglide\/)/.test(f)
 	)
 	.filter((f) => !f.endsWith('scripts/check-secrets.mjs'));
 

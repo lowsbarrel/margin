@@ -74,14 +74,14 @@ the current note to PDF.
 
 ```bash
 cd app
-pnpm install
-pnpm tauri dev
+bun install
+bun run tauri dev
 ```
 
 If that works on the first try, buy a lottery ticket.
 
 ```bash
-pnpm tauri build   # release binary for the current platform
+bun run tauri build   # release binary for the current platform
 ```
 
 ## How it works
@@ -163,7 +163,7 @@ Do it. You're probably less lazy than I am, and the bar is underground.
 
 ## Requirements
 
-Node ≥ 24 · pnpm · a Rust toolchain · the
+Bun ≥ 1.3 · a Rust toolchain · the
 [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your
 platform.
 

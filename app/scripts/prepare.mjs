@@ -1,10 +1,10 @@
-// Runs on every `pnpm install`. Two jobs: activate the enforced pre-commit hook,
+// Runs on every `bun install`. Two jobs: activate the enforced pre-commit hook,
 // and generate the files the type checker needs (SvelteKit's .svelte-kit tree and
 // the compiled Paraglide messages).
 //
-// This is a Node script rather than a shell one-liner because pnpm runs scripts
-// through cmd.exe on Windows, where `(a && b) || true` and `2>/dev/null` are not
-// valid syntax. Nothing here may fail the install.
+// A script rather than a shell one-liner because it must run identically on
+// Windows, where `(a && b) || true` and `2>/dev/null` are not valid syntax.
+// Nothing here may fail the install.
 import { execSync } from 'node:child_process';
 
 const run = (cmd) => execSync(cmd, { stdio: 'inherit' });
@@ -18,8 +18,8 @@ try {
 }
 
 try {
-	run('pnpm exec svelte-kit sync');
-	run('pnpm run i18n:compile');
+	run('bunx svelte-kit sync');
+	run('bun run i18n:compile');
 } catch {
-	// A partially-installed tree can't sync yet; `pnpm check` regenerates both.
+	// A partially-installed tree can't sync yet; `bun run check` regenerates both.
 }
