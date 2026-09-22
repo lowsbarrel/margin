@@ -318,7 +318,7 @@
 				);
 				await runSearch(query);
 			}
-			if (failed > 0) toast.error(m.toast_replace_failed({ error: String(failed) }));
+			if (failed > 0) toast.error(m.toast_replace_failed_count({ count: failed }));
 		} finally {
 			replacing = false;
 		}

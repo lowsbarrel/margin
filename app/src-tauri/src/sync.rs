@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::collections::{HashMap, HashSet};
 use std::fs;
-use std::path::{Component, Path, PathBuf};
+use std::path::{Path, PathBuf};
 use tauri::State;
 
 use crate::fs::atomic_write;
@@ -28,6 +28,20 @@ pub struct Manifest {
     #[specta(type = u32)]
     pub version: u64,
     pub files: Vec<ManifestEntry>,
+}
+
+/// Current manifest schema version. v2 mapped S3 keys from plaintext paths, so
+/// anything older is discarded on load rather than trusted.
+pub(crate) const MANIFEST_VERSION: u64 = 3;
+
+impl Manifest {
+    /// Empty manifest at the current schema version.
+    pub(crate) fn empty() -> Self {
+        Manifest {
+            version: MANIFEST_VERSION,
+            files: Vec::new(),
+        }
+    }
 }
 
 #[derive(Serialize, specta::Type)]
@@ -58,30 +72,38 @@ fn path_to_s3_key_internal(rel_path: &str, encryption_key: &[u8]) -> String {
 }
 
 fn vault_file_path(base: &Path, rel: &str) -> Result<PathBuf, String> {
-    if rel.is_empty() || rel.contains('\\') {
+    if !crate::fs::valid_rel_path(rel) {
         return Err(format!("Invalid sync path: {rel}"));
     }
-
-    for component in Path::new(rel).components() {
-        match component {
-            Component::Normal(name) => {
-                if name
-                    .to_str()
-                    .map(|s| s.is_empty() || s.starts_with('.'))
-                    .unwrap_or(true)
-                {
-                    return Err(format!("Invalid sync path: {rel}"));
-                }
-            }
-            _ => return Err(format!("Invalid sync path: {rel}")),
-        }
-    }
-
     Ok(base.join(rel))
 }
 
 /// Maximum number of concurrent per-object S3 operations in a sync batch.
 const SYNC_CONCURRENCY: usize = 8;
+
+/// Drive `spawn` over `items` with at most `SYNC_CONCURRENCY` tasks in flight,
+/// collecting every task's output in completion order. Fails fast: the first
+/// task error propagates (dropping the `JoinSet` aborts the remaining tasks).
+async fn run_bounded<T, R, F>(items: Vec<T>, mut spawn: F) -> Result<Vec<R>, String>
+where
+    R: Send + 'static,
+    F: FnMut(&mut tokio::task::JoinSet<Result<R, String>>, T),
+{
+    let mut iter = items.into_iter();
+    let mut tasks = tokio::task::JoinSet::new();
+    for item in iter.by_ref().take(SYNC_CONCURRENCY) {
+        spawn(&mut tasks, item);
+    }
+
+    let mut outputs = Vec::new();
+    while let Some(result) = tasks.join_next().await {
+        outputs.push(result.map_err(|e| format!("Task panicked: {e}"))??);
+        if let Some(item) = iter.next() {
+            spawn(&mut tasks, item);
+        }
+    }
+    Ok(outputs)
+}
 
 /// Delete files from S3 by their relative paths (computes HMAC keys internally).
 #[tauri::command]
@@ -98,10 +120,7 @@ pub async fn sync_delete_files(
         cached.bucket.clone()
     };
 
-    let mut iter = paths.into_iter();
-    let mut tasks = tokio::task::JoinSet::new();
-
-    let spawn_delete = |tasks: &mut tokio::task::JoinSet<Result<(), String>>, rel: String| {
+    run_bounded(paths, |tasks, rel| {
         let bucket = bucket.clone();
         let key = format!(
             "{}files/{}.enc",
@@ -122,19 +141,8 @@ pub async fn sync_delete_files(
                 }
             }
         });
-    };
-
-    // Prime the pool with up to SYNC_CONCURRENCY tasks.
-    for rel in iter.by_ref().take(SYNC_CONCURRENCY) {
-        spawn_delete(&mut tasks, rel);
-    }
-
-    while let Some(result) = tasks.join_next().await {
-        result.map_err(|e| format!("Task panicked: {e}"))??;
-        if let Some(rel) = iter.next() {
-            spawn_delete(&mut tasks, rel);
-        }
-    }
+    })
+    .await?;
 
     Ok(())
 }
@@ -144,8 +152,17 @@ pub async fn sync_delete_files(
 /// Compute SHA-256 hashes for a batch of files in parallel.
 #[tauri::command]
 #[specta::specta]
-pub fn hash_files_batch(vault_path: String, paths: Vec<String>) -> Result<Vec<String>, String> {
-    let base = Path::new(&vault_path);
+pub async fn hash_files_batch(
+    vault_path: String,
+    paths: Vec<String>,
+) -> Result<Vec<String>, String> {
+    tokio::task::spawn_blocking(move || hash_files_batch_blocking(&vault_path, &paths))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
+fn hash_files_batch_blocking(vault_path: &str, paths: &[String]) -> Result<Vec<String>, String> {
+    let base = Path::new(vault_path);
     paths
         .par_iter()
         .map(|rel| {
@@ -165,37 +182,25 @@ pub fn hash_files_batch(vault_path: String, paths: Vec<String>) -> Result<Vec<St
 pub fn load_manifest(vault_path: String, encryption_key: Vec<u8>) -> Result<Manifest, String> {
     let path = Path::new(&vault_path).join(".margin/sync-base.enc");
     if !path.exists() {
-        return Ok(Manifest {
-            version: 3,
-            files: vec![],
-        });
+        return Ok(Manifest::empty());
     }
     let enc = match fs::read(&path) {
         Ok(d) => d,
         Err(_) => {
-            return Ok(Manifest {
-                version: 3,
-                files: vec![],
-            });
+            return Ok(Manifest::empty());
         }
     };
     let dec = match crate::crypto::decrypt_blob(enc, encryption_key) {
         Ok(d) => d,
         Err(_) => {
-            return Ok(Manifest {
-                version: 3,
-                files: vec![],
-            });
+            return Ok(Manifest::empty());
         }
     };
     let manifest: Manifest =
         serde_json::from_slice(&dec).map_err(|e| format!("Invalid manifest JSON: {e}"))?;
     // Discard legacy v2 manifests — they used plaintext S3 keys
-    if manifest.version < 3 {
-        return Ok(Manifest {
-            version: 3,
-            files: vec![],
-        });
+    if manifest.version < MANIFEST_VERSION {
+        return Ok(Manifest::empty());
     }
     Ok(manifest)
 }
@@ -215,7 +220,7 @@ pub fn save_manifest(
     atomic_write(&dir.join("sync-base.enc"), &enc)
 }
 
-/// 3-way diff: compare base, local , and remote manifests to produce sync actions.
+/// 3-way diff: compare base, local, and remote manifests to produce sync actions.
 #[tauri::command]
 #[specta::specta]
 pub fn compute_sync_actions(
@@ -365,41 +370,27 @@ pub async fn sync_upload_files(
         .map(|rel| vault_file_path(base, &rel).map(|full| (rel, full)))
         .collect::<Result<_, _>>()?;
 
-    let mut iter = resolved.into_iter();
-    let mut tasks = tokio::task::JoinSet::new();
-
-    let spawn_upload =
-        |tasks: &mut tokio::task::JoinSet<Result<(), String>>, rel: String, full: PathBuf| {
-            let bucket = bucket.clone();
-            let encryption_key = encryption_key.clone();
-            let key = format!(
-                "{}files/{}.enc",
-                s3_prefix,
-                path_to_s3_key_internal(&rel, &encryption_key)
-            );
-            tasks.spawn(async move {
-                let data = tokio::fs::read(&full)
-                    .await
-                    .map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
-                let enc = crate::crypto::encrypt_blob(data, encryption_key)?;
-                bucket
-                    .put_object(&key, &enc)
-                    .await
-                    .map_err(|e| format!("Upload failed for {rel}: {e}"))?;
-                Ok(())
-            });
-        };
-
-    for (rel, full) in iter.by_ref().take(SYNC_CONCURRENCY) {
-        spawn_upload(&mut tasks, rel, full);
-    }
-
-    while let Some(result) = tasks.join_next().await {
-        result.map_err(|e| format!("Task panicked: {e}"))??;
-        if let Some((rel, full)) = iter.next() {
-            spawn_upload(&mut tasks, rel, full);
-        }
-    }
+    run_bounded(resolved, |tasks, (rel, full)| {
+        let bucket = bucket.clone();
+        let encryption_key = encryption_key.clone();
+        let key = format!(
+            "{}files/{}.enc",
+            s3_prefix,
+            path_to_s3_key_internal(&rel, &encryption_key)
+        );
+        tasks.spawn(async move {
+            let data = tokio::fs::read(&full)
+                .await
+                .map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
+            let enc = crate::crypto::encrypt_blob(data, encryption_key)?;
+            bucket
+                .put_object(&key, &enc)
+                .await
+                .map_err(|e| format!("Upload failed for {rel}: {e}"))?;
+            Ok(())
+        });
+    })
+    .await?;
 
     Ok(())
 }
@@ -446,17 +437,11 @@ pub async fn sync_download_files(
         .map(|(rel, mtime)| vault_file_path(base, &rel).map(|dest| (rel, dest, mtime as u64)))
         .collect::<Result<_, _>>()?;
 
-    let mut iter = resolved.into_iter();
-    let mut tasks = tokio::task::JoinSet::new();
-
     // Tasks return `Ok(None)` on success, `Ok(Some(rel))` when the blob is
     // missing on S3 (404) — a dangling manifest entry whose upload never landed.
     // Such files are skipped (not fatal) and reported back so the caller can
     // leave them out of the local base, prompting a retry on the next sync.
-    let spawn_download = |tasks: &mut tokio::task::JoinSet<Result<Option<String>, String>>,
-                          rel: String,
-                          dest: PathBuf,
-                          mtime: u64| {
+    let skipped = run_bounded(resolved, |tasks, (rel, dest, mtime)| {
         let bucket = bucket.clone();
         let encryption_key = encryption_key.clone();
         let key = format!(
@@ -499,23 +484,10 @@ pub async fn sync_download_files(
                 .map_err(|e| format!("Failed to set mtime for {}: {e}", dest.display()))?;
             Ok(None)
         });
-    };
+    })
+    .await?;
 
-    for (rel, dest, mtime) in iter.by_ref().take(SYNC_CONCURRENCY) {
-        spawn_download(&mut tasks, rel, dest, mtime);
-    }
-
-    let mut skipped: Vec<String> = Vec::new();
-    while let Some(result) = tasks.join_next().await {
-        if let Some(rel) = result.map_err(|e| format!("Task panicked: {e}"))?? {
-            skipped.push(rel);
-        }
-        if let Some((rel, dest, mtime)) = iter.next() {
-            spawn_download(&mut tasks, rel, dest, mtime);
-        }
-    }
-
-    Ok(skipped)
+    Ok(skipped.into_iter().flatten().collect())
 }
 
 /// Encrypt and upload the manifest to S3.

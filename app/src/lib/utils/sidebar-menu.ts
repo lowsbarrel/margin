@@ -17,7 +17,6 @@ interface MenuHandlers {
 	onOpenInFinder: (path: string) => void;
 	onCopy: (entry: FsEntry) => void;
 	onCut: (entry: FsEntry) => void;
-	onRename: (path: string) => void;
 	onDuplicate: (entry: FsEntry) => void;
 	onDelete: (entry: FsEntry) => void;
 }

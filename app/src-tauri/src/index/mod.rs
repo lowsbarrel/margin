@@ -303,7 +303,7 @@ pub fn remove_prefix(root: &str, dir: &Path) {
 /// no longer exist. Returns the number of notes present in the index.
 pub fn rebuild(root: &str) -> Result<u32, String> {
     let mut md_paths = Vec::new();
-    crate::fs::collect_md_paths(Path::new(root), &mut md_paths, 0, crate::fs::MAX_WALK_DEPTH);
+    crate::fs::collect_md_paths(Path::new(root), &mut md_paths);
 
     let mut conn = open_db(root)?;
 
@@ -435,8 +435,11 @@ pub fn index_search(root: &str, query: &str, limit: u32) -> Result<Vec<SearchHit
 /// Called by the frontend on vault open and on `vault-fs-changed`.
 #[tauri::command]
 #[specta::specta]
-pub fn index_rebuild(root: &str) -> Result<u32, String> {
-    rebuild(root)
+pub async fn index_rebuild(root: String) -> Result<u32, String> {
+    // `rebuild` opens its own SQLite connection, so nothing needs to move across threads.
+    tokio::task::spawn_blocking(move || rebuild(&root))
+        .await
+        .map_err(|e| e.to_string())?
 }
 
 /// Every `#tag` in the vault, most-used first. Served from the index rather

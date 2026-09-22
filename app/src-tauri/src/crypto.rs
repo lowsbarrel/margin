@@ -25,6 +25,7 @@ pub fn generate_mnemonic() -> Result<String, String> {
 }
 
 /// Derive vault_id and encryption_key from a BIP-39 mnemonic.
+/// The derived key is intentionally held in JS (plaintext never is).
 #[tauri::command]
 #[specta::specta]
 pub fn derive_vault_keys(mnemonic: &str) -> Result<VaultKeys, String> {

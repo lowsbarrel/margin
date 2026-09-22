@@ -298,7 +298,8 @@
 			if (vaultRefreshTimer) clearTimeout(vaultRefreshTimer);
 			vaultRefreshTimer = setTimeout(() => {
 				vaultRefreshTimer = null;
-				files.refresh();
+				// Best-effort: a failed refresh only leaves the tree stale until the next fs event.
+				files.refresh().catch((err) => console.warn('Failed to refresh file tree:', err));
 				// Keep the full-text search index fresh after any vault change (in-app
 				// save, sync, git, external edit). Skips unchanged files, so this only
 				// re-reads what actually changed. Fire-and-forget; best-effort.
@@ -374,7 +375,9 @@
 			const currentVaultPath = vault.vaultPath;
 			const currentKey = vault.encryptionKey;
 			untrack(() => {
-				files.refresh(currentVaultPath);
+				files
+					.refresh(currentVaultPath)
+					.catch((err) => console.warn('Failed to load file tree:', err));
 				favourites.load();
 				restoreWorkspaceState();
 				watchVault(currentVaultPath).catch((err) =>
@@ -385,7 +388,10 @@
 						.then((settings) => {
 							if (vault.vaultPath !== currentVaultPath) return;
 							if (settings?.s3) {
-								s3Configure(settings.s3);
+								// s3sync re-configures before each sync, where a failure surfaces with a toast.
+								s3Configure(settings.s3).catch((err) =>
+									console.warn('Failed to configure S3:', err)
+								);
 								const syncOpts = {
 									conflictStrategy: parseConflictStrategy(settings?.conflict_strategy)
 								};
@@ -525,12 +531,8 @@
 					filePath={panes.activeTab.path}
 					onclose={() => (showHistory = false)}
 					onrestore={(content) => {
-						const pi = panes.activePaneIndex;
-						const ti = panes.list[pi].activeTabIndex;
-						if (ti >= 0) {
-							panes.list[pi].tabs[ti] = { ...panes.list[pi].tabs[ti], content };
-							panes.list[pi].externalContentVersion++;
-						}
+						const active = panes.activeTab;
+						if (active) panes.applyExternalContent(active.path, content);
 					}}
 				/>
 			{/if}

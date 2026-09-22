@@ -27,6 +27,8 @@ import renderMentionMenu from '$lib/editor/mention-menu-renderer.svelte';
 import { SearchReplace } from '$lib/editor/search-replace';
 import { ContentDrag } from '$lib/editor/content-drag';
 import { PasteCleanup } from '$lib/editor/paste-cleanup';
+import { TrailingNode } from '$lib/editor/trailing-node';
+import { SelectionPreserve } from '$lib/editor/selection-preserve';
 import { Extension, type Extensions } from '@tiptap/core';
 import type { Fragment } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -276,7 +278,9 @@ export function createEditorExtensions({
 			// highlight, underline, super/subscript, alignment) on both paste and copy.
 			PasteCleanup,
 			SearchReplace,
-			ContentDrag
+			ContentDrag,
+			TrailingNode,
+			SelectionPreserve
 		);
 	}
 

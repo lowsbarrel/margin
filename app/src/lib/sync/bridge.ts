@@ -103,16 +103,11 @@ export async function syncUploadFiles(
 }
 
 /**
- * Download, decrypt and write files in a single batch. The Rust side stamps
- * each written file's mtime from the parallel `mtimes` array (seconds since
- * UNIX epoch), so callers no longer need a follow-up `setMtime` per file.
- * `mtimes[i]` corresponds to `paths[i]`.
- */
-/**
- * Returns the subset of `paths` that were skipped because their blob is missing
- * on S3 (HTTP 404 — a dangling manifest entry whose upload never landed). These
- * are not fatal; the caller should leave them out of the local base so they're
- * retried on the next sync.
+ * Download, decrypt and write files in a single batch; `mtimes[i]` (seconds
+ * since UNIX epoch) stamps the file written for `paths[i]`. Returns the subset
+ * of `paths` skipped because their blob is missing on S3 (HTTP 404 — a dangling
+ * manifest entry whose upload never landed). These are not fatal; the caller
+ * should leave them out of the local base so they're retried on the next sync.
  */
 export async function syncDownloadFiles(
 	vaultPath: string,

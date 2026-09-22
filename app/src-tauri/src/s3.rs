@@ -1,4 +1,5 @@
 use s3::creds::Credentials;
+use s3::serde_types::Part;
 use s3::{Bucket, Region};
 use serde::{Deserialize, Serialize};
 use std::fmt;
@@ -103,6 +104,11 @@ const MULTIPART_THRESHOLD: usize = 5 * 1024 * 1024;
 const PART_SIZE: usize = 5 * 1024 * 1024;
 /// Maximum retries per multipart chunk upload
 const MULTIPART_MAX_RETRIES: u32 = 3;
+/// Chunks uploaded concurrently — bounds both in-flight requests and how many
+/// 5 MB chunk copies are alive at once on a large file.
+const MULTIPART_CONCURRENCY: usize = 4;
+/// One multipart chunk task: `(part number, uploaded part)`.
+type ChunkTasks = tokio::task::JoinSet<Result<(u32, Part), String>>;
 
 // NOTE: raw-byte command — takes a tauri `Request` (not representable in specta),
 // so it is intentionally NOT annotated with `#[specta::specta]` and is excluded
@@ -131,9 +137,9 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
 
         let upload_id = init.upload_id;
 
-        let mut tasks = tokio::task::JoinSet::new();
+        let mut tasks = ChunkTasks::new();
 
-        for (i, chunk) in data.chunks(PART_SIZE).enumerate() {
+        let spawn_chunk = |tasks: &mut ChunkTasks, (i, chunk): (usize, &[u8])| {
             let part_number = (i as u32) + 1;
             let chunk_data = chunk.to_vec();
             let bucket = bucket.clone();
@@ -168,9 +174,14 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
                     MULTIPART_MAX_RETRIES
                 ))
             });
+        };
+
+        let mut iter = data.chunks(PART_SIZE).enumerate();
+        for chunk in iter.by_ref().take(MULTIPART_CONCURRENCY) {
+            spawn_chunk(&mut tasks, chunk);
         }
 
-        let mut indexed_parts: Vec<(u32, _)> = Vec::new();
+        let mut indexed_parts: Vec<(u32, Part)> = Vec::new();
         while let Some(result) = tasks.join_next().await {
             match result {
                 Ok(Ok(part)) => indexed_parts.push(part),
@@ -182,6 +193,9 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
                     let _ = bucket.abort_upload(&key, &upload_id).await;
                     return Err(format!("Task panicked: {e}"));
                 }
+            }
+            if let Some(chunk) = iter.next() {
+                spawn_chunk(&mut tasks, chunk);
             }
         }
 

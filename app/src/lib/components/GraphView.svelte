@@ -12,6 +12,8 @@
 	} from '$lib/graph/render-state';
 	import { files } from '$lib/stores/files.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
+	import * as m from '$lib/paraglide/messages.js';
 	import { RefreshCw } from '@lucide/svelte';
 
 	interface Props {
@@ -491,8 +493,13 @@
 	}
 
 	async function refresh() {
-		await graph.build();
-		initGraph(graph.data);
+		try {
+			await graph.build();
+			initGraph(graph.data);
+		} catch (err) {
+			console.error('Failed to build graph:', err);
+			toast.error(m.graph_load_failed());
+		}
 	}
 
 	let prevNodeCount = 0;

@@ -155,10 +155,11 @@ export async function copyFile(from: string, to: string): Promise<void> {
  * vault-contained destination — for drag-drop / import of an external file as
  * an attachment. Unlike `copyFile`, the source is NOT containment-checked (the
  * user explicitly chose it); only the destination must resolve inside the
- * vault. Mirrors the `import_external_file` Rust command — keep the two in sync.
+ * vault.
  */
 export async function importExternalFile(from: string, to: string): Promise<void> {
-	return invoke<void>('import_external_file', { from, to });
+	const r = await commands.importExternalFile(from, to);
+	if (r.status === 'error') throw r.error;
 }
 
 export async function copyDirectory(from: string, to: string): Promise<void> {

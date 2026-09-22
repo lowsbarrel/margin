@@ -186,9 +186,6 @@ pub fn run() {
             index::index_tags,
             index::index_links,
             index::index_backlinks,
-            index::index_tags,
-            index::index_links,
-            index::index_backlinks,
             s3::s3_configure,
             s3::s3_get_config,
             s3::s3_test_connection,
@@ -236,8 +233,8 @@ pub fn run() {
         .expect("error while running tauri application");
 }
 
-/// Build the tauri-specta command/type registry. Used both to register the
-/// invoke handler and to regenerate the TypeScript bindings.
+/// Build the tauri-specta command/type registry. Used only by [`export_bindings`]
+/// to regenerate the TypeScript bindings — command registration happens in [`run`].
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
         crypto::generate_mnemonic,
@@ -254,6 +251,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         fs::create_directory,
         fs::file_exists,
         fs::copy_file,
+        fs::import_external_file,
         fs::copy_directory,
         fs::reveal_in_file_manager,
         fs::set_mtime,

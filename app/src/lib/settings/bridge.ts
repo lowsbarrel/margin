@@ -1,7 +1,6 @@
-import { commands } from '$lib/bindings';
+import { commands, type AppSettings } from '$lib/bindings';
 
-export type { AppSettings } from '$lib/bindings';
-import type { AppSettings } from '$lib/bindings';
+export type { AppSettings };
 
 export async function saveSettings(
 	vaultPath: string,
