@@ -45,6 +45,7 @@ export const commands = {
 	renameEntry: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("rename_entry", { from, to })),
 	createDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_directory", { path })),
 	fileExists: (path: string) => __TAURI_INVOKE<boolean>("file_exists", { path }),
+	fileMetadata: (path: string) => typedError<FileMetadata, string>(__TAURI_INVOKE("file_metadata", { path })),
 	copyFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_file", { from, to })),
 	/**
 	 *  Copy a file from an arbitrary source **outside** the vault into a
@@ -339,6 +340,16 @@ export type AskEvent =
 export type Backlink = {
 	path: string,
 	name: string,
+};
+
+/**
+ *  Size and mtime of one vault file. Viewers that only describe a file (no
+ *  canvas, no text) use this instead of reading bytes they will never draw.
+ */
+export type FileMetadata = {
+	/**  Bytes. f64 because specta refuses a u64 across the IPC boundary. */
+	size: number | null,
+	modified: number,
 };
 
 export type FsEntry = {
