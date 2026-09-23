@@ -22,6 +22,30 @@ impl ApiFormat {
     }
 }
 
+/// How much reasoning the model may spend before answering.
+///
+/// `None` on [`LlmConfig`] means the field is not sent at all — the provider's
+/// own default, and the only setting that keeps working on models which reject
+/// reasoning parameters outright.
+#[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, specta::Type)]
+#[serde(rename_all = "lowercase")]
+pub enum Effort {
+    Low,
+    Medium,
+    High,
+}
+
+impl Effort {
+    /// The wire spelling, shared by both formats.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            Effort::Low => "low",
+            Effort::Medium => "medium",
+            Effort::High => "high",
+        }
+    }
+}
+
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct LlmConfig {
     pub api_format: ApiFormat,
@@ -30,6 +54,8 @@ pub struct LlmConfig {
     #[serde(default)]
     pub api_key: String,
     pub model: String,
+    #[serde(default)]
+    pub effort: Option<Effort>,
 }
 
 /// Hand-written Debug that redacts the key, mirroring [`crate::s3::S3Config`]:
@@ -42,6 +68,7 @@ impl fmt::Debug for LlmConfig {
             .field("base_url", &self.base_url)
             .field("api_key", &"<redacted>")
             .field("model", &self.model)
+            .field("effort", &self.effort)
             .finish()
     }
 }
@@ -102,7 +129,29 @@ mod tests {
             base_url: base.to_string(),
             api_key: String::new(),
             model: "m".to_string(),
+            effort: None,
         }
+    }
+
+    #[test]
+    fn effort_is_optional_so_an_older_settings_file_still_loads() {
+        let without = serde_json::json!({
+            "api_format": "openai",
+            "base_url": "https://x.test/v1",
+            "api_key": "sk",
+            "model": "m",
+        });
+        let parsed: LlmConfig = serde_json::from_value(without).unwrap();
+        assert_eq!(parsed.effort, None);
+
+        let with = serde_json::json!({
+            "api_format": "anthropic",
+            "model": "m",
+            "effort": "high",
+        });
+        let parsed: LlmConfig = serde_json::from_value(with).unwrap();
+        assert_eq!(parsed.effort, Some(Effort::High));
+        assert_eq!(serde_json::to_value(parsed.effort).unwrap(), "high");
     }
 
     #[test]
