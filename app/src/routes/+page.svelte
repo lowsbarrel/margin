@@ -20,7 +20,8 @@
 		unwatchFile,
 		onVaultFsChanged,
 		hasUnsyncedChanges,
-		rebuildIndex
+		rebuildIndex,
+		sweepUnusedAttachments
 	} from '$lib/fs/bridge';
 	import { loadSettings } from '$lib/settings/bridge';
 	import { saveSnapshot } from '$lib/history/bridge';
@@ -460,6 +461,11 @@
 								editor.setSyncStatus('idle');
 							}
 							attachmentFolder = resolveAttachmentFolder(settings?.attachment_folder);
+							// Upkeep nobody has to ask for: stored attachments no note has
+							// used for a week go to the trash, where they stay recoverable.
+							sweepUnusedAttachments(attachmentFolder).catch((err) =>
+								console.warn('Attachment sweep failed:', err)
+							);
 						})
 						.catch((err) => {
 							console.warn('Failed to load settings:', err);
@@ -604,10 +610,7 @@
 	{/if}
 
 	{#if showSettings}
-		<Settings
-			onclose={() => (showSettings = false)}
-			onattachmentschange={(folder) => (attachmentFolder = folder)}
-		/>
+		<Settings onclose={() => (showSettings = false)} />
 	{/if}
 
 	{#if showSpotlight}

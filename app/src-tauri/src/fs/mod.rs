@@ -736,19 +736,29 @@ pub fn import_attachment(
     Ok(rel)
 }
 
-/// Attachments in `folder` that no note refers to, vault-relative and sorted.
+/// Trash the attachments in `folder` that the app stored, no note refers to and
+/// nothing touched for a week. Runs by itself when a vault opens.
 #[tauri::command]
 #[specta::specta]
-pub async fn unused_attachments(
+pub async fn sweep_unused_attachments(
     folder: String,
     vault_path_state: tauri::State<'_, VaultPathState>,
-) -> Result<Vec<String>, String> {
-    let root = vault_root(&vault_path_state);
+) -> Result<u32, String> {
     let folder = folder.trim_matches('/').to_string();
+    if !valid_rel_path(&folder) {
+        return Err("Invalid attachments folder".into());
+    }
+    let root = vault_root(&vault_path_state);
     // Reading every note in the vault is blocking I/O.
-    tokio::task::spawn_blocking(move || attachments::unused_files(&root, &folder))
-        .await
-        .map_err(|e| e.to_string())?
+    let swept = tokio::task::spawn_blocking(move || {
+        attachments::sweep_unused(&root, &folder, attachments::SWEEP_GRACE)
+    })
+    .await
+    .map_err(|e| e.to_string())??;
+    if swept > 0 {
+        crate::index::tree::invalidate();
+    }
+    Ok(swept)
 }
 
 /// Copy a file from an arbitrary source **outside** the vault into a

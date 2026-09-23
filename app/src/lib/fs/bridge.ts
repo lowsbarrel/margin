@@ -219,9 +219,9 @@ export async function importAttachment(from: string, folder: string): Promise<st
 	return r.data;
 }
 
-/** Attachments in `folder` that no note in the vault refers to. */
-export async function unusedAttachments(folder: string): Promise<string[]> {
-	const r = await commands.unusedAttachments(folder);
+/** Trash stored attachments in `folder` that no note has used for a week. */
+export async function sweepUnusedAttachments(folder: string): Promise<number> {
+	const r = await commands.sweepUnusedAttachments(folder);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
