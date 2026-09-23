@@ -8,10 +8,6 @@
     <br />
 </p>
 
-[![Release](https://img.shields.io/github/v/release/lowsbarrel/margin?style=flat-square)](https://github.com/lowsbarrel/margin/releases/latest)
-[![CI](https://img.shields.io/github/actions/workflow/status/lowsbarrel/margin/ci.yml?style=flat-square&branch=main&label=CI)](https://github.com/lowsbarrel/margin/actions/workflows/ci.yml)
-[![Licenza: MIT](https://img.shields.io/badge/license-MIT-blue?style=flat-square)](LICENSE)
-
 [English](README.md) | Italiano
 
 Margin è un'app desktop per le note, pensata per chi vuole che le proprie note sopravvivano all'app. Ogni nota è un normale file Markdown in una cartella che scegli tu: leggibile da qualsiasi editor, ricercabile da qualsiasi strumento, e ancora tua il giorno in cui smetti di usare Margin.
