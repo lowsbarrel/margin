@@ -1,6 +1,7 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import type MermaidApi from 'mermaid';
+import * as m from '$lib/paraglide/messages.js';
 
 /**
  * Minimal structural type for the tiptap-markdown serializer state we touch.
@@ -40,7 +41,7 @@ async function renderInto(target: HTMLElement, code: string): Promise<void> {
 		target.innerHTML = '';
 		const empty = document.createElement('div');
 		empty.className = 'mermaid-empty';
-		empty.textContent = 'Empty diagram — click to edit';
+		empty.textContent = m.editor_empty_diagram();
 		target.appendChild(empty);
 		return;
 	}

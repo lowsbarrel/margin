@@ -4,6 +4,7 @@ import { vault } from '$lib/stores/vault.svelte';
 import { searchFiles, readFileBytes } from '$lib/fs/bridge';
 import { resolveImagePaths, resolveWikiEmbeds } from '$lib/editor/image-paths';
 import { createEditorExtensions, type Lowlight } from '$lib/editor/extensions';
+import * as m from '$lib/paraglide/messages.js';
 
 /**
  * Minimal structural types for the tiptap-markdown serializer state and the
@@ -207,7 +208,7 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 
 	async function load() {
 		if (!title) {
-			showMessage('note-embed-empty', 'Empty embed');
+			showMessage('note-embed-empty', m.note_embed_empty());
 			return;
 		}
 		const vaultPath = vault.vaultPath;
@@ -216,7 +217,7 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 			const results = await searchFiles(vaultPath, title);
 			const match = results.find((r) => !r.is_dir && r.name === `${title}.md`);
 			if (!match) {
-				showMessage('note-embed-missing', `Note not found: ${title}`);
+				showMessage('note-embed-missing', m.note_embed_missing({ title }));
 				return;
 			}
 			const bytes = await readFileBytes(match.path);
@@ -246,7 +247,7 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 				editorProps: { attributes: { class: 'md-editor' } }
 			});
 		} catch {
-			showMessage('note-embed-missing', `Could not load: ${title}`);
+			showMessage('note-embed-missing', m.note_embed_load_failed({ title }));
 		}
 	}
 

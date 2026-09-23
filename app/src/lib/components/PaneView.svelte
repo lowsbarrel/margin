@@ -249,7 +249,7 @@
 			<span
 				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {leftActive
 					? 'opacity-100'
-					: 'opacity-0'}">Split Left</span
+					: 'opacity-0'}">{m.pane_split_left()}</span
 			>
 		</div>
 		{#if drag.item?.kind === 'tab'}
@@ -262,7 +262,7 @@
 				<span
 					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {centerActive
 						? 'opacity-100'
-						: 'opacity-0'}">Move Here</span
+						: 'opacity-0'}">{m.pane_move_here()}</span
 				>
 			</div>
 		{/if}
@@ -275,7 +275,7 @@
 			<span
 				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {rightActive
 					? 'opacity-100'
-					: 'opacity-0'}">Split Right</span
+					: 'opacity-0'}">{m.pane_split_right()}</span
 			>
 		</div>
 	</div>
