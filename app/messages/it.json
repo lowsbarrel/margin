@@ -1,9 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-
 	"app_name": "margin",
 	"app_tagline": "I tuoi appunti. Le tue chiavi.",
-
 	"login_passphrase_label": "Passphrase",
 	"login_passphrase_placeholder": "inserisci le 12 parole mnemoniche",
 	"login_storage_label": "Posizione di archiviazione",
@@ -23,7 +21,6 @@
 	"login_back_to_vaults": "Torna ai vault",
 	"login_vault_name_label": "Nome del vault",
 	"login_vault_name_placeholder": "Il mio Vault",
-
 	"sidebar_explorer": "Esplora",
 	"sidebar_new_file": "Nuovo file",
 	"sidebar_new_folder": "Nuova cartella",
@@ -48,24 +45,20 @@
 	"sidebar_remove_favourite": "Rimuovi dai Preferiti",
 	"sidebar_graph": "Grafo",
 	"sidebar_tags": "Tag",
-
 	"tags_refresh": "Aggiorna tag",
 	"tags_filter_placeholder": "filtra tag…",
 	"tags_loading": "Caricamento tag…",
 	"tags_empty": "Nessun tag trovato. Usa #tag nelle tue note.",
 	"tags_no_files": "Nessun file trovato",
 	"tags_files": "{count} file",
-
 	"editor_empty_state": "Seleziona un file o creane uno",
 	"editor_cannot_render": "Questo tipo di file non può essere aperto nell'editor",
-
 	"tab_close": "Chiudi",
 	"tab_close_others": "Chiudi le altre",
 	"tab_close_all": "Chiudi tutte",
 	"tab_pin": "Fissa",
 	"tab_unpin": "Sblocca",
 	"tab_reopen_closed": "Riapri scheda chiusa",
-
 	"statusbar_markdown": "Markdown",
 	"statusbar_modified": "Modificato",
 	"statusbar_synced": "Sincronizzato",
@@ -79,7 +72,6 @@
 	"statusbar_export_pdf_success": "PDF esportato con successo",
 	"statusbar_lock_vault": "Blocca vault",
 	"statusbar_switch_vault": "Cambia vault",
-
 	"settings_title": "Impostazioni",
 	"settings_vault_title": "Vault",
 	"settings_vault_name": "Nome",
@@ -112,7 +104,6 @@
 	"settings_import_placeholder": "Incolla la stringa delle impostazioni criptate…",
 	"settings_import_btn": "Importa",
 	"settings_language": "Lingua",
-
 	"toast_settings_saved": "Impostazioni salvate",
 	"toast_cleanup_done": "Pulite {count} note",
 	"toast_cleanup_none": "Già pulito — niente da fare",
@@ -141,17 +132,13 @@
 	"toast_import_failed": "Importazione fallita: {error}",
 	"toast_configure_s3": "Configura prima S3",
 	"toast_copied": "Copiato negli appunti",
-
 	"settings_attachments_title": "Allegati",
 	"settings_attachments_hint": "Scegli una cartella nel tuo vault per immagini e file incollati. Incolla o trascina file nell'editor e verranno salvati qui.",
 	"settings_attachments_label": "Cartella allegati",
 	"settings_attachments_none": "— Nessuna —",
-
 	"toast_file_read_failed": "Impossibile leggere il file: {error}",
 	"pdf_load_failed": "Impossibile caricare il PDF: {error}",
-
 	"statusbar_history": "Cronologia file",
-
 	"history_title": "Cronologia",
 	"history_close": "Chiudi cronologia",
 	"history_loading": "Caricamento…",
@@ -166,7 +153,6 @@
 	"history_restore_failed": "Ripristino fallito",
 	"history_delete_failed": "Impossibile eliminare la versione",
 	"history_cleared": "{count} versioni eliminate",
-
 	"canvas_hand": "Mano",
 	"canvas_pen": "Penna",
 	"canvas_eraser": "Gomma",
@@ -179,7 +165,6 @@
 	"canvas_size": "Dimensione",
 	"canvas_clear_all": "Cancella tutto",
 	"canvas_text": "Testo",
-
 	"settings_export_zip_title": "Esporta Vault",
 	"settings_export_zip_hint": "Esporta l'intero vault come file .zip. I metadati interni (cartella .margin) sono esclusi.",
 	"settings_export_zip_btn": "Esporta come ZIP",
@@ -187,7 +172,6 @@
 	"settings_export_zip_dialog_title": "Salva archivio vault",
 	"toast_zip_exported": "Vault esportato come ZIP",
 	"toast_zip_export_failed": "Esportazione ZIP fallita: {error}",
-
 	"update_available": "Margin v{version} è disponibile",
 	"update_btn": "Aggiorna",
 	"update_installing": "Aggiornamento…",
@@ -196,7 +180,6 @@
 	"settings_updates_checking": "Controllo…",
 	"settings_updates_none": "Hai già l'ultima versione",
 	"settings_updates_found": "v{version} disponibile — clicca Aggiorna nel toast",
-
 	"settings_auto_sync": "Sincronizzazione automatica",
 	"settings_auto_sync_hint": "Il vault si sincronizzerà automaticamente ogni 5 minuti e dopo ogni salvataggio.",
 	"settings_conflict_resolution": "Risoluzione conflitti",
@@ -205,15 +188,12 @@
 	"settings_conflict_hint_newer": "In caso di conflitto, il file con la data di modifica più recente prevale. L'altra copia viene salvata come file .sync-conflict.",
 	"settings_conflict_hint_local": "In caso di conflitto, la versione locale prevale sempre. La versione remota viene salvata come file .sync-conflict.",
 	"settings_attachments_folder_placeholder": "es. allegati",
-
 	"appearance_title": "Aspetto",
 	"appearance_dark": "Scuro",
 	"appearance_light": "Chiaro",
 	"appearance_hint": "Margin ha un unico design system. Cambia solo l'abbinamento chiaro/scuro.",
-
 	"sidebar_close_panel": "Chiudi pannello",
 	"sidebar_open_panel": "Apri pannello",
-
 	"toast_replaced": "{count} occorrenze sostituite",
 	"toast_replaced_in_files": "{count} occorrenze sostituite in {files} file",
 	"toast_replace_failed": "Sostituzione fallita: {error}",
@@ -240,20 +220,15 @@
 	"toast_cannot_open_url": "Impossibile aprire l'URL: {error}",
 	"toast_cannot_reveal_file": "Impossibile mostrare il file: {error}",
 	"toast_note_not_found": "Nota non trovata: {title}",
-
 	"editor_view_image": "Visualizza immagine",
 	"editor_open_default_app": "Apri con app predefinita",
 	"editor_reveal_in_finder": "Mostra nel Finder",
 	"editor_open_file": "Apri \"{name}\"",
-
 	"login_auto_opening": "Apertura vault…",
-
 	"editor_untitled": "Senza titolo",
-
 	"canvas_zoom_in": "Ingrandisci",
 	"canvas_zoom_out": "Riduci",
 	"canvas_reset_view": "Reimposta vista",
-
 	"find_placeholder": "Cerca…",
 	"find_case_sensitive": "Maiuscole/minuscole",
 	"find_no_results": "Nessun risultato",
@@ -264,7 +239,6 @@
 	"find_close": "Chiudi (Esc)",
 	"find_replace": "Sostituisci",
 	"find_replace_all": "Sostituisci tutto",
-
 	"bubble_bold": "Grassetto (⌘B)",
 	"bubble_italic": "Corsivo (⌘I)",
 	"bubble_strike": "Barrato (⌘⇧S)",
@@ -274,7 +248,6 @@
 	"bubble_link": "Link",
 	"bubble_confirm_link": "Conferma link",
 	"bubble_cancel_link": "Annulla link",
-
 	"spotlight_title": "Spotlight",
 	"spotlight_placeholder": "Cerca note per nome o contenuto… o #tag",
 	"spotlight_hint": "Scrivi per cercare nei nomi e nei contenuti delle note. Inizia con # per sfogliare i tag.",
@@ -287,19 +260,15 @@
 	"spotlight_replace_all_files": "Sostituisci tutto in tutti i file corrispondenti",
 	"spotlight_replace_all_short": "Tutti ({count})",
 	"spotlight_replace_all_in_file": "Sostituisci tutto in questo file",
-
 	"folder_name_placeholder": "Nome cartella",
-
 	"pane_close": "Chiudi pannello",
 	"tab_close_label": "Chiudi scheda",
-
 	"validate_name_empty": "Il nome non può essere vuoto",
 	"validate_name_ascii": "Il nome può contenere solo caratteri ASCII standard",
 	"validate_name_invalid_chars": "Il nome contiene caratteri non validi: / \\\\ : * ? \" < > |",
 	"validate_name_dot_start": "Il nome non può iniziare con un punto",
 	"validate_name_trailing": "Il nome non può terminare con uno spazio o un punto",
 	"validate_name_reserved": "\"{name}\" è un nome di sistema riservato",
-
 	"onboarding_skip": "Salta",
 	"onboarding_back": "Indietro",
 	"onboarding_next": "Avanti",
@@ -321,5 +290,28 @@
 	"onboarding_wizard_name_title": "Come lo chiamiamo?",
 	"onboarding_wizard_name_body": "Un'etichetta che Margin usa per questo vault: la cartella su disco mantiene il suo nome.",
 	"onboarding_wizard_passphrase_title": "Bloccalo con dodici parole",
-	"onboarding_wizard_passphrase_body": "Incolla la passphrase di un vault esistente oppure generane una nuova. Conservala in un posto sicuro: non può essere recuperata."
+	"onboarding_wizard_passphrase_body": "Incolla la passphrase di un vault esistente oppure generane una nuova. Conservala in un posto sicuro: non può essere recuperata.",
+	"editor_table_add_row_above": "Aggiungi riga sopra",
+	"editor_table_add_row_below": "Aggiungi riga sotto",
+	"editor_table_add_column_left": "Aggiungi colonna a sinistra",
+	"editor_table_add_column_right": "Aggiungi colonna a destra",
+	"editor_table_delete_row": "Elimina riga",
+	"editor_table_delete_column": "Elimina colonna",
+	"editor_table_delete_table": "Elimina tabella",
+	"editor_table_insert_row_above": "Inserisci riga sopra",
+	"editor_table_insert_row_below": "Inserisci riga sotto",
+	"editor_table_insert_column_left": "Inserisci colonna a sinistra",
+	"editor_table_insert_column_right": "Inserisci colonna a destra",
+	"editor_table_move_row_up": "Sposta riga su",
+	"editor_table_move_row_down": "Sposta riga giù",
+	"editor_table_move_column_left": "Sposta colonna a sinistra",
+	"editor_table_move_column_right": "Sposta colonna a destra",
+	"editor_table_toggle_header_row": "Attiva/disattiva riga di intestazione",
+	"editor_table_align_left": "Allinea a sinistra",
+	"editor_table_align_center": "Allinea al centro",
+	"editor_table_align_right": "Allinea a destra",
+	"editor_table_add_row": "Aggiungi riga",
+	"editor_table_add_column": "Aggiungi colonna",
+	"editor_table_row_menu": "Opzioni riga",
+	"editor_table_column_menu": "Opzioni colonna"
 }

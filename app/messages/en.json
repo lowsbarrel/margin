@@ -1,9 +1,7 @@
 {
 	"$schema": "https://inlang.com/schema/inlang-message-format",
-
 	"app_name": "margin",
 	"app_tagline": "Your notes. Your keys.",
-
 	"login_passphrase_label": "Passphrase",
 	"login_passphrase_placeholder": "enter your 12-word mnemonic",
 	"login_storage_label": "Storage location",
@@ -23,7 +21,6 @@
 	"login_back_to_vaults": "Back to vaults",
 	"login_vault_name_label": "Vault name",
 	"login_vault_name_placeholder": "My Vault",
-
 	"sidebar_explorer": "Explorer",
 	"sidebar_new_file": "New file",
 	"sidebar_new_folder": "New folder",
@@ -48,24 +45,20 @@
 	"sidebar_remove_favourite": "Remove from Favourites",
 	"sidebar_graph": "Graph",
 	"sidebar_tags": "Tags",
-
 	"tags_refresh": "Refresh tags",
 	"tags_filter_placeholder": "filter tags…",
 	"tags_loading": "Loading tags…",
 	"tags_empty": "No tags found. Use #tag in your notes.",
 	"tags_no_files": "No files found",
 	"tags_files": "{count} file",
-
 	"editor_empty_state": "Select a file or create one",
 	"editor_cannot_render": "This file type cannot be opened in the editor",
-
 	"tab_close": "Close",
 	"tab_close_others": "Close Others",
 	"tab_close_all": "Close All",
 	"tab_pin": "Pin",
 	"tab_unpin": "Unpin",
 	"tab_reopen_closed": "Reopen Closed Tab",
-
 	"statusbar_markdown": "Markdown",
 	"statusbar_modified": "Modified",
 	"statusbar_synced": "Synced",
@@ -79,7 +72,6 @@
 	"statusbar_export_pdf_success": "PDF exported successfully",
 	"statusbar_lock_vault": "Lock vault",
 	"statusbar_switch_vault": "Switch vault",
-
 	"settings_title": "Settings",
 	"settings_vault_title": "Vault",
 	"settings_vault_name": "Name",
@@ -112,7 +104,6 @@
 	"settings_import_placeholder": "Paste encrypted settings string…",
 	"settings_import_btn": "Import",
 	"settings_language": "Language",
-
 	"toast_settings_saved": "Settings saved",
 	"toast_cleanup_done": "Cleaned {count} note(s)",
 	"toast_cleanup_none": "Already clean — nothing to do",
@@ -141,17 +132,13 @@
 	"toast_import_failed": "Import failed: {error}",
 	"toast_configure_s3": "Configure S3 first",
 	"toast_copied": "Copied to clipboard",
-
 	"settings_attachments_title": "Attachments",
 	"settings_attachments_hint": "Choose a folder in your vault for pasted images and files. Paste or drag files into the editor and they will be saved here.",
 	"settings_attachments_label": "Attachment folder",
 	"settings_attachments_none": "— None —",
-
 	"toast_file_read_failed": "Failed to read file: {error}",
 	"pdf_load_failed": "Failed to load PDF: {error}",
-
 	"statusbar_history": "File history",
-
 	"history_title": "History",
 	"history_close": "Close history",
 	"history_loading": "Loading…",
@@ -166,7 +153,6 @@
 	"history_restore_failed": "Restore failed",
 	"history_delete_failed": "Failed to delete snapshot",
 	"history_cleared": "Deleted {count} snapshots",
-
 	"canvas_hand": "Hand",
 	"canvas_pen": "Pen",
 	"canvas_eraser": "Eraser",
@@ -179,7 +165,6 @@
 	"canvas_size": "Size",
 	"canvas_clear_all": "Clear all",
 	"canvas_text": "Text",
-
 	"settings_export_zip_title": "Export Vault",
 	"settings_export_zip_hint": "Export the entire vault as a .zip file. Internal metadata (.margin folder) is excluded.",
 	"settings_export_zip_btn": "Export as ZIP",
@@ -187,7 +172,6 @@
 	"settings_export_zip_dialog_title": "Save vault archive",
 	"toast_zip_exported": "Vault exported as ZIP",
 	"toast_zip_export_failed": "ZIP export failed: {error}",
-
 	"update_available": "Margin v{version} is available",
 	"update_btn": "Update",
 	"update_installing": "Updating…",
@@ -196,7 +180,6 @@
 	"settings_updates_checking": "Checking…",
 	"settings_updates_none": "You're on the latest version",
 	"settings_updates_found": "v{version} available — click Update in the toast",
-
 	"settings_auto_sync": "Auto-sync",
 	"settings_auto_sync_hint": "Vault will sync automatically every 5 minutes and after each save.",
 	"settings_conflict_resolution": "Conflict resolution",
@@ -205,15 +188,12 @@
 	"settings_conflict_hint_newer": "On conflict, the file with the most recent modification time wins. The other copy is saved as a .sync-conflict file.",
 	"settings_conflict_hint_local": "On conflict, the local version always wins. The remote version is saved as a .sync-conflict file.",
 	"settings_attachments_folder_placeholder": "e.g. attachments",
-
 	"appearance_title": "Appearance",
 	"appearance_dark": "Dark",
 	"appearance_light": "Light",
 	"appearance_hint": "Margin ships a single design system. Only the light/dark pairing changes.",
-
 	"sidebar_close_panel": "Close panel",
 	"sidebar_open_panel": "Open panel",
-
 	"toast_replaced": "Replaced {count} occurrences",
 	"toast_replaced_in_files": "Replaced {count} occurrences in {files} files",
 	"toast_replace_failed": "Replace failed: {error}",
@@ -240,20 +220,15 @@
 	"toast_cannot_open_url": "Cannot open URL: {error}",
 	"toast_cannot_reveal_file": "Cannot reveal file: {error}",
 	"toast_note_not_found": "Note not found: {title}",
-
 	"editor_view_image": "View Image",
 	"editor_open_default_app": "Open with Default App",
 	"editor_reveal_in_finder": "Reveal in Finder",
 	"editor_open_file": "Open \"{name}\"",
-
 	"login_auto_opening": "Opening vault…",
-
 	"editor_untitled": "Untitled",
-
 	"canvas_zoom_in": "Zoom in",
 	"canvas_zoom_out": "Zoom out",
 	"canvas_reset_view": "Reset view",
-
 	"find_placeholder": "Find…",
 	"find_case_sensitive": "Case sensitive",
 	"find_no_results": "No results",
@@ -264,7 +239,6 @@
 	"find_close": "Close (Esc)",
 	"find_replace": "Replace",
 	"find_replace_all": "Replace all",
-
 	"bubble_bold": "Bold (⌘B)",
 	"bubble_italic": "Italic (⌘I)",
 	"bubble_strike": "Strikethrough (⌘⇧S)",
@@ -274,7 +248,6 @@
 	"bubble_link": "Link",
 	"bubble_confirm_link": "Confirm link",
 	"bubble_cancel_link": "Cancel link",
-
 	"spotlight_title": "Spotlight",
 	"spotlight_placeholder": "Search notes by name or content… or #tag",
 	"spotlight_hint": "Type to search note names and contents. Start with # to browse tags.",
@@ -287,19 +260,15 @@
 	"spotlight_replace_all_files": "Replace all in all matching files",
 	"spotlight_replace_all_short": "All ({count})",
 	"spotlight_replace_all_in_file": "Replace all in this file",
-
 	"folder_name_placeholder": "Folder name",
-
 	"pane_close": "Close pane",
 	"tab_close_label": "Close tab",
-
 	"validate_name_empty": "Name cannot be empty",
 	"validate_name_ascii": "Name can only contain standard ASCII characters",
 	"validate_name_invalid_chars": "Name contains invalid characters: / \\\\ : * ? \" < > |",
 	"validate_name_dot_start": "Name cannot start with a dot",
 	"validate_name_trailing": "Name cannot end with a space or dot",
 	"validate_name_reserved": "\"{name}\" is a reserved system name",
-
 	"onboarding_skip": "Skip",
 	"onboarding_back": "Back",
 	"onboarding_next": "Next",
@@ -321,5 +290,28 @@
 	"onboarding_wizard_name_title": "What should we call it?",
 	"onboarding_wizard_name_body": "A label Margin uses for this vault — the folder on disk keeps its own name.",
 	"onboarding_wizard_passphrase_title": "Lock it with twelve words",
-	"onboarding_wizard_passphrase_body": "Paste the passphrase of an existing vault, or generate a fresh one. Store it somewhere safe: it cannot be recovered."
+	"onboarding_wizard_passphrase_body": "Paste the passphrase of an existing vault, or generate a fresh one. Store it somewhere safe: it cannot be recovered.",
+	"editor_table_add_row_above": "Add Row Above",
+	"editor_table_add_row_below": "Add Row Below",
+	"editor_table_add_column_left": "Add Column Left",
+	"editor_table_add_column_right": "Add Column Right",
+	"editor_table_delete_row": "Delete Row",
+	"editor_table_delete_column": "Delete Column",
+	"editor_table_delete_table": "Delete Table",
+	"editor_table_insert_row_above": "Insert row above",
+	"editor_table_insert_row_below": "Insert row below",
+	"editor_table_insert_column_left": "Insert column left",
+	"editor_table_insert_column_right": "Insert column right",
+	"editor_table_move_row_up": "Move row up",
+	"editor_table_move_row_down": "Move row down",
+	"editor_table_move_column_left": "Move column left",
+	"editor_table_move_column_right": "Move column right",
+	"editor_table_toggle_header_row": "Toggle header row",
+	"editor_table_align_left": "Align left",
+	"editor_table_align_center": "Align center",
+	"editor_table_align_right": "Align right",
+	"editor_table_add_row": "Add row",
+	"editor_table_add_column": "Add column",
+	"editor_table_row_menu": "Row options",
+	"editor_table_column_menu": "Column options"
 }

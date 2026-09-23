@@ -1,4 +1,6 @@
 import type { Editor } from '@tiptap/core';
+import { TextSelection } from '@tiptap/pm/state';
+import { cellAround } from '@tiptap/pm/tables';
 import { isLocalfileUrl, stripLocalfilePrefix, toOsPath } from '$lib/editor/image-url';
 import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
 import { toast } from '$lib/stores/toast.svelte';
@@ -174,7 +176,21 @@ export function buildEditorContextMenu(
 	// Table cell context menu
 	const tableCell = (event.target as HTMLElement).closest('td, th') as HTMLElement | null;
 	const tableEl = tableCell?.closest('table');
-	if (tableCell && tableEl && container?.contains(tableEl) && editor?.isActive('table')) {
+	if (tableCell && tableEl && container?.contains(tableEl)) {
+		if (!editor) return null;
+
+		// Right-clicking a cell from elsewhere has to move the selection there
+		// first: every command below acts on the cell the selection sits in.
+		const view = editor.view;
+		const hit = view.posAtCoords({ left: event.clientX, top: event.clientY });
+		if (hit != null) {
+			const $hit = view.state.doc.resolve(hit.pos);
+			if (cellAround($hit)) {
+				view.dispatch(view.state.tr.setSelection(TextSelection.near($hit)));
+			}
+		}
+		if (!editor.isActive('table')) return null;
+
 		event.preventDefault();
 		event.stopPropagation();
 		return {
@@ -182,47 +198,47 @@ export function buildEditorContextMenu(
 			y: event.clientY,
 			items: [
 				{
-					label: 'Add Row Above',
+					label: m.editor_table_add_row_above(),
 					onclick: () => {
-						editor?.chain().focus().addRowBefore().run();
+						editor.chain().focus().addRowBefore().run();
 					}
 				},
 				{
-					label: 'Add Row Below',
+					label: m.editor_table_add_row_below(),
 					onclick: () => {
-						editor?.chain().focus().addRowAfter().run();
+						editor.chain().focus().addRowAfter().run();
 					}
 				},
 				{
-					label: 'Add Column Left',
+					label: m.editor_table_add_column_left(),
 					onclick: () => {
-						editor?.chain().focus().addColumnBefore().run();
+						editor.chain().focus().addColumnBefore().run();
 					}
 				},
 				{
-					label: 'Add Column Right',
+					label: m.editor_table_add_column_right(),
 					onclick: () => {
-						editor?.chain().focus().addColumnAfter().run();
+						editor.chain().focus().addColumnAfter().run();
 					}
 				},
 				{
-					label: 'Delete Row',
+					label: m.editor_table_delete_row(),
 					onclick: () => {
-						editor?.chain().focus().deleteRow().run();
+						editor.chain().focus().deleteRow().run();
 					},
 					destructive: true
 				},
 				{
-					label: 'Delete Column',
+					label: m.editor_table_delete_column(),
 					onclick: () => {
-						editor?.chain().focus().deleteColumn().run();
+						editor.chain().focus().deleteColumn().run();
 					},
 					destructive: true
 				},
 				{
-					label: 'Delete Table',
+					label: m.editor_table_delete_table(),
 					onclick: () => {
-						editor?.chain().focus().deleteTable().run();
+						editor.chain().focus().deleteTable().run();
 					},
 					destructive: true
 				}

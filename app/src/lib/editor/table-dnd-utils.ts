@@ -34,7 +34,7 @@ function isCellSelection(value: unknown): value is CellSelection {
 	return value instanceof CellSelection;
 }
 
-interface FindParentNodeResult {
+export interface TablePosition {
 	node: Node;
 	pos: number;
 	start: number;
@@ -44,7 +44,7 @@ interface FindParentNodeResult {
 function findParentNode(
 	predicate: (node: Node) => boolean,
 	$pos: ResolvedPos
-): FindParentNodeResult | undefined {
+): TablePosition | undefined {
 	for (let depth = $pos.depth; depth >= 0; depth -= 1) {
 		const node = $pos.node(depth);
 		if (predicate(node)) {
@@ -55,7 +55,7 @@ function findParentNode(
 	}
 }
 
-export function findTable($pos: ResolvedPos): FindParentNodeResult | undefined {
+export function findTable($pos: ResolvedPos): TablePosition | undefined {
 	return findParentNode((node) => node.type.spec.tableRole === 'table', $pos);
 }
 
@@ -419,6 +419,25 @@ function domCellAround(target: HTMLElement | null): HTMLElement | null {
 	return target;
 }
 
+export function getCellInfoAt($cell: ResolvedPos): HoveringCellInfo {
+	const map = TableMap.get($cell.node(-1));
+	const tableStart = $cell.start(-1);
+	const rect = map.findCell($cell.pos - tableStart);
+
+	function getCellPosAt(r: number, c: number): number {
+		const cellIndex = map.width * r + c;
+		return tableStart + map.map[cellIndex];
+	}
+
+	return {
+		rowIndex: rect.top,
+		colIndex: rect.left,
+		cellPos: $cell.pos,
+		rowFirstCellPos: getCellPosAt(rect.top, 0),
+		colFirstCellPos: getCellPosAt(0, rect.left)
+	};
+}
+
 export function getHoveringCell(view: EditorView, event: MouseEvent): HoveringCellInfo | undefined {
 	const domCell = domCellAround(event.target as HTMLElement | null);
 	if (!domCell) return;
@@ -427,24 +446,7 @@ export function getHoveringCell(view: EditorView, event: MouseEvent): HoveringCe
 	if (!eventPos) return;
 	const $cellPos = cellAround(view.state.doc.resolve(eventPos.pos));
 	if (!$cellPos) return;
-	const map = TableMap.get($cellPos.node(-1));
-	const tableStart = $cellPos.start(-1);
-	const cellRect = map.findCell($cellPos.pos - tableStart);
-	const rowIndex = cellRect.top;
-	const colIndex = cellRect.left;
-
-	function getCellPosAt(r: number, c: number): number {
-		const cellIndex = map.width * r + c;
-		return tableStart + map.map[cellIndex];
-	}
-
-	return {
-		rowIndex,
-		colIndex,
-		cellPos: $cellPos.pos,
-		rowFirstCellPos: getCellPosAt(rowIndex, 0),
-		colFirstCellPos: getCellPosAt(0, colIndex)
-	};
+	return getCellInfoAt($cellPos);
 }
 
 function getTableDOMByPos(view: EditorView, pos: number): HTMLTableElement | undefined {
