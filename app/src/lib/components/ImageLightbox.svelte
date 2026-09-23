@@ -77,14 +77,14 @@
 
 	{#if images.length > 1}
 		<button
-			class="absolute top-1/2 left-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-transparent text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
+			class="absolute top-1/2 left-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-transparent p-0 text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
 			onclick={() => step(-1)}
 			aria-label={m.viewer_previous()}
 		>
 			<ChevronLeft size={26} />
 		</button>
 		<button
-			class="absolute top-1/2 right-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-transparent text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
+			class="absolute top-1/2 right-4 flex size-11 -translate-y-1/2 items-center justify-center rounded-full bg-transparent p-0 text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
 			onclick={() => step(1)}
 			aria-label={m.viewer_next()}
 		>
@@ -96,7 +96,7 @@
 	{/if}
 
 	<button
-		class="absolute top-4 right-5 flex size-9 items-center justify-center rounded-sm bg-transparent text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
+		class="absolute top-4 right-5 flex size-9 items-center justify-center rounded-sm bg-transparent p-0 text-white/70 [transition:color_var(--transition-fast),background_var(--transition-fast)] hover:bg-white/10 hover:text-white"
 		onclick={onclose}
 		aria-label={m.tab_close()}
 	>
