@@ -67,7 +67,8 @@ const INVOKE_ALLOW = new Set([
 	'src/lib/ai/bridge.ts',
 	'src/lib/crypto/bridge.ts',
 	'src/lib/fs/bridge.ts',
-	'src/lib/s3/bridge.ts'
+	'src/lib/s3/bridge.ts',
+	'src/lib/terminal/bridge.ts'
 ]);
 walk('src', ['.ts', '.svelte'], (p, c) => {
 	if (/@tauri-apps\/api\/core/.test(c) && !INVOKE_ALLOW.has(rel(p))) {

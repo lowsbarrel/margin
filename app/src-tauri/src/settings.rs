@@ -155,6 +155,12 @@ pub struct WorkspaceState {
     pub sidebar_open: bool,
     pub sidebar_width: f64,
     pub sort_order: String,
+    // Terminal panel visibility and height. `#[serde(default)]` keeps
+    // workspace.enc files written before the panel existed loadable.
+    #[serde(default)]
+    pub terminal_open: bool,
+    #[serde(default)]
+    pub terminal_height: f64,
 }
 
 /// Save workspace state encrypted to disk at {vault_path}/.margin/workspace.enc

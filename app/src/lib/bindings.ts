@@ -157,6 +157,8 @@ export const commands = {
 	sidebar_open: boolean,
 	sidebar_width: number | null,
 	sort_order: string,
+	terminal_open?: boolean,
+	terminal_height?: number | null,
 } | null, string>(__TAURI_INVOKE("load_workspace_state", { vaultPath, encryptionKey })),
 	/**  Legacy compatibility: save_session now saves/updates a profile */
 	saveSession: (mnemonic: string, vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("save_session", { mnemonic, vaultPath })),
@@ -264,6 +266,25 @@ export const commands = {
 	 *  hex identifier. Same path always maps to same key — no lookup table needed.
 	 */
 	pathToS3Key: (relPath: string, encryptionKey: number[]) => __TAURI_INVOKE<string>("path_to_s3_key", { relPath, encryptionKey }),
+	/**
+	 *  Start a shell in the open vault. `on_output` streams the terminal and
+	 *  `on_exit` fires once with the shell's exit code.
+	 */
+	ptySpawn: (id: number, cols: number, rows: number, onOutput: Channel<string>, onExit: Channel<number>) => typedError<null, string>(__TAURI_INVOKE("pty_spawn", { id, cols, rows, onOutput, onExit })),
+	/**
+	 *  Send keystrokes to a shell. Control characters (Ctrl+C, Ctrl+D) travel this
+	 *  way rather than as signals.
+	 */
+	ptyWrite: (id: number, data: string) => typedError<null, string>(__TAURI_INVOKE("pty_write", { id, data })),
+	/**  Tell the kernel (and through it the shell) that the window changed size. */
+	ptyResize: (id: number, cols: number, rows: number) => typedError<null, string>(__TAURI_INVOKE("pty_resize", { id, cols, rows })),
+	/**
+	 *  Close one shell. Dropping the session closes the master, which hangs up the
+	 *  terminal's foreground process group — the shell's own children included.
+	 */
+	ptyKill: (id: number) => typedError<null, string>(__TAURI_INVOKE("pty_kill", { id })),
+	/**  Close every shell — used when a vault is locked or the window goes away. */
+	ptyKillAll: () => typedError<null, string>(__TAURI_INVOKE("pty_kill_all")),
 };
 
 /* Types */
@@ -441,6 +462,8 @@ export type WorkspaceState = {
 	sidebar_open: boolean,
 	sidebar_width: number | null,
 	sort_order: string,
+	terminal_open?: boolean,
+	terminal_height?: number | null,
 };
 
 export type WorkspaceTab = {
