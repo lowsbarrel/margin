@@ -2,9 +2,8 @@
 	import { vault } from '$lib/stores/vault.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { saveVaultProfile } from '$lib/session/bridge';
-	import { cleanVault } from '$lib/editor/clean-vault';
 	import { Button, Input, Field, Section } from '$lib/ui';
-	import { KeyRound, Eye, EyeOff, FolderOpen, Sparkles } from '@lucide/svelte';
+	import { KeyRound, Eye, EyeOff, FolderOpen } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let showPassphrase = $state(false);
@@ -12,9 +11,6 @@
 	// changes, but still writable so the <Input> can bind to it while editing
 	// (a writable $derived, not $state mirrored by an effect).
 	let editingVaultName = $derived(vault.profileName ?? '');
-	let cleaning = $state(false);
-	let confirmingClean = $state(false);
-	let cleanProgress = $state('');
 
 	async function handleSaveVaultName() {
 		if (!vault.vaultPath || !vault.mnemonic) return;
@@ -29,31 +25,6 @@
 			toast.success(m.toast_settings_saved());
 		} catch (err) {
 			toast.error(String(err));
-		}
-	}
-
-	async function runCleanVault() {
-		if (!vault.vaultPath || cleaning) return;
-		confirmingClean = false;
-		cleaning = true;
-		cleanProgress = m.settings_cleanup_progress({ done: '0', total: '…' });
-		try {
-			const res = await cleanVault(vault.vaultPath, vault.encryptionKey, (p) => {
-				cleanProgress = m.settings_cleanup_progress({
-					done: String(p.scanned),
-					total: String(p.total)
-				});
-			});
-			if (res.cleaned > 0) {
-				toast.success(m.toast_cleanup_done({ count: String(res.cleaned) }));
-			} else {
-				toast.info(m.toast_cleanup_none());
-			}
-		} catch (err) {
-			toast.error(m.toast_cleanup_failed({ error: String(err) }));
-		} finally {
-			cleaning = false;
-			cleanProgress = '';
 		}
 	}
 </script>
@@ -105,22 +76,4 @@
 			<span class="truncate font-mono text-sm text-foreground">{vault.vaultPath ?? ''}</span>
 		</div>
 	</Field>
-</Section>
-
-<Section title={m.settings_cleanup_title()} icon={Sparkles} collapsible defaultOpen={false}>
-	<p class="mt-0 mb-2 text-sm leading-normal text-subtle-foreground">{m.settings_cleanup_desc()}</p>
-	{#if cleaning}
-		<Button variant="secondary" loading disabled>{cleanProgress}</Button>
-	{:else if confirmingClean}
-		<div class="flex items-center gap-2">
-			<Button variant="primary" onclick={runCleanVault}>{m.settings_cleanup_confirm()}</Button>
-			<Button variant="ghost" onclick={() => (confirmingClean = false)}
-				>{m.settings_cleanup_cancel()}</Button
-			>
-		</div>
-	{:else}
-		<Button variant="secondary" onclick={() => (confirmingClean = true)}
-			>{m.settings_cleanup_button()}</Button
-		>
-	{/if}
 </Section>

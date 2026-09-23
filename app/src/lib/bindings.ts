@@ -70,8 +70,11 @@ export const commands = {
 	 *  destination is containment-checked, as in [`import_external_file`].
 	 */
 	importAttachment: (from: string, folder: string) => typedError<string, string>(__TAURI_INVOKE("import_attachment", { from, folder })),
-	/**  Attachments in `folder` that no note refers to, vault-relative and sorted. */
-	unusedAttachments: (folder: string) => typedError<string[], string>(__TAURI_INVOKE("unused_attachments", { folder })),
+	/**
+	 *  Trash the attachments in `folder` that the app stored, no note refers to and
+	 *  nothing touched for a week. Runs by itself when a vault opens.
+	 */
+	sweepUnusedAttachments: (folder: string) => typedError<number, string>(__TAURI_INVOKE("sweep_unused_attachments", { folder })),
 	copyDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_directory", { from, to })),
 	revealInFileManager: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_in_file_manager", { path })),
 	/**
