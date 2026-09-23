@@ -2,6 +2,7 @@
 	import { X } from '@lucide/svelte';
 	import type { Snippet } from 'svelte';
 	import * as Dialog from '$lib/components/ui/dialog/index.js';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		title: string;
@@ -38,7 +39,7 @@
 				{title}
 			</Dialog.Title>
 			<Dialog.Close
-				aria-label="Close"
+				aria-label={m.dialog_close()}
 				class="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-sm bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
 			>
 				<X size={16} />

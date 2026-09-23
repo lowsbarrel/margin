@@ -128,7 +128,13 @@
 </script>
 
 <div class="relative h-full w-full bg-background">
-	<div class="h-full w-full" bind:this={hostEl}></div>
+	<!-- Padding lives on the element xterm fits against: FitAddon measures this
+	     box's content width, so the columns stay correct with the inset. -->
+	<div
+		class="h-full w-full"
+		style="padding: var(--space-sm) var(--space-md)"
+		bind:this={hostEl}
+	></div>
 
 	{#if tab.error}
 		<div

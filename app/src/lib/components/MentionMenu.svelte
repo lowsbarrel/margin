@@ -1,6 +1,7 @@
 <script lang="ts">
 	import type { MentionItem } from '$lib/editor/mention-command';
 	import { FileText } from '@lucide/svelte';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		items: MentionItem[];
@@ -31,7 +32,7 @@
      counter `src/app.css`'s unlayered bare-`button` rule. -->
 <div class="surface-popover max-h-70 min-w-55 overflow-y-auto p-1" bind:this={listEl}>
 	{#if items.length === 0}
-		<div class="px-3 py-2 text-sm text-subtle-foreground">No matching documents</div>
+		<div class="px-3 py-2 text-sm text-subtle-foreground">{m.menu_no_matching_documents()}</div>
 	{:else}
 		{#each items as item, index (item.path)}
 			<button

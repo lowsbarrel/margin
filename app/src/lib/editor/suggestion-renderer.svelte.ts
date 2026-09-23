@@ -3,7 +3,7 @@ import { mount, unmount, type Component } from 'svelte';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 
 /**
- * Props every suggestion menu component (SlashMenu/EmojiMenu/MentionMenu)
+ * Props every suggestion menu component (SlashMenu/MentionMenu)
  * accepts. The factory mounts the component with these props.
  */
 export interface SuggestionMenuProps<TItem> {
@@ -33,7 +33,7 @@ export interface SuggestionRenderer<TItem> {
 }
 
 export interface CreateSuggestionRendererOptions<TItem> {
-	/** The Svelte menu component to mount (SlashMenu/EmojiMenu/MentionMenu). */
+	/** The Svelte menu component to mount (SlashMenu/MentionMenu). */
 	component: Component<SuggestionMenuProps<TItem>, SuggestionMenuExports>;
 	/** Compute the items to show for the given query. May be async. */
 	getItems: (query: string) => TItem[] | Promise<TItem[]>;
@@ -61,6 +61,10 @@ export function createSuggestionRenderer<TItem>(
 		let selectedIndex = $state(0);
 		let command: ((item: TItem) => void) | null = null;
 		let instance: SuggestionMenuExports | null = null;
+		// Bumped by every onStart and by onExit. A refresh awaits IPC, so the menu
+		// can close during it; a stale generation means the wrapper never gets
+		// mounted (or the unmounted one is never touched again).
+		let generation = 0;
 
 		function updatePosition(clientRect: () => DOMRect | null): void {
 			if (!wrapper) return;
@@ -90,7 +94,9 @@ export function createSuggestionRenderer<TItem>(
 
 		return {
 			onStart: async (props) => {
+				const gen = ++generation;
 				await refresh(props);
+				if (gen !== generation) return;
 
 				wrapper = document.createElement('div');
 				wrapper.style.position = 'absolute';
@@ -119,7 +125,9 @@ export function createSuggestionRenderer<TItem>(
 			},
 
 			onUpdate: async (props) => {
+				const gen = generation;
 				await refresh(props);
+				if (gen !== generation) return;
 
 				if (props.clientRect) {
 					updatePosition(props.clientRect);
@@ -159,6 +167,7 @@ export function createSuggestionRenderer<TItem>(
 			},
 
 			onExit: () => {
+				generation++;
 				if (instance && wrapper) {
 					unmount(instance);
 					wrapper.remove();

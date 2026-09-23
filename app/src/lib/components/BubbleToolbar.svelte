@@ -118,11 +118,25 @@
 		if (ed.isActive('blockquote')) return 'quote';
 		if (ed.isActive('codeBlock')) return 'code';
 		if (ed.isActive('callout')) return 'callout';
-		if (ed.isActive('details')) return 'details';
 		return 'text';
 	}
 
+	// `isActive()` is a plain call, not a signal: without this the select keeps
+	// showing the block type of wherever the caret used to be.
+	let selectionVersion = $state(0);
+
+	$effect(() => {
+		const ed = editor;
+		if (!ed) return;
+		const bump = () => (selectionVersion += 1);
+		ed.on('selectionUpdate', bump);
+		return () => {
+			ed.off('selectionUpdate', bump);
+		};
+	});
+
 	let blockType = $derived.by(() => {
+		void selectionVersion;
 		if (!editor) return 'text';
 		return getActiveBlockType(editor);
 	});
@@ -171,14 +185,9 @@
 			case 'callout':
 				chain.toggleCallout({ type: 'info' }).run();
 				break;
-			case 'details':
-				chain.setDetails().run();
-				break;
 		}
 		updateActiveStates();
 	}
-
-	export { updateActiveStates };
 </script>
 
 <!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -250,13 +259,12 @@
 				<option value="h4">H4</option>
 				<option value="h5">H5</option>
 				<option value="h6">H6</option>
-				<option value="bullet">• Bullet list</option>
-				<option value="ordered">1. Numbered list</option>
-				<option value="task">☑ To-do list</option>
-				<option value="quote">" Quote</option>
-				<option value="code">&lt;/&gt; Code block</option>
-				<option value="callout">💡 Callout</option>
-				<option value="details">▶ Toggle</option>
+				<option value="bullet">• {m.bubble_block_bullet()}</option>
+				<option value="ordered">1. {m.bubble_block_ordered()}</option>
+				<option value="task">☑ {m.bubble_block_task()}</option>
+				<option value="quote">" {m.bubble_block_quote()}</option>
+				<option value="code">&lt;/&gt; {m.bubble_block_code()}</option>
+				<option value="callout">💡 {m.bubble_block_callout()}</option>
 			</select>
 			<ChevronDown size={12} class="pointer-events-none absolute right-1 text-muted-foreground" />
 		</span>

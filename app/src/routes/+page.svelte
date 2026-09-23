@@ -54,7 +54,7 @@
 		handleWikiLink,
 		handleLogout
 	} from '$lib/utils/page-actions';
-	import { isModalOpen } from '$lib/utils/modal';
+	import { isModalOpen, isFormControlFocused } from '$lib/utils/modal';
 	import { executeDrop, startDividerDrag } from '$lib/utils/tab-drag';
 	import { DEFAULT_ATTACHMENT_FOLDER, resolveAttachmentFolder } from '$lib/editor/attachments';
 
@@ -641,13 +641,16 @@
 		// Shift changes the character the key reports ("f" → "F"), so compare on a
 		// lowercased key and test the modifier separately.
 		const key = e.key.toLowerCase();
+		// A control that owns the keyboard: the palette and a reopened tab would
+		// both take focus out of it mid-edit.
+		const inControl = isFormControlFocused();
 
 		// Terminal panel. Matched on the character rather than the physical key:
 		// layouts where `\` sits on that key (the plan gives Ctrl+\ to the sidebar)
 		// keep their sidebar shortcut.
 		if (!e.shiftKey && key === '`') {
 			e.preventDefault();
-			terminals.toggle();
+			if (!isModalOpen()) terminals.toggle();
 			return;
 		}
 
@@ -655,18 +658,21 @@
 		// alias for the quick switcher it grew out of, and Cmd/Ctrl+Shift+F — which
 		// used to focus the (now removed) sidebar search — opens the same palette.
 		if (!e.shiftKey && (key === 'k' || key === 'p')) {
+			if (inControl) return;
 			e.preventDefault();
-			showSpotlight = !showSpotlight;
+			if (!isModalOpen()) showSpotlight = !showSpotlight;
 			return;
 		}
 		if (e.shiftKey && key === 'f') {
+			if (inControl) return;
 			e.preventDefault();
-			showSpotlight = true;
+			if (!isModalOpen()) showSpotlight = true;
 			return;
 		}
 		if (e.shiftKey && key === 't') {
+			if (inControl) return;
 			e.preventDefault();
-			panes.reopenClosedTab();
+			if (!isModalOpen()) panes.reopenClosedTab();
 			return;
 		}
 		// Neither of these may fire behind a modal — a note created under a
@@ -680,10 +686,10 @@
 			e.preventDefault();
 			if (!isModalOpen()) handleNewNote();
 		}
-		// Toggle the active tab's editor surface.
+		// Toggle the active tab's editor surface, which moves focus into it.
 		if (e.shiftKey && key === 'e') {
 			e.preventDefault();
-			toggleViewMode();
+			if (!isModalOpen() && !inControl) toggleViewMode();
 		}
 	}}
 	onmousemove={(e) => {
