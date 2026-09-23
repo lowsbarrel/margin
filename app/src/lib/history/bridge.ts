@@ -44,11 +44,6 @@ export async function clearSnapshots(vaultPath: string, filePath: string): Promi
 	return r.data;
 }
 
-export async function clearHistoryTree(vaultPath: string, entryPath: string): Promise<void> {
-	const r = await commands.clearHistoryTree(vaultPath, entryPath);
-	if (r.status === 'error') throw r.error;
-}
-
 export async function renameHistory(
 	vaultPath: string,
 	oldPath: string,

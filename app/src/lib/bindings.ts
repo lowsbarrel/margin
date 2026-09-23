@@ -178,11 +178,6 @@ export const commands = {
 	 *  `MAX_SNAPSHOTS_PER_FILE` and never approaches u32::MAX.
 	 */
 	clearSnapshots: (vaultPath: string, filePath: string) => typedError<number, string>(__TAURI_INVOKE("clear_snapshots", { vaultPath, filePath })),
-	/**
-	 *  Delete the entire history subtree for a given path (file or directory).
-	 *  When a directory is deleted, all history for every file beneath it is removed.
-	 */
-	clearHistoryTree: (vaultPath: string, entryPath: string) => typedError<null, string>(__TAURI_INVOKE("clear_history_tree", { vaultPath, entryPath })),
 	/**  Move/rename the history directory when a file or directory is renamed. */
 	renameHistory: (vaultPath: string, oldPath: string, newPath: string) => typedError<null, string>(__TAURI_INVOKE("rename_history", { vaultPath, oldPath, newPath })),
 	/**

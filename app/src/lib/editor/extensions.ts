@@ -1,5 +1,4 @@
 import StarterKit from '@tiptap/starter-kit';
-import { Table } from '@tiptap/extension-table';
 import TableRow from '@tiptap/extension-table-row';
 import TableCell from '@tiptap/extension-table-cell';
 import TableHeader from '@tiptap/extension-table-header';
@@ -17,6 +16,7 @@ import FileEmbed from '$lib/editor/file-embed';
 import NoteEmbed from '$lib/editor/note-embed';
 import WikiLink from '$lib/editor/wiki-link';
 import Callout from '$lib/editor/callout';
+import { TableMarkdown } from '$lib/editor/table-markdown';
 import { MathBlock, MathInline } from '$lib/editor/math';
 import { Mermaid } from '$lib/editor/mermaid';
 import SlashCommand from '$lib/editor/slash-command';
@@ -105,7 +105,7 @@ export function createEditorExtensions({
 				spellcheck: 'false'
 			}
 		}),
-		Table.configure({
+		TableMarkdown.configure({
 			resizable: true,
 			lastColumnResizable: true,
 			allowTableNodeSelection: true
