@@ -1,3 +1,4 @@
+use crate::ai::config::LlmConfig;
 use crate::crypto;
 use crate::s3::S3Config;
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
@@ -14,6 +15,8 @@ pub struct AppSettings {
     pub auto_sync: Option<bool>,
     #[serde(default)]
     pub conflict_strategy: Option<String>,
+    #[serde(default)]
+    pub llm: Option<LlmConfig>,
 }
 
 /// Save settings encrypted to disk at {vault_path}/.margin/settings.enc
@@ -92,6 +95,9 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
         && strategy != "keep_newer"
     {
         return Err(format!("Unknown conflict strategy: {strategy}"));
+    }
+    if let Some(llm) = &settings.llm {
+        crate::ai::config::validate(llm)?;
     }
     Ok(())
 }

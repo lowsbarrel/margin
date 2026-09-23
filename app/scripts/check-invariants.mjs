@@ -64,6 +64,7 @@ if (existsSync('src-tauri/src/lib.rs')) {
 // A raw invoke() bypasses the types, so the signature can drift silently.
 const INVOKE_ALLOW = new Set([
 	'src/lib/bindings.ts',
+	'src/lib/ai/bridge.ts',
 	'src/lib/crypto/bridge.ts',
 	'src/lib/fs/bridge.ts',
 	'src/lib/s3/bridge.ts'
@@ -78,7 +79,9 @@ walk('src', ['.ts', '.svelte'], (p, c) => {
 });
 
 // Untrusted note content reaches the DOM; {@html} is where that becomes XSS.
-const HTML_ALLOW = new Set(['src/lib/components/SidebarSearch.svelte']);
+// Nothing is allowlisted: notes render through ProseMirror, and the AI answer
+// goes through markdown-it with raw HTML disabled.
+const HTML_ALLOW = new Set();
 walk('src', ['.svelte'], (p, c) => {
 	if (/\{@html\b/.test(c) && !HTML_ALLOW.has(rel(p))) {
 		fail(
