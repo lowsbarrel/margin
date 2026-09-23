@@ -55,9 +55,6 @@
 				api_key: apiKey.trim(),
 				model: model.trim()
 			});
-			// A first-time setup has no model typed yet; the list's first entry is
-			// a better default than an empty field.
-			if (!model) model = models[0] ?? '';
 		} catch (err) {
 			modelsError = m.settings_ai_models_failed({ error: String(err) });
 		} finally {
@@ -97,18 +94,21 @@
 	</Field>
 
 	<Field label={m.settings_ai_model()} forId="aiModel">
+		<!-- A datalist rather than a select: hosted routers list hundreds of models,
+		     so the field stays typeable and filters the loaded list as you type. -->
+		<Input
+			id="aiModel"
+			bind:value={model}
+			placeholder={m.settings_ai_model_placeholder()}
+			list={models.length > 0 ? 'aiModelOptions' : undefined}
+			mono
+		/>
 		{#if models.length > 0}
-			<select
-				class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-mono text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
-				id="aiModel"
-				bind:value={model}
-			>
+			<datalist id="aiModelOptions">
 				{#each models as id (id)}
-					<option value={id}>{id}</option>
+					<option value={id}></option>
 				{/each}
-			</select>
-		{:else}
-			<Input id="aiModel" bind:value={model} placeholder={m.settings_ai_model_placeholder()} mono />
+			</datalist>
 		{/if}
 	</Field>
 

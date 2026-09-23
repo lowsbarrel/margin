@@ -70,7 +70,7 @@ pub fn llm_configure(config: LlmConfig, state: State<'_, LlmState>) -> Result<()
 #[tauri::command]
 #[specta::specta]
 pub async fn llm_list_models(config: LlmConfig) -> Result<Vec<String>, String> {
-    config::validate(&config)?;
+    config::validate_endpoint(&config)?;
     provider::list_models(&config)
         .await
         .map_err(|e| e.message())
