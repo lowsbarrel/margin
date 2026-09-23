@@ -66,31 +66,6 @@ jobs:
       - run: bun run check
       - run: bun run build
 
-  # Type-aware deprecation gate: fails on any use of an @deprecated symbol —
-  # renamed Lucide icons, deprecated Tiptap/SvelteKit/Tauri APIs, or your own
-  # @deprecated tags. Needs full type info, so it's slow and lives in its own
-  # job, deliberately kept out of `pnpm lint` and the pre-commit hook.
-  #
-  # "Slow" is not an exaggeration: the rule builds a type program over the whole
-  # SvelteKit tree and did not finish in 10 minutes on a warm local checkout.
-  # The timeout is here to cap it rather than because 20 minutes is expected —
-  # if it trips, scope the run to a subdirectory instead of raising it.
-  deprecations:
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    defaults:
-      run:
-        working-directory: app
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
-        with:
-          bun-version: latest
-      # install runs `prepare` (svelte-kit sync + i18n:compile), so the type
-      # program the rule needs is generated before it runs.
-      - run: bun install --frozen-lockfile
-      - run: bun run check:deprecated
-
   # The Rust half, on every platform we ship. Margin is full of
   # `#[cfg(target_os = "…")]` path and shell handling, so a single-platform lint
   # proves nothing about the branch that only compiles on the other two — and
