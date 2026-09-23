@@ -1,6 +1,5 @@
 import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import type { FsEntry, TreeEntry } from '$lib/fs/bridge';
-import { favourites } from '$lib/stores/favourites.svelte';
 import { clipboard } from '$lib/stores/clipboard.svelte';
 import { files } from '$lib/stores/files.svelte';
 import * as m from '$lib/paraglide/messages.js';
@@ -43,13 +42,6 @@ export function buildMenuItems(target: MenuTarget, handlers: MenuHandlers): Cont
 			{ label: m.sidebar_new_canvas(), onclick: () => handlers.onNewCanvas(entry.path) },
 			{ label: m.sidebar_new_folder(), onclick: () => handlers.onNewFolder(entry.path) }
 		);
-	} else {
-		items.push({
-			label: favourites.isFavourite(entry.path)
-				? m.sidebar_remove_favourite()
-				: m.sidebar_add_favourite(),
-			onclick: () => favourites.toggle(entry.path)
-		});
 	}
 	items.push(
 		{ label: m.sidebar_copy(), onclick: () => handlers.onCopy(entry) },

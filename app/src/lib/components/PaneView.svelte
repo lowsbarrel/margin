@@ -6,7 +6,6 @@
 	import Editor from '$lib/components/Editor.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import CanvasEditor from '$lib/components/CanvasEditor.svelte';
-	import GraphView from '$lib/components/GraphView.svelte';
 	import { X, ChevronRight, Pin } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import { handleTabMouseDown } from '$lib/utils/tab-drag';
@@ -14,7 +13,6 @@
 	let {
 		pane,
 		paneIndex,
-		onfileselect,
 		onrename,
 		onwikilink,
 		ontabcontextmenu,
@@ -25,7 +23,6 @@
 	}: {
 		pane: Pane;
 		paneIndex: number;
-		onfileselect: (path: string, searchText?: string) => void;
 		onrename: (from: string, to: string, isDir?: boolean) => void;
 		onwikilink: (title: string) => void;
 		ontabcontextmenu: (e: MouseEvent, paneIndex: number, tabIndex: number) => void;
@@ -204,10 +201,6 @@
 						panes.broadcastContent(paneIndex, paneActiveTab.path, content);
 					}}
 				/>
-			{/key}
-		{:else if paneActiveTab.type === 'graph'}
-			{#key paneActiveTab.id}
-				<GraphView {onfileselect} />
 			{/key}
 		{/if}
 	{:else}

@@ -66,8 +66,8 @@ A fact is defined once and imported everywhere else.
 - User-facing strings go through Paraglide. Both `en` and `it` are maintained —
   a key added to one and not the other falls back silently.
 - `{@html}` is XSS on note content. It is allowlisted in one file.
-- Heavy work belongs off the main thread: Rust for CPU-bound work, a Web Worker
-  for graph layout. Never block the editor.
+- Heavy work belongs off the main thread: Rust for CPU-bound work. Never block
+  the editor.
 - Heavy editor dependencies load through dynamic `import()`. A top-level import
   of a browser-only package crashes to a blank screen, because `ssr = false`
   hides it until runtime.
