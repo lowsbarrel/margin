@@ -1,5 +1,6 @@
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { getCurrentWindow } from '@tauri-apps/api/window';
+import { IS_WINDOWS } from '$lib/utils/platform';
 import { drag } from '$lib/stores/drag.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { files } from '$lib/stores/files.svelte';
@@ -40,27 +41,31 @@ export function clearExternalEditorHandlers(handlers: ExternalEditorHandlers) {
 /**
  * Route OS drag-drop events to the tree, the editor, or nowhere.
  *
- * Tauri reports the position in physical pixels (`DragDropEvent.position` is a
- * `PhysicalPosition`), while `elementFromPoint` and `getBoundingClientRect` work
- * in CSS pixels. On a 2× display an unconverted point lands twice as far right
- * and down as the user's cursor, so every hit-test — and the sidebar's old
- * bounds check — was wrong on retina. The conversion happens once, here.
+ * `DragDropEvent.position` is typed `PhysicalPosition`, but wry fills it from
+ * the platform: on macOS (`draggingLocation`, points) and Linux (GTK widget
+ * coordinates) it is already in CSS pixels; only Windows (`ScreenToClient`)
+ * reports device pixels. Dividing the macOS value by the 2× retina factor put
+ * the target half as far down as the cursor. The conversion happens once, here.
  */
 export async function installExternalDropRouter(): Promise<() => void> {
-	let scaleFactor = await getCurrentWindow()
-		.scaleFactor()
-		.catch(() => window.devicePixelRatio);
+	let scaleFactor = IS_WINDOWS
+		? await getCurrentWindow()
+				.scaleFactor()
+				.catch(() => window.devicePixelRatio)
+		: 1;
 
 	// A window dragged to a display with a different pixel ratio keeps reporting
-	// physical pixels at the new ratio; without this every hit-test would drift
+	// device pixels at the new ratio; without this every hit-test would drift
 	// again until restart.
 	let unlistenScale: (() => void) | null = null;
-	try {
-		unlistenScale = await getCurrentWindow().onScaleChanged(({ payload }) => {
-			scaleFactor = payload.scaleFactor;
-		});
-	} catch (err) {
-		console.warn('Failed to watch the window scale factor:', err);
+	if (IS_WINDOWS) {
+		try {
+			unlistenScale = await getCurrentWindow().onScaleChanged(({ payload }) => {
+				scaleFactor = payload.scaleFactor;
+			});
+		} catch (err) {
+			console.warn('Failed to watch the window scale factor:', err);
+		}
 	}
 
 	const unlistenDrop = await getCurrentWebview().onDragDropEvent((event) => {

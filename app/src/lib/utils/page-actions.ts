@@ -8,6 +8,7 @@ import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import {
 	deleteEntry,
+	fileExists,
 	unwatchFile,
 	unwatchVault,
 	renameEntry,
@@ -74,26 +75,28 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
 	}
 }
 
+/** Drop every tab, active-file pointer and selected folder that refers to `path`. */
+function forgetEntry(path: string, isDir: boolean) {
+	panes.removePaths(path, isDir);
+	if (
+		files.activeFile &&
+		(files.activeFile === path || (isDir && files.activeFile.startsWith(`${path}/`)))
+	) {
+		files.setActiveFile(null);
+	}
+	if (
+		files.selectedFolder &&
+		(files.selectedFolder === path || (isDir && files.selectedFolder.startsWith(`${path}/`)))
+	) {
+		files.setSelectedFolder(vault.vaultPath);
+	}
+}
+
 export async function handleDelete(path: string, isDir: boolean) {
 	if (!vault.vaultPath) return;
 	try {
 		await unwatchFile();
-
-		panes.removePaths(path, isDir);
-
-		if (
-			files.activeFile &&
-			(files.activeFile === path || (isDir && files.activeFile.startsWith(`${path}/`)))
-		) {
-			files.setActiveFile(null);
-		}
-		if (
-			files.selectedFolder &&
-			(files.selectedFolder === path || (isDir && files.selectedFolder.startsWith(`${path}/`)))
-		) {
-			files.setSelectedFolder(vault.vaultPath);
-		}
-
+		forgetEntry(path, isDir);
 		await deleteEntry(path);
 		await files.refresh(vault.vaultPath);
 		await panes.restoreWatchingForPane(panes.activePaneIndex);
@@ -101,6 +104,27 @@ export async function handleDelete(path: string, isDir: boolean) {
 		console.error('Delete failed:', err);
 		throw err;
 	}
+}
+
+/**
+ * Close what an OS drag moved out of the vault. The file manager performed the
+ * move, so only the app's view of it changes. Returns the entries still on disk.
+ */
+export async function reconcileMovedOut(
+	entries: { path: string; isDir: boolean }[]
+): Promise<{ path: string; isDir: boolean }[]> {
+	if (!vault.vaultPath) return [];
+	const remaining: { path: string; isDir: boolean }[] = [];
+	const gone: { path: string; isDir: boolean }[] = [];
+	for (const entry of entries) {
+		((await fileExists(entry.path)) ? remaining : gone).push(entry);
+	}
+	if (gone.length === 0) return remaining;
+	await unwatchFile();
+	for (const entry of gone) forgetEntry(entry.path, entry.isDir);
+	await files.refresh(vault.vaultPath);
+	await panes.restoreWatchingForPane(panes.activePaneIndex);
+	return remaining;
 }
 
 /**

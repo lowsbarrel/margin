@@ -503,7 +503,6 @@
 				onrenameentry={(from, to, isDir) => handleRename(from, to, isDir)}
 				ondeleteentry={(path, isDir) => handleDelete(path, isDir)}
 				panelOpen={sidebarOpen}
-				ontoggle={() => (sidebarOpen = !sidebarOpen)}
 				bind:panelWidth={sidebarWidth}
 			/>
 

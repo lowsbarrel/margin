@@ -1,8 +1,9 @@
 import { drag } from '$lib/stores/drag.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { startPointerDrag } from '$lib/utils/drag-handler';
+import { reconcileMovedOut } from '$lib/utils/page-actions';
 import { startDrag as startNativeDrag } from '@crabnebula/tauri-plugin-drag';
-import type { TreeEntry } from '$lib/fs/bridge';
+import { onVaultFsChanged, type TreeEntry } from '$lib/fs/bridge';
 
 /**
  * How long the pointer must stay outside the window before an in-app drag is
@@ -12,6 +13,8 @@ import type { TreeEntry } from '$lib/fs/bridge';
  */
 const NATIVE_DRAG_EXIT_DWELL_MS = 250;
 const NATIVE_DRAG_END_SETTLE_MS = 100;
+/** How long to wait for the file manager to finish a move it reported as dropped. */
+const MOVE_OUT_SETTLE_MS = 10_000;
 
 /** When the pointer was first seen outside the window during the current drag. */
 let outsideSince: number | null = null;
@@ -86,19 +89,17 @@ export async function moveEntriesInto(
 /**
  * Start a native OS drag once the pointer has deliberately left the window.
  *
- * A drop outside the window is a copy: the OS hands the target application a
- * copy of the file. The vault entry is never removed — the OS reports `Dropped`
- * for both copy and move gestures, so treating a drop as a move deleted notes
- * the user had merely dragged somewhere.
+ * The drag offers a move, so dropping on the Finder/Explorer moves the entry
+ * out of the vault. The file manager performs the move; the app deletes
+ * nothing itself, so a target that only reads the file leaves it in place.
+ * Afterwards the app closes whatever actually left the vault.
  *
  * "Deliberately left" is the pointer strictly outside the viewport bounds
  * (`clientX < 0 || clientX >= innerWidth || clientY < 0 || clientY >=
  * innerHeight`) for {@link NATIVE_DRAG_EXIT_DWELL_MS}. Neither the boundary
- * point nor a one-frame excursion counts, so a drag toward the sidebar rail can
- * no longer convert mid-gesture. The cost of the rule is that if the webview
- * stops delivering mousemove as soon as the pointer leaves, the native drag is
- * never started — the failure mode is a gesture that stays in-app, which is
- * strictly better than one that silently abandons its own drop target.
+ * point nor a one-frame excursion counts. If the webview stops delivering
+ * mousemove as soon as the pointer leaves, the native drag is never started,
+ * and the gesture stays in-app.
  */
 export function tryNativeDrag(
 	clientX: number,
@@ -134,10 +135,10 @@ export function tryNativeDrag(
 	drag.end();
 	drag.startNativeDrag();
 
-	const paths =
+	const entries: { path: string; isDir: boolean }[] =
 		files.selectedEntries.size > 1 && files.isSelected(item.path)
-			? files.getSelectedPaths()
-			: [item.path];
+			? files.getSelectedAsList()
+			: [{ path: item.path, isDir: item.isDir }];
 
 	let finished = false;
 	function finishNativeDrag() {
@@ -149,11 +150,40 @@ export function tryNativeDrag(
 		}, NATIVE_DRAG_END_SETTLE_MS);
 	}
 
-	startNativeDrag({ item: paths, icon: dragIconPath }, () => {
-		finishNativeDrag();
-	}).catch(() => {
+	// Land any debounced save now: once the file manager has moved the note, a
+	// late write would recreate it at its old path.
+	window.dispatchEvent(new Event('margin:flush'));
+	startNativeDrag(
+		{ item: entries.map((entry) => entry.path), icon: dragIconPath, mode: 'move' },
+		({ result }) => {
+			finishNativeDrag();
+			if (result === 'Dropped') void settleMovedOut(entries);
+		}
+	).catch(() => {
 		finishNativeDrag();
 	});
+}
+
+/**
+ * Reconcile a drop outside the window. A file manager may report the drop
+ * before it finishes moving, so anything still on disk is checked again on the
+ * next filesystem change.
+ */
+async function settleMovedOut(entries: { path: string; isDir: boolean }[]) {
+	const remaining = await reconcileMovedOut(entries);
+	if (remaining.length === 0) return;
+	let settled = false;
+	const unlisten = await onVaultFsChanged(() => {
+		if (settled) return;
+		settled = true;
+		unlisten();
+		void reconcileMovedOut(remaining);
+	});
+	window.setTimeout(() => {
+		if (settled) return;
+		settled = true;
+		unlisten();
+	}, MOVE_OUT_SETTLE_MS);
 }
 
 export function startDragEntry(e: MouseEvent, entry: TreeEntry, onDragStart: () => void) {

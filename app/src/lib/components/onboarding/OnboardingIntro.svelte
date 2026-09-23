@@ -5,7 +5,7 @@
 	import { ArrowLeft, ArrowRight } from '@lucide/svelte';
 	import { Button } from '$lib/ui';
 	import { motion } from '$lib/stores/motion.svelte';
-	import LogoMark from './LogoMark.svelte';
+	import LogoMark from '$lib/components/LogoMark.svelte';
 	import IntroArtFiles from './IntroArtFiles.svelte';
 	import IntroArtPassphrase from './IntroArtPassphrase.svelte';
 	import IntroArtSync from './IntroArtSync.svelte';
@@ -103,7 +103,7 @@
 
 <div class="flex w-full flex-col items-center">
 	<div class="mb-6 flex flex-col items-center gap-1 text-accent-foreground">
-		<LogoMark size={54} />
+		<LogoMark size={54} animated />
 		<h1 class="font-sans text-xl font-bold tracking-[0.08em] text-foreground">{m.app_name()}</h1>
 	</div>
 
