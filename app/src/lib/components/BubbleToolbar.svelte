@@ -235,7 +235,7 @@
 		<button class={TOOLBAR_BTN} data-cmd="code" title={m.bubble_code()}>
 			<code class="font-mono text-xs">&lt;/&gt;</code>
 		</button>
-		<span class="mx-[3px] h-4.5 w-px bg-border"></span>
+		<span class="mx-0.75 h-4.5 w-px bg-border"></span>
 		<span class="relative flex items-center">
 			<select
 				class="h-6.5 cursor-pointer appearance-none rounded-xs border border-border bg-surface-2 py-0 pr-4.5 pl-1.5 text-xs text-foreground hover:border-input"
@@ -260,7 +260,7 @@
 			</select>
 			<ChevronDown size={12} class="pointer-events-none absolute right-1 text-muted-foreground" />
 		</span>
-		<span class="mx-[3px] h-4.5 w-px bg-border"></span>
+		<span class="mx-0.75 h-4.5 w-px bg-border"></span>
 		<button class={TOOLBAR_BTN} data-cmd="link" title={m.bubble_link()}>
 			<svg
 				width="16"

@@ -42,7 +42,7 @@
 	// `@layer base` button rule gives every bare <button> 8px/14px padding and an
 	// 8px radius, which would inflate these 30px icon buttons.
 	const TOOL_BTN =
-		'flex size-[30px] min-h-[30px] min-w-[30px] shrink-0 items-center justify-center rounded-xs bg-transparent p-0 [transition:background_var(--transition-fast),color_var(--transition-fast)]';
+		'flex size-7.5 min-h-7.5 min-w-7.5 shrink-0 items-center justify-center rounded-xs bg-transparent p-0 [transition:background_var(--transition-fast),color_var(--transition-fast)]';
 
 	// Active and hover states are emitted as alternatives rather than stacked,
 	// mirroring the original CSS where `.active` was declared after `:hover` and
@@ -58,7 +58,7 @@
 	// `box-sizing: content-box` did. The transition names `scale` rather than
 	// `transform` because Tailwind's `scale-*` sets the `scale` property.
 	const SWATCH =
-		'size-[18px] min-h-[18px] min-w-[18px] shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
+		'size-4.5 min-h-4.5 min-w-4.5 shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
 
 	const swatchCls = (active: boolean) =>
 		`${SWATCH} ${active ? 'border-foreground scale-115' : 'border-transparent hover:scale-120'}`;
@@ -69,7 +69,7 @@
 {/snippet}
 
 <div
-	class="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-32px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-sm border border-border bg-background px-2.5 py-1.5 shadow-[var(--shadow-lg)] select-none"
+	class="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-32px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-sm border border-border bg-background px-2.5 py-1.5 shadow-(--shadow-lg) select-none"
 >
 	<div class="flex shrink-0 items-center gap-0.5">
 		<button
@@ -133,7 +133,7 @@
 
 	{@render sep()}
 
-	<div class="flex shrink-0 items-center gap-[3px]">
+	<div class="flex shrink-0 items-center gap-0.75">
 		{#each colorPresets as c (c)}
 			<!-- `style:background` is canvas data (the pen colour), not theming. -->
 			<button
@@ -159,7 +159,7 @@
 			max={tool === 'eraser' ? 60 : tool === 'text' ? 72 : 30}
 			value={currentSize}
 			oninput={(e) => onSizeChange(Number(e.currentTarget.value))}
-			class="w-20 min-w-[60px] cursor-pointer accent-foreground"
+			class="w-20 min-w-15 cursor-pointer accent-foreground"
 		/>
 	</div>
 

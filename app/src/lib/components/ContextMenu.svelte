@@ -76,7 +76,7 @@
      `src/app.css`'s unlayered bare-`button` rule, which outranks utilities on
      the properties it sets (padding, weight, disabled cursor). -->
 <div
-	class="surface-popover fixed z-[200] min-w-44 p-1 outline-none"
+	class="surface-popover fixed z-200 min-w-44 p-1 outline-none"
 	bind:this={menuEl}
 	style:left={`${left}px`}
 	style:top={`${top}px`}
@@ -85,7 +85,7 @@
 >
 	{#each items as item (item.label)}
 		<button
-			class="block w-full rounded-sm px-2.5 py-[7px] text-left text-sm font-normal tracking-normal transition-colors disabled:cursor-default disabled:opacity-40 {item.destructive
+			class="block w-full rounded-sm px-2.5 py-1.75 text-left text-sm font-normal tracking-normal transition-colors disabled:cursor-default disabled:opacity-40 {item.destructive
 				? 'text-destructive enabled:hover:bg-destructive/10'
 				: 'text-muted-foreground enabled:hover:bg-surface-1 enabled:hover:text-foreground'}"
 			disabled={item.disabled}

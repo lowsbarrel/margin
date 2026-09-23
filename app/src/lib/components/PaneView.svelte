@@ -61,7 +61,7 @@
 	 */
 	function dropZoneClass(zone: 'left' | 'center' | 'right', fileDrag: boolean, active: boolean) {
 		if (zone === 'center') {
-			return `${DROP_ZONE_BASE} flex-[40] ${active ? 'bg-brand/22' : ''}`;
+			return `${DROP_ZONE_BASE} flex-40 ${active ? 'bg-brand/22' : ''}`;
 		}
 		if (fileDrag) {
 			const edge = zone === 'left' ? 'border-r-2' : 'border-l-2';
@@ -70,7 +70,7 @@
 			}`;
 		}
 		const edge = zone === 'left' ? 'border-r' : 'border-l';
-		return `${DROP_ZONE_BASE} flex-[30] border-dashed border-brand/40 ${edge} ${
+		return `${DROP_ZONE_BASE} flex-30 border-dashed border-brand/40 ${edge} ${
 			active ? 'bg-brand/22' : ''
 		}`;
 	}
@@ -83,7 +83,7 @@
 <!-- Tab Bar -->
 <div class="flex h-10 min-h-10 items-center overflow-hidden border-b border-border bg-surface-1">
 	<div
-		class="flex flex-1 [scrollbar-width:none] overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
+		class="flex flex-1 scrollbar-none overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
 	>
 		{#each pane.tabs as tab, i (tab.id)}
 			<div
@@ -108,7 +108,7 @@
 				{/if}
 				<span class="max-w-40 min-w-0 shrink truncate">{fileTitle(tab.path)}</span>
 				<button
-					class="flex size-[18px] shrink-0 cursor-pointer items-center justify-center rounded-xs p-0 text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
+					class="flex size-4.5 shrink-0 cursor-pointer items-center justify-center rounded-xs p-0 text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
 					onclick={(e) => {
 						e.stopPropagation();
 						panes.closeTab(paneIndex, i);
@@ -124,7 +124,7 @@
 	{#if panes.list.length > 1}
 		<div class="flex h-full shrink-0 items-center gap-0.5 border-l border-border px-1.5">
 			<button
-				class="flex size-[26px] cursor-pointer items-center justify-center rounded-sm p-0 text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
+				class="flex size-6.5 cursor-pointer items-center justify-center rounded-sm p-0 text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
 				onclick={(e) => {
 					e.stopPropagation();
 					panes.closePane(paneIndex);
@@ -140,7 +140,7 @@
 <!-- Breadcrumbs -->
 {#if paneActiveTab && paneCrumbs.length > 0}
 	<div
-		class="flex min-h-[30px] items-center gap-1 overflow-x-auto border-b border-border bg-background px-4 py-1.5 text-xs whitespace-nowrap text-subtle-foreground"
+		class="flex min-h-7.5 items-center gap-1 overflow-x-auto border-b border-border bg-background px-4 py-1.5 text-xs whitespace-nowrap text-subtle-foreground"
 	>
 		<!-- Keyed on the path prefix each crumb stands for: crumb labels alone can
 		     repeat within one path (`notes/ideas/notes`), but prefixes cannot. -->
@@ -224,7 +224,7 @@
 	{@const rightActive = dropTarget?.paneIndex === paneIndex && dropTarget.zone === 'right'}
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="pointer-events-none absolute inset-0 z-[100] flex {fileDrag
+		class="pointer-events-none absolute inset-0 z-100 flex {fileDrag
 			? 'justify-between'
 			: 'bg-brand/6'}"
 	>
@@ -235,7 +235,7 @@
 			onmouseleave={() => ondropleave(paneIndex, 'left')}
 		>
 			<span
-				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-[3px] text-xs font-medium text-accent-foreground transition-opacity {leftActive
+				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {leftActive
 					? 'opacity-100'
 					: 'opacity-0'}">Split Left</span
 			>
@@ -248,7 +248,7 @@
 				onmouseleave={() => ondropleave(paneIndex, 'center')}
 			>
 				<span
-					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-[3px] text-xs font-medium text-accent-foreground transition-opacity {centerActive
+					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {centerActive
 						? 'opacity-100'
 						: 'opacity-0'}">Move Here</span
 				>
@@ -261,7 +261,7 @@
 			onmouseleave={() => ondropleave(paneIndex, 'right')}
 		>
 			<span
-				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-[3px] text-xs font-medium text-accent-foreground transition-opacity {rightActive
+				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {rightActive
 					? 'opacity-100'
 					: 'opacity-0'}">Split Right</span
 			>

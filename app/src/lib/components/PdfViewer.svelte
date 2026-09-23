@@ -141,7 +141,7 @@
 		<div class="pdf-pages flex flex-col items-center gap-2 p-4" bind:this={containerEl}>
 			{#each pages as page (page.num)}
 				<div
-					class="pdf-page-wrapper max-w-full rounded-xs shadow-[var(--shadow-md)]"
+					class="pdf-page-wrapper max-w-full rounded-xs shadow-(--shadow-md)"
 					data-page-num={page.num}
 					style:width="{page.width}px"
 					style:height="{page.height}px"

@@ -41,7 +41,7 @@
 		'hover:bg-muted hover:text-foreground',
 		'disabled:pointer-events-none disabled:opacity-40',
 		'[&.spin]:animate-spin',
-		size === 'sm' ? 'size-[26px]' : 'size-8',
+		size === 'sm' ? 'size-6.5' : 'size-8',
 		active && 'bg-accent text-accent-foreground',
 		extraClass
 	)}
