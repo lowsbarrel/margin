@@ -17,7 +17,6 @@ export { flushWriteQueue };
 export type {
 	Backlink,
 	FsEntry,
-	LinkEntry,
 	TreeEntry,
 	SearchHit,
 	TagInfo,
@@ -28,7 +27,6 @@ export type {
 import type {
 	Backlink,
 	FsEntry,
-	LinkEntry,
 	TreeEntry,
 	SearchHit,
 	TagInfo,
@@ -268,13 +266,6 @@ export async function setMtime(path: string, mtime: number): Promise<void> {
  */
 export async function listAllTags(root: string): Promise<TagInfo[]> {
 	const r = await commands.indexTags(root);
-	if (r.status === 'error') throw r.error;
-	return r.data;
-}
-
-/** Every note's outgoing [[wiki-links]] — the whole graph in one query. */
-export async function listAllLinks(root: string): Promise<LinkEntry[]> {
-	const r = await commands.indexLinks(root);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }

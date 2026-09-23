@@ -39,14 +39,6 @@ pub struct TagInfo {
     pub files: Vec<String>,
 }
 
-/// Every `[[wiki-link]]` out of one note. Titles keep their original case —
-/// the graph uses them as node ids.
-#[derive(Serialize, specta::Type)]
-pub struct LinkEntry {
-    pub path: String,
-    pub links: Vec<String>,
-}
-
 /// A note that links *to* the one being viewed.
 #[derive(Debug, Serialize, specta::Type)]
 pub struct Backlink {
@@ -58,7 +50,10 @@ pub struct Backlink {
 /// and links are only written when a note is (re)indexed, so a vault built by
 /// an older schema would otherwise keep serving empty tag and backlink results
 /// forever — `rebuild` skips unchanged files, and every file is unchanged.
-const SCHEMA_VERSION: i64 = 2;
+///
+/// The index is disposable, so a bump drops the tables rather than migrating
+/// them: SQLite cannot drop a column that is part of a primary key.
+const SCHEMA_VERSION: i64 = 3;
 
 fn db_path(root: &str) -> std::path::PathBuf {
     Path::new(root).join(".margin").join("index.sqlite")
@@ -75,8 +70,27 @@ fn open_db(root: &str) -> Result<Connection, String> {
     conn.execute_batch(
         "PRAGMA busy_timeout = 5000;
          PRAGMA journal_mode = WAL;
-         PRAGMA synchronous = NORMAL;
-         CREATE TABLE IF NOT EXISTS notes (
+         PRAGMA synchronous = NORMAL;",
+    )
+    .map_err(|e| format!("Failed to configure index db: {e}"))?;
+
+    let version: i64 = conn
+        .query_row("PRAGMA user_version", [], |r| r.get(0))
+        .unwrap_or(0);
+    if version < SCHEMA_VERSION {
+        conn.execute_batch(
+            "DROP TABLE IF EXISTS notes;
+             DROP TABLE IF EXISTS notes_fts;
+             DROP TABLE IF EXISTS tags;
+             DROP TABLE IF EXISTS links;",
+        )
+        .map_err(|e| format!("Failed to reset index: {e}"))?;
+        conn.pragma_update(None, "user_version", SCHEMA_VERSION)
+            .map_err(|e| format!("Failed to stamp index schema: {e}"))?;
+    }
+
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS notes (
              path  TEXT PRIMARY KEY,
              name  TEXT NOT NULL,
              mtime INTEGER NOT NULL,
@@ -96,28 +110,13 @@ fn open_db(root: &str) -> Result<Connection, String> {
          CREATE INDEX IF NOT EXISTS tags_tag ON tags (tag);
          CREATE TABLE IF NOT EXISTS links (
              src       TEXT NOT NULL,
-             target    TEXT NOT NULL,
              target_lc TEXT NOT NULL,
-             PRIMARY KEY (src, target)
+             PRIMARY KEY (src, target_lc)
          );
          CREATE INDEX IF NOT EXISTS links_target_lc ON links (target_lc);",
     )
     .map_err(|e| format!("Failed to init index schema: {e}"))?;
 
-    let version: i64 = conn
-        .query_row("PRAGMA user_version", [], |r| r.get(0))
-        .unwrap_or(0);
-    if version < SCHEMA_VERSION {
-        conn.execute_batch(
-            "DELETE FROM notes;
-             DELETE FROM notes_fts;
-             DELETE FROM tags;
-             DELETE FROM links;",
-        )
-        .map_err(|e| format!("Failed to reset index: {e}"))?;
-        conn.pragma_update(None, "user_version", SCHEMA_VERSION)
-            .map_err(|e| format!("Failed to stamp index schema: {e}"))?;
-    }
     Ok(conn)
 }
 
@@ -166,12 +165,11 @@ fn upsert(
 
     conn.execute("DELETE FROM links WHERE src = ?1", params![path])?;
     for link in crate::text::parse_wiki_links(body) {
-        // Stored both ways: the graph keys nodes on the title as written, while
-        // backlink lookup has to be case-insensitive.
-        let lower = link.title.to_lowercase();
+        // Resolution is by filename stem and case-insensitive, so the folded
+        // title is the only form worth keeping.
         conn.execute(
-            "INSERT OR IGNORE INTO links (src, target, target_lc) VALUES (?1, ?2, ?3)",
-            params![path, link.title, lower],
+            "INSERT OR IGNORE INTO links (src, target_lc) VALUES (?1, ?2)",
+            params![path, link.title.to_lowercase()],
         )?;
     }
     Ok(())
@@ -473,45 +471,6 @@ pub fn index_tags(root: &str) -> Result<Vec<TagInfo>, String> {
     Ok(out)
 }
 
-/// Every wiki-link in the vault, grouped by source note — the whole graph in
-/// one query. Notes with no outgoing links are included so they still appear
-/// as nodes.
-#[tauri::command]
-#[specta::specta]
-pub fn index_links(root: &str) -> Result<Vec<LinkEntry>, String> {
-    let conn = open_db(root)?;
-
-    let mut by_src: HashMap<String, Vec<String>> = HashMap::new();
-    {
-        let mut stmt = conn
-            .prepare("SELECT path FROM notes")
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| r.get::<_, String>(0))
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            by_src.entry(row.map_err(|e| e.to_string())?).or_default();
-        }
-    }
-    {
-        let mut stmt = conn
-            .prepare("SELECT src, target FROM links ORDER BY src")
-            .map_err(|e| e.to_string())?;
-        let rows = stmt
-            .query_map([], |r| Ok((r.get::<_, String>(0)?, r.get::<_, String>(1)?)))
-            .map_err(|e| e.to_string())?;
-        for row in rows {
-            let (src, target) = row.map_err(|e| e.to_string())?;
-            by_src.entry(src).or_default().push(target);
-        }
-    }
-
-    Ok(by_src
-        .into_iter()
-        .map(|(path, links)| LinkEntry { path, links })
-        .collect())
-}
-
 /// The notes that link to `path`, by its filename stem — the same thing a
 /// `[[wiki-link]]` names. Matched case-insensitively, as link resolution is.
 #[tauri::command]
@@ -646,11 +605,48 @@ mod tests {
         assert_eq!(back.len(), 1, "expected alpha.md, got {back:?}");
         assert_eq!(back[0].name, "alpha.md");
 
-        // Image embeds are not links.
-        let links = index_links(&root_str).unwrap();
-        let alpha = crate::fs::path_to_string(root.join("alpha.md"));
-        let alpha_links = &links.iter().find(|e| e.path == alpha).unwrap().links;
-        assert_eq!(alpha_links, &vec!["Beta".to_string()]);
+        // Image embeds are not links: alpha.md carries `![[not-a-link.png]]`, so a
+        // note whose stem is `not-a-link.png` must report no backlinks.
+        let stem_match = crate::fs::path_to_string(root.join("not-a-link.png.md"));
+        assert!(
+            index_backlinks(&root_str, &stem_match).unwrap().is_empty(),
+            "image embeds must not become links"
+        );
+
+        std::fs::remove_dir_all(&root).ok();
+    }
+
+    /// An index written by an older schema must be rebuilt, not patched. The old
+    /// `links` table has a NOT NULL `target` column the new writes never fill, so
+    /// without the version bump replacing the table every later backlink lookup
+    /// would fail on a constraint error.
+    #[test]
+    fn an_older_index_schema_is_replaced_on_open() {
+        let root = temp_vault();
+        let root_str = crate::fs::path_to_string(root.clone());
+        std::fs::write(root.join("alpha.md"), "see [[Beta]]\n").unwrap();
+        std::fs::write(root.join("beta.md"), "#work\n").unwrap();
+
+        let conn = open_db(&root_str).unwrap();
+        conn.execute_batch(
+            "DROP TABLE links;
+             CREATE TABLE links (
+                 src       TEXT NOT NULL,
+                 target    TEXT NOT NULL,
+                 target_lc TEXT NOT NULL,
+                 PRIMARY KEY (src, target)
+             );
+             INSERT INTO links (src, target, target_lc) VALUES ('stale', 'legacy', 'legacy');",
+        )
+        .unwrap();
+        conn.pragma_update(None, "user_version", 2).unwrap();
+        drop(conn);
+
+        rebuild(&root_str).unwrap();
+
+        let beta = crate::fs::path_to_string(root.join("beta.md"));
+        let back = index_backlinks(&root_str, &beta).unwrap();
+        assert_eq!(back.len(), 1, "expected alpha.md, got {back:?}");
 
         std::fs::remove_dir_all(&root).ok();
     }

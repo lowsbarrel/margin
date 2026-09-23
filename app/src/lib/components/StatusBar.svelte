@@ -29,7 +29,8 @@
 		Settings,
 		RefreshCw,
 		ArrowLeftRight,
-		History
+		History,
+		PanelLeft
 	} from '$lib/components/movingicons';
 	import * as m from '$lib/paraglide/messages.js';
 
@@ -38,6 +39,8 @@
 		onsettings?: () => void;
 		onsync?: () => void;
 		onswitchvault?: () => void;
+		onsidebartoggle?: () => void;
+		sidebarOpen?: boolean;
 		onhistory?: () => void;
 		historyActive?: boolean;
 		onbacklinks?: () => void;
@@ -52,6 +55,8 @@
 		onsettings,
 		onsync,
 		onswitchvault,
+		onsidebartoggle,
+		sidebarOpen = false,
 		onhistory,
 		historyActive = false,
 		onbacklinks,
@@ -94,6 +99,16 @@
 	class="flex h-9 shrink-0 items-center justify-between gap-3 border-t border-border bg-surface-1 pr-2 pl-4 text-xs/5 tracking-normal text-subtle-foreground select-none"
 >
 	<div class="flex items-center gap-1.5">
+		{#if onsidebartoggle}
+			<IconButton
+				icon={PanelLeft}
+				size="sm"
+				onclick={onsidebartoggle}
+				title={sidebarOpen ? m.sidebar_close_panel() : m.sidebar_open_panel()}
+				active={sidebarOpen}
+			/>
+			<span class="text-hairline">·</span>
+		{/if}
 		<span class="tabular-nums">Ln {editor.cursorLine}, Col {editor.cursorCol}</span>
 		<span class="text-hairline">·</span>
 		<span class="tabular-nums">{m.statusbar_markdown()}</span>

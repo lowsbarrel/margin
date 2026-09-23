@@ -148,7 +148,6 @@ pub struct WorkspaceState {
     pub expanded_folders: Vec<String>,
     pub sidebar_open: bool,
     pub sidebar_width: f64,
-    pub sidebar_view: String,
     pub sort_order: String,
 }
 
@@ -221,5 +220,34 @@ mod tests {
         let back: WorkspaceTab = serde_json::from_str(&json).unwrap();
         assert_eq!(back.view_mode, "source");
         assert_eq!(back.cursor_pos, Some(12));
+    }
+
+    /// A workspace file written before the sidebar dropped its view switcher still
+    /// carries `sidebar_view`. It must keep loading: serde ignores the field the
+    /// struct no longer declares.
+    #[test]
+    fn workspace_state_ignores_the_removed_sidebar_view_field() {
+        let json = r#"{
+            "panes": [
+                {
+                    "tabs": [{ "path": "/v/a.md", "type": "markdown", "pinned": false, "cursor_pos": 3 }],
+                    "active_tab_index": 0
+                }
+            ],
+            "pane_flexes": [1.0],
+            "active_pane_index": 0,
+            "expanded_folders": ["/v/notes"],
+            "sidebar_open": true,
+            "sidebar_width": 280.0,
+            "sidebar_view": "files",
+            "sort_order": "name"
+        }"#;
+
+        let state: WorkspaceState = serde_json::from_str(json).expect("old payload must load");
+
+        assert_eq!(state.sidebar_width, 280.0);
+        assert_eq!(state.expanded_folders, vec!["/v/notes".to_string()]);
+        assert_eq!(state.panes[0].tabs[0].tab_type, "markdown");
+        assert_eq!(state.panes[0].tabs[0].cursor_pos, Some(3));
     }
 }

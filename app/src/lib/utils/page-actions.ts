@@ -1,11 +1,18 @@
 import { panes, remapPath } from '$lib/stores/panes.svelte';
 import { files } from '$lib/stores/files.svelte';
-import { favourites } from '$lib/stores/favourites.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { vault } from '$lib/stores/vault.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
-import { deleteEntry, unwatchFile, unwatchVault, renameEntry, searchFiles } from '$lib/fs/bridge';
+import {
+	deleteEntry,
+	unwatchFile,
+	unwatchVault,
+	renameEntry,
+	searchFiles,
+	writeFileBytes
+} from '$lib/fs/bridge';
+import { createUniqueFilePath } from '$lib/utils/sidebar-ops';
 import { renameHistory } from '$lib/history/bridge';
 import { flushEditorWrites } from '$lib/fs/writeQueue';
 import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
@@ -53,7 +60,6 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
 			if (files.selectedFolder) {
 				files.setSelectedFolder(remapPath(files.selectedFolder, oldPath, newPath, isDir));
 			}
-			favourites.renamePath(oldPath, newPath);
 			await files.refresh(vault.vaultPath);
 			await panes.restoreWatchingForPane(panes.activePaneIndex);
 		} catch (postErr) {
@@ -86,13 +92,55 @@ export async function handleDelete(path: string, isDir: boolean) {
 		}
 
 		await deleteEntry(path);
-		favourites.removePath(path);
 		await files.refresh(vault.vaultPath);
 		await panes.restoreWatchingForPane(panes.activePaneIndex);
 	} catch (err) {
 		console.error('Delete failed:', err);
 		throw err;
 	}
+}
+
+/**
+ * Folder a new note or folder lands in: the selected folder, else the folder of
+ * the active file, else the vault root.
+ */
+export function newEntryFolder(): string | null {
+	if (files.selectedFolder) return files.selectedFolder;
+	const active = files.activeFile;
+	if (active) return active.slice(0, active.lastIndexOf('/'));
+	return vault.vaultPath;
+}
+
+async function ensureFolderExpanded(path: string) {
+	const vaultPath = vault.vaultPath;
+	if (!vaultPath || path === vaultPath || files.expandedFolders.has(path)) return;
+	await files.expandFolder(path);
+}
+
+/** Create an empty note (or canvas, when `desiredName` names one) and open it. */
+export async function handleNewNote(folder?: string, desiredName?: string) {
+	const base = folder ?? newEntryFolder();
+	const vaultPath = vault.vaultPath;
+	if (!base || !vaultPath) return;
+
+	const path = await createUniqueFilePath(base, desiredName);
+	if (!path) return;
+
+	await writeFileBytes(path, new TextEncoder().encode(''));
+	await ensureFolderExpanded(base);
+	await files.refresh(vaultPath);
+	editor.markLocalChange();
+	files.requestTreeReveal(path);
+	await panes.openFile(path);
+}
+
+/** Start the inline "new folder" input inside `folder`. */
+export async function handleNewFolder(folder?: string) {
+	const base = folder ?? newEntryFolder();
+	if (!base || !vault.vaultPath) return;
+	await ensureFolderExpanded(base);
+	files.startNewFolder(base);
+	files.requestPendingNewFolderReveal(base);
 }
 
 export async function handleWikiLink(title: string) {

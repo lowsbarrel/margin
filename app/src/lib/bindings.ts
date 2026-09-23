@@ -97,12 +97,6 @@ export const commands = {
 	 */
 	indexTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("index_tags", { root })),
 	/**
-	 *  Every wiki-link in the vault, grouped by source note — the whole graph in
-	 *  one query. Notes with no outgoing links are included so they still appear
-	 *  as nodes.
-	 */
-	indexLinks: (root: string) => typedError<LinkEntry[], string>(__TAURI_INVOKE("index_links", { root })),
-	/**
 	 *  The notes that link to `path`, by its filename stem — the same thing a
 	 *  `[[wiki-link]]` names. Matched case-insensitively, as link resolution is.
 	 */
@@ -141,7 +135,6 @@ export const commands = {
 	expanded_folders: string[],
 	sidebar_open: boolean,
 	sidebar_width: number | null,
-	sidebar_view: string,
 	sort_order: string,
 } | null, string>(__TAURI_INVOKE("load_workspace_state", { vaultPath, encryptionKey })),
 	/**  Legacy compatibility: save_session now saves/updates a profile */
@@ -279,15 +272,6 @@ export type FuzzyEntry = {
 	path: string,
 };
 
-/**
- *  Every `[[wiki-link]]` out of one note. Titles keep their original case —
- *  the graph uses them as node ids.
- */
-export type LinkEntry = {
-	path: string,
-	links: string[],
-};
-
 export type Manifest = Manifest_Serialize | Manifest_Deserialize;
 
 export type ManifestEntry = ManifestEntry_Serialize | ManifestEntry_Deserialize;
@@ -411,7 +395,6 @@ export type WorkspaceState = {
 	expanded_folders: string[],
 	sidebar_open: boolean,
 	sidebar_width: number | null,
-	sidebar_view: string,
 	sort_order: string,
 };
 
