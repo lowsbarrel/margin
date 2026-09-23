@@ -58,6 +58,13 @@
 		}
 	}
 
+	// Capture: a scroll of the tree's inner viewport does not bubble, and leaving
+	// the menu floating over rows it no longer belongs to invites acting on an
+	// entry that has scrolled away.
+	function handleDocumentScroll() {
+		onclose();
+	}
+
 	async function runItem(item: ContextMenuItem) {
 		if (item.disabled) return;
 		onclose();
@@ -69,6 +76,7 @@
 	onmousedown={handleDocumentMouseDown}
 	oncontextmenu={handleDocumentContextMenu}
 	onkeydown={handleKeydown}
+	onscrollcapture={handleDocumentScroll}
 />
 
 <!-- Surface (solid fill, hairline border, shadow) comes from the shared

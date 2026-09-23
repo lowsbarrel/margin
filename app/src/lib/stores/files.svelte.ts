@@ -1,5 +1,6 @@
 import { SvelteSet } from 'svelte/reactivity';
-import { buildVisibleTree, buildSubtree, type TreeEntry } from '$lib/fs/bridge';
+import { buildVisibleTree, type TreeEntry } from '$lib/fs/bridge';
+import { remapPath } from '$lib/utils/path-remap';
 
 export type SortOrder = 'name' | 'date';
 export type TreeRevealTarget =
@@ -96,6 +97,23 @@ async function _rebuild(): Promise<void> {
 }
 
 /**
+ * Whether `path` is absent from the visible tree only because an ancestor is
+ * collapsed. Without this, collapsing a folder silently dropped every selected
+ * entry inside it on the next rebuild, and the following bulk action then
+ * operated on fewer files than the user had highlighted.
+ */
+function hiddenByCollapsedAncestor(path: string): boolean {
+	const index = pathIndex();
+	let slash = path.lastIndexOf('/');
+	while (slash > 0) {
+		const parent = path.slice(0, slash);
+		if (index.get(parent) !== undefined && !state.expandedFolders.has(parent)) return true;
+		slash = parent.lastIndexOf('/');
+	}
+	return false;
+}
+
+/**
  * Drop selected/active paths that no longer exist in the tree. Without this a
  * deleted or moved file keeps its highlight (and stays in the selection that
  * the next bulk action would operate on) until something else happens to clear
@@ -104,12 +122,18 @@ async function _rebuild(): Promise<void> {
 function _pruneSelection() {
 	const live = new Set(state.flatTree.map((r) => r.path));
 	if (selectedEntries.size > 0) {
-		const kept = [...selectedEntries].filter(([path]) => live.has(path));
+		const kept = [...selectedEntries].filter(
+			([path]) => live.has(path) || hiddenByCollapsedAncestor(path)
+		);
 		// Only replace the container when something was actually dropped, so an
 		// unaffected refresh doesn't invalidate every row reading `isSelected`.
 		if (kept.length !== selectedEntries.size) selectedEntries = selectionMap(kept);
 	}
-	if (state.lastSelectedPath && !live.has(state.lastSelectedPath)) {
+	if (
+		state.lastSelectedPath &&
+		!live.has(state.lastSelectedPath) &&
+		!hiddenByCollapsedAncestor(state.lastSelectedPath)
+	) {
 		state.lastSelectedPath = null;
 	}
 }
@@ -215,6 +239,31 @@ export const files = {
 		state.selectedFolder = path;
 	},
 
+	/**
+	 * Follow a rename/move. Expanded folders and the selection are keyed by path,
+	 * so without this a moved folder collapses (losing every expansion beneath it,
+	 * which the workspace snapshot then persists) and the old path stays selected.
+	 */
+	remapPaths(oldPath: string, newPath: string, isDir: boolean) {
+		const expanded = [...state.expandedFolders];
+		state.expandedFolders.clear();
+		for (const path of expanded) {
+			state.expandedFolders.add(remapPath(path, oldPath, newPath, isDir));
+		}
+
+		if (selectedEntries.size > 0) {
+			selectedEntries = selectionMap(
+				[...selectedEntries].map(([path, entry]) => {
+					const next = remapPath(path, oldPath, newPath, isDir);
+					return [next, { path: next, isDir: entry.isDir }] as const;
+				})
+			);
+		}
+		if (state.lastSelectedPath) {
+			state.lastSelectedPath = remapPath(state.lastSelectedPath, oldPath, newPath, isDir);
+		}
+	},
+
 	// ─── Multi-selection ───
 
 	get selectedEntries() {
@@ -307,24 +356,21 @@ export const files = {
 		this.selectSingle(path, isDir);
 	},
 
+	/**
+	 * Expand one folder.
+	 *
+	 * This used to splice the children of a single `build_subtree` result into
+	 * whatever `flatTree` held at that moment, outside the generation guard that
+	 * `_rebuild` applies. A double-click (click expands, click collapses) or a
+	 * watcher refresh landing mid-await therefore re-inserted children for a
+	 * folder that was no longer expanded, or inserted them twice — and the keyed
+	 * `{#each}` then threw on duplicate rows, blanking the sidebar. Rebuilding
+	 * under the guard replaces the whole list from one snapshot, so a stale
+	 * response is discarded instead of patched in.
+	 */
 	async expandFolder(path: string) {
 		state.expandedFolders.add(path);
-		const idx = state.flatTree.findIndex((r) => r.path === path);
-		if (idx !== -1 && state.vaultRoot) {
-			const parentDepth = state.flatTree[idx].depth;
-			const children = await buildSubtree(
-				path,
-				parentDepth + 1,
-				[...state.expandedFolders],
-				state.sortOrder
-			);
-			const next = [...state.flatTree];
-			next.splice(idx + 1, 0, ...children);
-			state.flatTree = next;
-			_pathIndexDirty = true;
-		} else {
-			await _rebuild();
-		}
+		await _rebuild();
 	},
 
 	async collapseAll() {
