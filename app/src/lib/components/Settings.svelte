@@ -6,6 +6,7 @@
 	import { startAutoSync, stopAutoSync, type ConflictStrategy } from '$lib/sync/s3sync';
 	import { GlassModal } from '$lib/ui';
 	import { listDirectory } from '$lib/fs/bridge';
+	import { resolveAttachmentFolder } from '$lib/editor/attachments';
 	import * as m from '$lib/paraglide/messages.js';
 	import { llmConfigure, type ApiFormat } from '$lib/ai/bridge';
 	import { ask } from '$lib/stores/ask.svelte';
@@ -21,9 +22,11 @@
 
 	interface Props {
 		onclose: () => void;
+		/** The attachments folder changed — the app hides it in the file tree. */
+		onattachmentschange?: (folder: string) => void;
 	}
 
-	let { onclose }: Props = $props();
+	let { onclose, onattachmentschange }: Props = $props();
 
 	let endpoint = $state('');
 	let bucket = $state('');
@@ -152,6 +155,7 @@
 				stopAutoSync();
 			}
 
+			onattachmentschange?.(resolveAttachmentFolder(settings.attachment_folder));
 			toast.success(m.toast_settings_saved());
 		} catch (err) {
 			toast.error(m.toast_save_failed({ error: String(err) }));

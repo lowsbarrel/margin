@@ -56,6 +56,7 @@
 	} from '$lib/utils/page-actions';
 	import { isModalOpen } from '$lib/utils/modal';
 	import { executeDrop, startDividerDrag } from '$lib/utils/tab-drag';
+	import { DEFAULT_ATTACHMENT_FOLDER, resolveAttachmentFolder } from '$lib/editor/attachments';
 
 	// Local UI state
 
@@ -66,7 +67,8 @@
 	let showBacklinks = $state(false);
 	let sidebarOpen = $state(true);
 	let sidebarWidth = $state(280);
-	let attachmentFolder = $state<string | null>(null);
+	/** Where attachments land — the setting, or its default. */
+	let attachmentFolder = $state<string>(DEFAULT_ATTACHMENT_FOLDER);
 	let pendingScrollText = $state<string | null>(null);
 	let unlistenFileChange: (() => void) | null = null;
 	let unlistenVaultChange: (() => void) | null = null;
@@ -457,7 +459,7 @@
 							} else {
 								editor.setSyncStatus('idle');
 							}
-							attachmentFolder = settings?.attachment_folder ?? null;
+							attachmentFolder = resolveAttachmentFolder(settings?.attachment_folder);
 						})
 						.catch((err) => {
 							console.warn('Failed to load settings:', err);
@@ -465,6 +467,13 @@
 				}
 			});
 		}
+	});
+
+	// The attachments folder is hidden from the file tree, and only from the
+	// tree: sync, export, the watcher and filename search all still see it.
+	$effect(() => {
+		if (!vault.vaultPath) return;
+		files.setHiddenPaths([`${vault.vaultPath}/${attachmentFolder}`]);
 	});
 
 	// Auto-save workspace state when layout changes
@@ -596,7 +605,10 @@
 	{/if}
 
 	{#if showSettings}
-		<Settings onclose={() => (showSettings = false)} />
+		<Settings
+			onclose={() => (showSettings = false)}
+			onattachmentschange={(folder) => (attachmentFolder = folder)}
+		/>
 	{/if}
 
 	{#if showSpotlight}

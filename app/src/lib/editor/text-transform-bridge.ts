@@ -11,17 +11,3 @@ export async function fuzzyFilterFiles(
 ): Promise<FuzzyEntry[]> {
 	return commands.fuzzyFilterFiles(files, query, limit);
 }
-
-/**
- * Transform image paths in markdown content (resolve or unresolve).
- * Mode "resolve": wiki embeds → standard md images, relative → localfile:// URLs
- * Mode "unresolve": localfile:// URLs → relative paths
- */
-export async function transformImagePaths(
-	markdown: string,
-	vaultPath: string | null,
-	attachmentFolder: string | null,
-	mode: 'resolve' | 'unresolve'
-): Promise<string> {
-	return commands.transformImagePaths(markdown, vaultPath, attachmentFolder, mode);
-}

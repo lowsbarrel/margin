@@ -85,11 +85,18 @@ function selectionMap(
  */
 let _rebuildGeneration = 0;
 
+/**
+ * Absolute paths the tree must not draw — the attachments folder. Held outside
+ * `state` because nothing renders it: it only feeds the next rebuild, and a
+ * rebuild is what tells the sidebar anything changed.
+ */
+let hiddenPaths: string[] = [];
+
 async function _rebuild(): Promise<void> {
 	if (!state.vaultRoot) return;
 	const generation = ++_rebuildGeneration;
 	const expanded = [...state.expandedFolders];
-	const flatTree = await buildVisibleTree(state.vaultRoot, expanded, state.sortOrder);
+	const flatTree = await buildVisibleTree(state.vaultRoot, expanded, state.sortOrder, hiddenPaths);
 	if (generation !== _rebuildGeneration) return;
 	state.flatTree = flatTree;
 	_pathIndexDirty = true;
@@ -419,6 +426,17 @@ export const files = {
 		} finally {
 			state.loading = false;
 		}
+	},
+
+	/**
+	 * Keep these absolute paths out of the tree. Presentation only — sync,
+	 * export, the watcher and the filename index all still see them.
+	 */
+	setHiddenPaths(paths: string[]) {
+		const next = [...paths].sort();
+		if (next.length === hiddenPaths.length && next.every((p, i) => p === hiddenPaths[i])) return;
+		hiddenPaths = next;
+		_rebuild().catch((err) => console.warn('Failed to rebuild tree:', err));
 	},
 
 	clear() {

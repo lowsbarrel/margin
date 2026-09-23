@@ -1,26 +1,6 @@
-mod image_paths;
-
 use nucleo_matcher::pattern::{CaseMatching, Normalization, Pattern};
 use nucleo_matcher::{Config, Matcher, Utf32Str};
 use serde::{Deserialize, Serialize};
-
-const IMAGE_EXTS: &[&str] = &[
-    "png", "jpg", "jpeg", "gif", "webp", "svg", "bmp", "avif", "ico", "tiff", "tif",
-];
-
-// In Tauri 2, custom URI schemes on Windows/Android are served under
-// `http://<scheme>.localhost/…` — the raw `scheme://…` form is rejected
-// by WebView2 with ERR_UNKNOWN_URL_SCHEME. Keep these two prefixes in
-// sync with the JS side (`image-url.ts`) and the CSP in tauri.conf.json.
-#[cfg(any(target_os = "windows", target_os = "android"))]
-const LOCALFILE_URL_PREFIX: &str = "http://localfile.localhost";
-#[cfg(not(any(target_os = "windows", target_os = "android")))]
-const LOCALFILE_URL_PREFIX: &str = "localfile://localhost";
-
-// Legacy prefix — markdown files saved before the Windows fix may still
-// contain this form. Unresolve and the Windows rewrite step both accept
-// it so old notes keep working.
-const LEGACY_LOCALFILE_PREFIX: &str = "localfile://localhost";
 
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct FuzzyEntry {
@@ -96,30 +76,4 @@ pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: u32) -> 
         .take(limit)
         .map(|(entry, _)| entry)
         .collect()
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn transform_image_paths(
-    markdown: String,
-    vault_path: Option<String>,
-    attachment_folder: Option<String>,
-    mode: String,
-) -> String {
-    let folder = attachment_folder.unwrap_or_else(|| "attachments".to_string());
-
-    match mode.as_str() {
-        "resolve" => {
-            let md = image_paths::resolve_wiki_embeds(&markdown, &folder);
-            match vault_path {
-                Some(ref vp) => image_paths::resolve_image_paths(&md, vp),
-                None => md,
-            }
-        }
-        "unresolve" => match vault_path {
-            Some(ref vp) => image_paths::unresolve_image_paths(&markdown, vp),
-            None => markdown,
-        },
-        _ => markdown,
-    }
 }

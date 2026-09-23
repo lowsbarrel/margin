@@ -1,3 +1,4 @@
+mod attachments;
 mod export;
 mod search;
 pub(crate) mod tags;
@@ -328,22 +329,45 @@ pub fn read_file_bytes(
     Ok(Response::new(bytes))
 }
 
+/// Read a request header as UTF-8. Header values are Latin-1, so the frontend
+/// percent-encodes what it puts here and the wire form stays ASCII.
+fn header(request: &Request, key: &str) -> Result<String, String> {
+    let raw = request
+        .headers()
+        .get(key)
+        .and_then(|v| v.to_str().ok())
+        .ok_or_else(|| format!("Missing {key} header"))?;
+    decode_header(raw).ok_or_else(|| format!("Invalid {key} header"))
+}
+
+/// Percent-decode a header value — the mirror of `encodeURIComponent` on the
+/// frontend, which is how a clipboard file name crosses as ASCII.
+fn decode_header(raw: &str) -> Option<String> {
+    percent_encoding::percent_decode_str(raw)
+        .decode_utf8()
+        .map(|decoded| decoded.into_owned())
+        .ok()
+}
+
+/// The invoke body as raw bytes. The frontend sends an `ArrayBuffer`, which
+/// arrives raw; the JSON form is the fallback for a caller that had to serialize.
+fn request_body(request: &Request) -> Result<Vec<u8>, String> {
+    match request.body() {
+        InvokeBody::Raw(bytes) => Ok(bytes.clone()),
+        InvokeBody::Json(val) => {
+            serde_json::from_value::<Vec<u8>>(val.clone()).map_err(|e| format!("Invalid body: {e}"))
+        }
+    }
+}
+
 #[tauri::command]
 pub fn write_file_bytes(
     request: Request,
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
-    let path = request
-        .headers()
-        .get("x-path")
-        .and_then(|v| v.to_str().ok())
-        .ok_or_else(|| "Missing x-path header".to_string())?;
-    let data = match request.body() {
-        InvokeBody::Raw(bytes) => bytes.clone(),
-        InvokeBody::Json(val) => serde_json::from_value::<Vec<u8>>(val.clone())
-            .map_err(|e| format!("Invalid body: {e}"))?,
-    };
-    let p = ensure_in_vault(path, &vault_path_state)?;
+    let path = header(&request, "x-path")?;
+    let data = request_body(&request)?;
+    let p = ensure_in_vault(&path, &vault_path_state)?;
     if let Some(parent) = p.parent() {
         fs::create_dir_all(parent)
             .map_err(|e| format!("Failed to create parent directory: {e}"))?;
@@ -617,6 +641,82 @@ pub fn copy_file(
     Ok(())
 }
 
+/// Resolve the vault-contained attachments folder. Created on demand by the
+/// store, so a folder that does not exist yet is not an error.
+fn attachment_dir(
+    folder: &str,
+    vault_path_state: &tauri::State<'_, VaultPathState>,
+) -> Result<PathBuf, String> {
+    if !valid_rel_path(folder) {
+        return Err(format!("Invalid attachments folder: {folder}"));
+    }
+    ensure_in_vault(
+        &format!("{}/{}", vault_root(vault_path_state), folder),
+        vault_path_state,
+    )
+}
+
+/// Store `bytes` in `folder` under a content-addressed name and return the
+/// vault-relative path. The same bytes pasted twice resolve to the same file.
+fn store_attachment(
+    folder: &str,
+    name: &str,
+    bytes: &[u8],
+    vault_path_state: &tauri::State<'_, VaultPathState>,
+) -> Result<String, String> {
+    let folder = folder.trim_matches('/');
+    let file = attachments::store(&attachment_dir(folder, vault_path_state)?, name, bytes)?;
+    crate::index::tree::invalidate();
+    Ok(format!("{folder}/{file}"))
+}
+
+/// Store pasted bytes as an attachment; the vault-relative path comes back.
+///
+/// Raw-byte command (Request body), so it is registered in `run()` but excluded
+/// from the specta bindings: the clipboard's bytes reach Rust without a base64
+/// or JSON hop. The folder and the original file name travel in headers.
+#[tauri::command]
+pub fn store_attachment_bytes(
+    request: Request,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<String, String> {
+    let folder = header(&request, "x-folder")?;
+    let name = header(&request, "x-name")?;
+    store_attachment(&folder, &name, &request_body(&request)?, &vault_path_state)
+}
+
+/// Import a file from outside the vault as an attachment, named after its
+/// contents. The source is user-chosen and may live anywhere; only the
+/// destination is containment-checked, as in [`import_external_file`].
+#[tauri::command]
+#[specta::specta]
+pub fn import_attachment(
+    from: &str,
+    folder: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<String, String> {
+    let folder = folder.trim_matches('/');
+    let dir = attachment_dir(folder, &vault_path_state)?;
+    let rel = attachments::import_file(&PathBuf::from(from), &dir, folder)?;
+    crate::index::tree::invalidate();
+    Ok(rel)
+}
+
+/// Attachments in `folder` that no note refers to, vault-relative and sorted.
+#[tauri::command]
+#[specta::specta]
+pub async fn unused_attachments(
+    folder: String,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<Vec<String>, String> {
+    let root = vault_root(&vault_path_state);
+    let folder = folder.trim_matches('/').to_string();
+    // Reading every note in the vault is blocking I/O.
+    tokio::task::spawn_blocking(move || attachments::unused_files(&root, &folder))
+        .await
+        .map_err(|e| e.to_string())?
+}
+
 /// Copy a file from an arbitrary source **outside** the vault into a
 /// vault-contained destination. Used by drag-drop / paste import flows where
 /// the user explicitly brings an external file (e.g. an image on the Desktop)
@@ -821,6 +921,20 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_percent_encoded_header_decodes_to_its_text() {
+        assert_eq!(
+            decode_header("Screenshot%202026.png").unwrap(),
+            "Screenshot 2026.png"
+        );
+        assert_eq!(decode_header("ni%C3%B1o.pdf").unwrap(), "niño.pdf");
+        assert_eq!(decode_header("plain.png").unwrap(), "plain.png");
+        assert!(
+            decode_header("%FF").is_none(),
+            "invalid UTF-8 is not a file name"
+        );
+    }
 
     fn temp_dir(tag: &str) -> PathBuf {
         let dir = std::env::temp_dir().join(format!(

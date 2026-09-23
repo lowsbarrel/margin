@@ -4,8 +4,12 @@
 	import { common, createLowlight } from 'lowlight';
 	import { createEditorExtensions } from '$lib/editor/extensions';
 	import { splitFrontmatter, joinFrontmatter } from '$lib/editor/frontmatter';
-	import { unresolveImagePaths } from '$lib/editor/image-paths';
-	import { transformImagePaths } from '$lib/editor/text-transform-bridge';
+	import {
+		resolveImagePaths,
+		resolveWikiEmbeds,
+		unresolveImagePaths
+	} from '$lib/editor/image-paths';
+	import { resolveAttachmentFolder, type AttachmentTarget } from '$lib/editor/attachments';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
@@ -99,6 +103,26 @@
 
 	let container: HTMLDivElement;
 	let bubbleMenuEl: HTMLDivElement;
+
+	/** The folder pasted and dropped files land in — the setting, or the default. */
+	let folder = $derived(resolveAttachmentFolder(attachmentFolder));
+
+	/**
+	 * What the editor renders: wiki embeds become images and relative
+	 * destinations become the localfile URLs the WebView can load.
+	 */
+	function toEditorContent(md: string): string {
+		return resolveImagePaths(resolveWikiEmbeds(md, folder), vault.vaultPath);
+	}
+
+	/**
+	 * Where this editor's paste and drop insertions go, or null while there is
+	 * nothing open to insert into.
+	 */
+	function attachmentTarget(): AttachmentTarget | null {
+		if (!tiptap || !vault.vaultPath) return null;
+		return { editor: tiptap, vaultPath: vault.vaultPath, attachmentFolder: folder };
+	}
 	/**
 	 * The note title lives in a `contenteditable` div, so its text is state the
 	 * component owns rather than something to poke into the DOM by hand:
@@ -181,9 +205,7 @@
 
 	// Reload content on external update
 	let lastSeenVersion = untrack(() => externalContentVersion);
-	// Guards every full-document replacement of the rich editor against an
-	// out-of-order async resolution, whichever path started it.
-	let richReplaceToken = 0;
+
 	$effect(() => {
 		const v = externalContentVersion;
 		if (v !== lastSeenVersion) {
@@ -199,6 +221,9 @@
 				cancelPendingSave();
 				editorStore.setDirty(false);
 				sourceSeed = initialContent;
+				// The adopted text is what is on disk now; the next save departs
+				// from it, not from the buffer this replaced.
+				lastSavedText = initialContent;
 
 				// The source surface holds the file's bytes as they are; only the
 				// rich editor needs the image paths resolved before parsing.
@@ -207,28 +232,16 @@
 					return;
 				}
 
-				// Guard against out-of-order async resolution (mirror bubblePositionToken).
-				const token = ++richReplaceToken;
-				transformImagePaths(
-					takeFrontmatter(initialContent),
-					vault.vaultPath,
-					attachmentFolder,
-					'resolve'
-				).then((resolved) => {
-					if (token !== richReplaceToken || !tiptap) return;
-					// Preserve selection across the full-document replacement.
-					const prev = tiptap.state.selection;
-					const prevFrom = prev.from;
-					const prevTo = prev.to;
-					tiptap.commands.setContent(resolved, { emitUpdate: false });
-					const size = tiptap.state.doc.content.size;
-					const from = Math.min(prevFrom, size);
-					const to = Math.min(prevTo, size);
-					tiptap.commands.setTextSelection({ from, to });
-					// The adopted text is what is on disk now; the next save departs
-					// from it, not from the buffer this replaced.
-					lastSavedText = initialContent;
-				});
+				const resolved = toEditorContent(takeFrontmatter(initialContent));
+				// Preserve selection across the full-document replacement.
+				const prev = tiptap.state.selection;
+				const prevFrom = prev.from;
+				const prevTo = prev.to;
+				tiptap.commands.setContent(resolved, { emitUpdate: false });
+				const size = tiptap.state.doc.content.size;
+				const from = Math.min(prevFrom, size);
+				const to = Math.min(prevTo, size);
+				tiptap.commands.setTextSelection({ from, to });
 			}
 		}
 	});
@@ -485,6 +498,8 @@
 	$effect(() => {
 		const pending = drag.pendingInsert;
 		if (!pending || !container || !tiptap) return;
+		const target = attachmentTarget();
+		if (!target) return;
 		const rect = container.getBoundingClientRect();
 		if (
 			pending.x >= rect.left &&
@@ -493,8 +508,8 @@
 			pending.y <= rect.bottom
 		) {
 			drag.clearPendingInsert();
-			setCursorAtCoords(tiptap, pending.x, pending.y);
-			insertFileAtCursor(pending.path, tiptap, vault.vaultPath!, attachmentFolder);
+			setCursorAtCoords(target.editor, pending.x, pending.y);
+			void insertFileAtCursor(pending.path, target);
 		}
 	});
 
@@ -523,8 +538,8 @@
 				if (tiptap) setCursorAtCoords(tiptap, pos.x, pos.y);
 			},
 			drop: (paths: string[], pos: { x: number; y: number }) => {
-				if (!vault.vaultPath || !tiptap) return;
-				void handleTauriFileDrop(paths, pos, tiptap, vault.vaultPath, attachmentFolder);
+				const target = attachmentTarget();
+				if (target) void handleTauriFileDrop(paths, pos, target);
 			}
 		};
 		setExternalEditorHandlers(handlers);
@@ -532,8 +547,8 @@
 	});
 
 	function handlePaste(event: ClipboardEvent) {
-		if (!attachmentFolder || !vault.vaultPath || !tiptap) return;
-		handleEditorPaste(event, tiptap, vault.vaultPath, attachmentFolder);
+		const target = attachmentTarget();
+		if (target) handleEditorPaste(event, target);
 	}
 
 	function handleEditorContextMenu(event: MouseEvent) {
@@ -558,7 +573,7 @@
 
 		const inst = new Editor({
 			element: container,
-			extensions: createEditorExtensions({ lowlight, attachmentFolder }),
+			extensions: createEditorExtensions({ lowlight, attachmentFolder: folder }),
 			content: content,
 			editorProps: {
 				attributes: {
@@ -659,19 +674,11 @@
 
 	/** Replace the rich document with `text`, re-parsing it through the load path. */
 	function applyTextToRich(e: Editor, text: string, caretPos: number) {
-		const token = ++richReplaceToken;
-		return transformImagePaths(
-			takeFrontmatter(text),
-			vault.vaultPath,
-			attachmentFolder,
-			'resolve'
-		).then((resolved) => {
-			if (token !== richReplaceToken || !alive) return;
-			e.commands.setContent(resolved, { emitUpdate: false });
-			const size = e.state.doc.content.size;
-			e.commands.setTextSelection(Math.min(Math.max(caretPos, 0), Math.max(size - 1, 0)));
-			e.commands.scrollIntoView();
-		});
+		if (!alive) return;
+		e.commands.setContent(toEditorContent(takeFrontmatter(text)), { emitUpdate: false });
+		const size = e.state.doc.content.size;
+		e.commands.setTextSelection(Math.min(Math.max(caretPos, 0), Math.max(size - 1, 0)));
+		e.commands.scrollIntoView();
 	}
 
 	async function enterSourceMode(e: Editor) {
@@ -725,7 +732,7 @@
 		const text = source.getText();
 		const offset = source.getCursorOffset();
 		sourceSeed = text;
-		void applyTextToRich(e, text, sourceOffsetToRichPos(e, text, offset));
+		applyTextToRich(e, text, sourceOffsetToRichPos(e, text, offset));
 	}
 
 	// The surface follows the tab's mode: the rich editor stays alive (hidden)
@@ -746,15 +753,8 @@
 	});
 
 	onMount(() => {
-		transformImagePaths(
-			takeFrontmatter(initialContent),
-			vault.vaultPath,
-			attachmentFolder,
-			'resolve'
-		).then((resolved) => {
-			createEditor(resolved);
-			restoreCursorOnce();
-		});
+		createEditor(toEditorContent(takeFrontmatter(initialContent)));
+		restoreCursorOnce();
 		container.addEventListener('paste', handlePaste as EventListener, true);
 		container.addEventListener('contextmenu', handleEditorContextMenu as EventListener, true);
 		// Find & Replace keyboard shortcuts
