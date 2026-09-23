@@ -43,12 +43,12 @@
 	   colour, padding, font-size/family, radius). Its focus ring and placeholder
 	   colour already match the design, so they are left in place. */
 	const BASE =
-		'w-full resize-y field-sizing-fixed min-h-0 leading-5 bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-[var(--color-text-disabled)] disabled:cursor-not-allowed';
+		'w-full resize-y field-sizing-fixed min-h-0 leading-5 bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-(--color-text-disabled) disabled:cursor-not-allowed';
 
 	const SIZES: Record<Size, string> = {
-		sm: 'px-2.5 py-[7px] text-xs md:text-xs rounded-sm',
-		md: 'px-3 py-[9px] text-sm md:text-sm rounded-sm',
-		lg: 'px-3.5 py-[11px] text-sm md:text-sm rounded-md'
+		sm: 'px-2.5 py-1.75 text-xs md:text-xs rounded-sm',
+		md: 'px-3 py-2.25 text-sm md:text-sm rounded-sm',
+		lg: 'px-3.5 py-2.75 text-sm md:text-sm rounded-md'
 	};
 </script>
 

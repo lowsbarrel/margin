@@ -99,12 +99,12 @@
 	// purpose — the old `.rail-btn.active` rule came after `.rail-btn:hover` in
 	// the stylesheet, so hovering the active item never changed its colours.
 	const RAIL_BTN =
-		'relative flex size-[34px] items-center justify-center rounded-sm p-0 transition-colors';
+		'relative flex size-8.5 items-center justify-center rounded-sm p-0 transition-colors';
 	const RAIL_IDLE =
 		'bg-transparent text-subtle-foreground hover:bg-surface-3 hover:text-foreground';
 	// Orange rail marker on the active view, flush to the window edge.
 	const RAIL_ACTIVE =
-		"bg-accent text-accent-foreground before:absolute before:top-[7px] before:bottom-[7px] before:left-[-7px] before:w-0.5 before:rounded-full before:bg-brand before:content-['']";
+		"bg-accent text-accent-foreground before:absolute before:top-1.75 before:bottom-1.75 before:-left-1.75 before:w-0.5 before:rounded-full before:bg-brand before:content-['']";
 
 	function railClass(active: boolean) {
 		return `${RAIL_BTN} ${active ? RAIL_ACTIVE : RAIL_IDLE}`;

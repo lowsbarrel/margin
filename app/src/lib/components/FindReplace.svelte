@@ -140,7 +140,7 @@
 <!-- Floats over the editor, so it earns a shadow — on a solid surface with a
      hairline border, per the house style. -->
 <div
-	class="absolute top-2 right-4 z-60 flex min-w-[320px] flex-col gap-1 rounded-sm border border-border bg-surface-1 px-2 py-1.5 shadow-[var(--shadow-lg)]"
+	class="absolute top-2 right-4 z-60 flex min-w-[320px] flex-col gap-1 rounded-sm border border-border bg-surface-1 px-2 py-1.5 shadow-(--shadow-lg)"
 	onkeydown={handleKeydown}
 >
 	<div class="flex items-center gap-1.5">
@@ -163,7 +163,7 @@
 				<CaseSensitive size={14} />
 			</button>
 		</div>
-		<span class="min-w-[50px] text-center text-xs whitespace-nowrap text-subtle-foreground">
+		<span class="min-w-12.5 text-center text-xs whitespace-nowrap text-subtle-foreground">
 			{#if searchValue && totalMatches > 0}
 				{currentIndex + 1} / {totalMatches}
 			{:else if searchValue}
@@ -172,7 +172,7 @@
 		</span>
 		<div class="flex gap-0.5">
 			<button
-				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={findPrev}
 				title={m.find_previous()}
 				disabled={totalMatches === 0}
@@ -180,7 +180,7 @@
 				<ChevronUp size={16} />
 			</button>
 			<button
-				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={findNext}
 				title={m.find_next()}
 				disabled={totalMatches === 0}
@@ -188,7 +188,7 @@
 				<ChevronDown size={16} />
 			</button>
 			<button
-				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {replaceVisible
+				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {replaceVisible
 					? 'bg-surface-2 text-foreground'
 					: ''}"
 				onclick={() => (replaceVisible = !replaceVisible)}
@@ -197,7 +197,7 @@
 				<Replace size={14} />
 			</button>
 			<button
-				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={close}
 				title={m.find_close()}
 			>
@@ -219,7 +219,7 @@
 			</div>
 			<div class="flex gap-0.5">
 				<button
-					class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 					onclick={replaceCurrent}
 					title={m.find_replace()}
 					disabled={totalMatches === 0}
@@ -227,7 +227,7 @@
 					<Replace size={14} />
 				</button>
 				<button
-					class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 					onclick={replaceAll}
 					title={m.find_replace_all()}
 					disabled={totalMatches === 0}

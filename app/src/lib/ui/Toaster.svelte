@@ -10,14 +10,14 @@
 			<!-- Toasts float above everything, so they get a real shadow — but still
 			     on a solid surface with a hairline border rather than a blurred pane. -->
 			<div
-				class="toast-in pointer-events-auto flex max-w-[380px] items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-[var(--shadow-lg)]"
+				class="toast-in pointer-events-auto flex max-w-95 items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-(--shadow-lg)"
 				role="alert"
 			>
 				<span
 					class={cn(
 						'flex shrink-0 items-center',
-						item.type === 'success' && 'text-[var(--color-text-positive)]',
-						item.type === 'error' && 'text-[var(--color-text-negative)]',
+						item.type === 'success' && 'text-(--color-text-positive)',
+						item.type === 'error' && 'text-(--color-text-negative)',
 						item.type !== 'success' && item.type !== 'error' && 'text-subtle-foreground'
 					)}
 				>
@@ -44,7 +44,7 @@
 					</button>
 				{/if}
 				<button
-					class="flex size-[22px] shrink-0 items-center justify-center rounded-xs bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
+					class="flex size-5.5 shrink-0 items-center justify-center rounded-xs bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
 					onclick={() => toast.dismiss(item.id)}
 				>
 					<X size={12} />

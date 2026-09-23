@@ -78,7 +78,7 @@
 						>{vault.mnemonic ?? ''}</span
 					>
 				{:else}
-					<span class="font-mono text-sm tracking-[0.1em] text-subtle-foreground"
+					<span class="font-mono text-sm tracking-widest text-subtle-foreground"
 						>••••••••••••••••••••••••</span
 					>
 				{/if}

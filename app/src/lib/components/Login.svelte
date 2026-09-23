@@ -47,7 +47,7 @@
 	// list and the form space their children differently, and two gap utilities
 	// on one element resolve by Tailwind's sort order, not by class order.
 	const CARD =
-		'flex w-full flex-col rounded-md border border-border bg-background p-6 shadow-[var(--shadow-lg)]';
+		'flex w-full flex-col rounded-md border border-border bg-background p-6 shadow-(--shadow-lg)';
 	const BRAND = 'mb-8 text-center';
 	const BRAND_TITLE = 'font-sans text-2xl font-bold tracking-[0.08em] text-foreground';
 	const FIELD = 'flex flex-col gap-1.5';
@@ -207,7 +207,7 @@
 	<!-- Short windows can't centre a full card and still show it: below 760px
 	     tall the shell stops stretching and pins itself to the top instead. -->
 	<div
-		class="relative mx-auto flex min-h-[calc(100vh_-_4rem)] w-[min(100%,380px)] flex-col items-stretch justify-center [@media(max-height:760px)]:min-h-0 [@media(max-height:760px)]:justify-start [@media(max-height:760px)]:pt-10 [@media(max-height:760px)]:pb-4"
+		class="relative mx-auto flex min-h-[calc(100vh-4rem)] w-[min(100%,380px)] flex-col items-stretch justify-center [@media(max-height:760px)]:min-h-0 [@media(max-height:760px)]:justify-start [@media(max-height:760px)]:pt-10 [@media(max-height:760px)]:pb-4"
 	>
 		{#if autoLogging}
 			<div class="flex flex-col items-center gap-6">

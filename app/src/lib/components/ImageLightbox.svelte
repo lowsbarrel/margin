@@ -20,7 +20,7 @@
 	tokens, which would flip with `data-theme` and wash the image out.
 -->
 <div
-	class="fixed inset-0 z-[300] flex cursor-zoom-out items-center justify-center bg-black/85 backdrop-blur-[6px]"
+	class="fixed inset-0 z-300 flex cursor-zoom-out items-center justify-center bg-black/85 backdrop-blur-[6px]"
 	onclick={onclose}
 	onkeydown={handleKeydown}
 >
@@ -29,7 +29,7 @@
 	<img
 		{src}
 		{alt}
-		class="max-h-[90vh] max-w-[90vw] cursor-default rounded-sm object-contain shadow-[var(--shadow-lg)] select-none"
+		class="max-h-[90vh] max-w-[90vw] cursor-default rounded-sm object-contain shadow-(--shadow-lg) select-none"
 		onclick={(e) => e.stopPropagation()}
 	/>
 	<button
