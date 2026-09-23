@@ -1,5 +1,5 @@
 <p align="center">
-  <img alt="Margin logo" src="media/logo.png" width="128" />
+  <img alt="Margin: a note open in the editor, with the file tree on the left" src="media/screenshot.png" width="900" />
 </p>
 
 <div align="center">
