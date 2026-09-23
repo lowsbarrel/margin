@@ -1,9 +1,10 @@
 use aes_gcm_siv::{
     Aes256GcmSiv, Nonce,
-    aead::{Aead, KeyInit, OsRng},
+    aead::{Aead, KeyInit},
 };
 use bip39::Mnemonic;
-use rand::RngCore;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
 use tauri::ipc::{InvokeBody, Request, Response};
@@ -19,7 +20,9 @@ pub struct VaultKeys {
 #[specta::specta]
 pub fn generate_mnemonic() -> Result<String, String> {
     let mut entropy = [0u8; 16]; // 128 bits = 12 words
-    OsRng.fill_bytes(&mut entropy);
+    SysRng
+        .try_fill_bytes(&mut entropy)
+        .map_err(|e| format!("OS random source failed: {e}"))?;
     let mnemonic = Mnemonic::from_entropy(&entropy).map_err(|e| e.to_string())?;
     Ok(mnemonic.to_string())
 }
@@ -53,7 +56,9 @@ pub fn encrypt_blob(plaintext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String>
     let cipher = Aes256GcmSiv::new_from_slice(&key).map_err(|e| format!("Invalid key: {e}"))?;
 
     let mut nonce_bytes = [0u8; 12];
-    OsRng.fill_bytes(&mut nonce_bytes);
+    SysRng
+        .try_fill_bytes(&mut nonce_bytes)
+        .map_err(|e| format!("OS random source failed: {e}"))?;
     let nonce = Nonce::from_slice(&nonce_bytes);
 
     let ciphertext = cipher
@@ -125,5 +130,29 @@ fn parse_body(request: &Request) -> Result<Vec<u8>, String> {
         InvokeBody::Json(val) => {
             serde_json::from_value::<Vec<u8>>(val.clone()).map_err(|e| format!("Invalid body: {e}"))
         }
+    }
+}
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// A fixed seed or a zero-filled buffer would hand back the same phrase twice.
+    #[test]
+    fn mnemonics_do_not_reuse_entropy() {
+        let first = generate_mnemonic().unwrap();
+        let second = generate_mnemonic().unwrap();
+        assert_eq!(first.split_whitespace().count(), 12);
+        assert_ne!(first, second);
+    }
+
+    /// A reused nonce is the one failure GCM-SIV cannot detect on its own.
+    #[test]
+    fn blobs_do_not_reuse_a_nonce() {
+        let key = vec![7u8; 32];
+        let first = encrypt_blob(b"hello".to_vec(), key.clone()).unwrap();
+        let second = encrypt_blob(b"hello".to_vec(), key.clone()).unwrap();
+        assert_ne!(first, second);
+        assert_eq!(decrypt_blob(first, key.clone()).unwrap(), b"hello");
+        assert_eq!(decrypt_blob(second, key).unwrap(), b"hello");
     }
 }

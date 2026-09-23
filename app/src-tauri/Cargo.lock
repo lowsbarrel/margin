@@ -103,7 +103,7 @@ dependencies = [
  "notify",
  "nucleo-matcher",
  "percent-encoding",
- "rand 0.8.6",
+ "rand 0.10.2",
  "rayon",
  "rusqlite",
  "rust-s3",
