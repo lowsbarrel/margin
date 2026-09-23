@@ -16,6 +16,7 @@
 	import { diffLines, countChanges, type DiffLine } from '$lib/utils/line-diff';
 	import { IconButton } from '$lib/ui';
 	import { RotateCcwClock, Trash2, RotateCcw, X, Clock } from '@lucide/svelte';
+	import { formatBytes } from '$lib/utils/bytes';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
@@ -192,12 +193,6 @@
 		});
 	}
 
-	function formatSize(bytes: number): string {
-		if (bytes < 1024) return `${bytes} B`;
-		if (bytes < 1048576) return `${(bytes / 1024).toFixed(1)} KB`;
-		return `${(bytes / 1048576).toFixed(1)} MB`;
-	}
-
 	function groupByDay(items: Snapshot[]): { label: string; snapshots: Snapshot[] }[] {
 		// The result array *is* the group list, in first-seen order; the lookup
 		// alongside it only points at buckets already in that array. A
@@ -283,7 +278,7 @@
 								<Clock size={12} />
 								<span class="whitespace-nowrap">{formatDate(snapshot.timestamp)}</span>
 								<span class="text-xs whitespace-nowrap text-subtle-foreground"
-									>{formatSize(snapshot.size)}</span
+									>{formatBytes(snapshot.size)}</span
 								>
 							</div>
 							<div

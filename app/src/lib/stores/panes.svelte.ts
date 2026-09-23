@@ -1,5 +1,5 @@
 import { IMAGE_EXTS, mimeForPath } from '$lib/utils/mime';
-import { readFileBytes, watchFile, unwatchFile } from '$lib/fs/bridge';
+import { readFileBytes, watchFile, unwatchFile, fileMetadata } from '$lib/fs/bridge';
 import { remapPath } from '$lib/utils/path-remap';
 import { files } from '$lib/stores/files.svelte';
 import { editor } from '$lib/stores/editor.svelte';
@@ -22,6 +22,10 @@ export interface Tab {
 	viewMode: ViewMode;
 	blobUrl?: string;
 	pdfData?: Uint8Array;
+	/** Bytes on disk, for viewers that report it. */
+	size?: number;
+	/** Seconds since the epoch, for the tab that describes a file it can't draw. */
+	modified?: number;
 	/** Pinned tabs sort to the front of the pane and survive close-others/all. */
 	pinned: boolean;
 	/**
@@ -112,8 +116,6 @@ let _fileSelectGeneration = 0;
 let _closedTabs = $state<string[]>([]);
 
 function pushClosedTab(tab: Tab): void {
-	// Skip transient/unsupported tabs that can't be meaningfully reopened.
-	if (tab.type === 'unknown') return;
 	_closedTabs = [tab.path, ..._closedTabs.filter((p) => p !== tab.path)].slice(
 		0,
 		MAX_CLOSED_HISTORY
@@ -342,10 +344,6 @@ export const panes = {
 		const pane = _panes[paneIndex];
 
 		const tabType = getTabType(path);
-		if (tabType === 'unknown') {
-			toast.info(m.editor_cannot_render());
-			return false;
-		}
 
 		const existingIndex = pane.tabs.findIndex((t) => t.path === path);
 		if (existingIndex >= 0) {
@@ -361,18 +359,30 @@ export const panes = {
 		let content = '';
 		let blobUrl: string | undefined;
 		let pdfData: Uint8Array | undefined;
+		let size: number | undefined;
+		let modified: number | undefined;
 		try {
-			const bytes = await readFileBytes(path);
-			if (gen !== _fileSelectGeneration) return false;
-			if (tabType === 'markdown' || tabType === 'canvas') {
-				content = new TextDecoder().decode(bytes);
-			} else if (tabType === 'pdf') {
-				pdfData = new Uint8Array(bytes);
+			if (tabType === 'unknown') {
+				// Nothing can be drawn from these bytes, so they are never read: a
+				// file large enough to matter stays on disk and only its metadata is.
+				const stats = await fileMetadata(path);
+				if (gen !== _fileSelectGeneration) return false;
+				size = stats.size ?? undefined;
+				modified = stats.modified;
 			} else {
-				const blob = new Blob([bytes.buffer as ArrayBuffer], {
-					type: mimeForPath(path)
-				});
-				blobUrl = URL.createObjectURL(blob);
+				const bytes = await readFileBytes(path);
+				if (gen !== _fileSelectGeneration) return false;
+				size = bytes.length;
+				if (tabType === 'markdown' || tabType === 'canvas') {
+					content = new TextDecoder().decode(bytes);
+				} else if (tabType === 'pdf') {
+					pdfData = new Uint8Array(bytes);
+				} else {
+					const blob = new Blob([bytes.buffer as ArrayBuffer], {
+						type: mimeForPath(path)
+					});
+					blobUrl = URL.createObjectURL(blob);
+				}
 			}
 		} catch (err) {
 			console.warn('Failed to read file:', path, err);
@@ -388,6 +398,8 @@ export const panes = {
 			viewMode: 'rich',
 			blobUrl,
 			pdfData,
+			size,
+			modified,
 			pinned: false
 		};
 		_panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
@@ -594,20 +606,28 @@ export const panes = {
 		const buildTab = async (wsTab: WorkspacePane['tabs'][number]): Promise<Tab | null> => {
 			const path = wsTab.path;
 			const type = getTabType(path);
-			if (type === 'unknown') return null;
 
 			let content = '';
 			let blobUrl: string | undefined;
 			let pdfData: Uint8Array | undefined;
+			let size: number | undefined;
+			let modified: number | undefined;
 			try {
-				const bytes = await readFileBytes(path);
-				if (type === 'markdown' || type === 'canvas') {
-					content = new TextDecoder().decode(bytes);
-				} else if (type === 'pdf') {
-					pdfData = new Uint8Array(bytes);
+				if (type === 'unknown') {
+					const stats = await fileMetadata(path);
+					size = stats.size ?? undefined;
+					modified = stats.modified;
 				} else {
-					const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
-					blobUrl = URL.createObjectURL(blob);
+					const bytes = await readFileBytes(path);
+					size = bytes.length;
+					if (type === 'markdown' || type === 'canvas') {
+						content = new TextDecoder().decode(bytes);
+					} else if (type === 'pdf') {
+						pdfData = new Uint8Array(bytes);
+					} else {
+						const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
+						blobUrl = URL.createObjectURL(blob);
+					}
 				}
 			} catch {
 				return null;
@@ -620,6 +640,8 @@ export const panes = {
 				viewMode: wsTab.view_mode === 'source' ? 'source' : 'rich',
 				blobUrl,
 				pdfData,
+				size,
+				modified,
 				pinned: wsTab.pinned ?? false,
 				cursorPos: wsTab.cursor_pos ?? undefined
 			};
