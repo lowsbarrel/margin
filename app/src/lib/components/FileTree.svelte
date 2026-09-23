@@ -223,9 +223,9 @@
 	let suppressNextClick = false;
 	const nativeDragState = { started: false };
 
-	// A double-click fires click, click, dblclick. The folder toggle runs on the
-	// first click; without this the second click collapses the folder the user is
-	// about to rename.
+	// A multi-click fires one click per press. The folder toggle runs on the
+	// first; without this the later clicks of the triple-click that renames would
+	// collapse and re-expand the folder under the user.
 	let lastClickPath = '';
 	let lastClickAt = 0;
 
@@ -543,16 +543,13 @@
 							files.selectToggle(row.path, true);
 						} else if (e.shiftKey) {
 							files.selectRange(row.path);
+						} else if (e.detail === 3) {
+							files.startRename(row.path);
 						} else {
 							files.selectSingle(row.path, true);
 							files.setSelectedFolder(row.path);
 							if (!isSecondClick(row.path)) void files.toggleFolder(row.path);
 						}
-					}}
-					ondblclick={(e) => {
-						e.preventDefault();
-						e.stopPropagation();
-						files.startRename(row.path);
 					}}
 					oncontextmenu={(e) => {
 						e.preventDefault();
@@ -610,15 +607,12 @@
 						files.selectToggle(row.path, false);
 					} else if (e.shiftKey) {
 						files.selectRange(row.path);
+					} else if (e.detail === 3) {
+						files.startRename(row.path);
 					} else {
 						files.selectSingle(row.path, false);
 						onfileselect(row.path);
 					}
-				}}
-				ondblclick={(e) => {
-					e.preventDefault();
-					e.stopPropagation();
-					files.startRename(row.path);
 				}}
 				oncontextmenu={(e) => {
 					e.preventDefault();

@@ -18,9 +18,7 @@
 	import { installExternalDropRouter } from '$lib/utils/external-drop';
 	import { IconButton } from '$lib/ui';
 	import { ensureFolderExpanded, handleNewFolder, handleNewNote } from '$lib/utils/page-actions';
-	// Static / non-interactive glyphs stay on lucide; the registry has no
-	// animated equivalent for PanelLeftClose.
-	import { PanelLeftClose, ArrowDownAZ, ArrowDownWideNarrow, ChevronsDownUp } from '@lucide/svelte';
+	import { ArrowDownAZ, ArrowDownWideNarrow, ChevronsDownUp } from '@lucide/svelte';
 	// Hover-animated counterparts for the controls the user actually points at.
 	import { FilePlus, FolderPlus, PenLine } from '$lib/components/movingicons';
 	import * as m from '$lib/paraglide/messages.js';
@@ -32,7 +30,6 @@
 		onrenameentry: (from: string, to: string, isDir: boolean) => Promise<void>;
 		ondeleteentry: (path: string, isDir: boolean) => Promise<void>;
 		panelOpen: boolean;
-		ontoggle: () => void;
 		panelWidth?: number;
 	}
 
@@ -41,7 +38,6 @@
 		onrenameentry,
 		ondeleteentry,
 		panelOpen,
-		ontoggle,
 		panelWidth = $bindable(280)
 	}: Props = $props();
 	let menuTarget = $state<MenuTarget | null>(null);
@@ -384,12 +380,6 @@
 					size="sm"
 					onclick={() => handleNewFolder()}
 					title={m.sidebar_new_folder()}
-				/>
-				<IconButton
-					icon={PanelLeftClose}
-					size="sm"
-					onclick={ontoggle}
-					title={m.sidebar_close_panel()}
 				/>
 			</div>
 		</div>
