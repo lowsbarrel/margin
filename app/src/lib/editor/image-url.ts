@@ -1,22 +1,11 @@
+import { IS_ANDROID, IS_WINDOWS } from '$lib/utils/platform';
+
 // In Tauri 2, custom URI schemes on Windows/Android are served under
 // `http://<scheme>.localhost/…`. On other platforms the raw scheme form
-// is used. Keep these two prefixes in sync with text_transform.rs and
-// the CSP in tauri.conf.json.
-
-const isWindowsLike = (() => {
-	if (typeof navigator === 'undefined') return false;
-	// `navigator.userAgentData` is Chromium-only and absent from the DOM lib; the
-	// user-agent string is the fallback for the WebKit webviews (`navigator.platform`
-	// is deprecated).
-	const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-	const platform = nav.userAgentData?.platform ?? '';
-	// Android and Windows both use the http.localhost form in Tauri 2.
-	return /Win|Android/i.test(platform) || /Windows|Android/i.test(navigator.userAgent);
-})();
-
-export const LOCALFILE_URL_PREFIX = isWindowsLike
-	? 'http://localfile.localhost'
-	: 'localfile://localhost';
+// is used. Keep these two prefixes in sync with the `localfile` protocol in
+// lib.rs and the CSP in tauri.conf.json.
+export const LOCALFILE_URL_PREFIX =
+	IS_WINDOWS || IS_ANDROID ? 'http://localfile.localhost' : 'localfile://localhost';
 
 const LEGACY_PREFIXES = ['http://localfile.localhost', 'localfile://localhost'];
 
