@@ -16,7 +16,7 @@ Notes stay as ordinary Markdown in a folder you choose. Everything that leaves t
 ![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?logo=typescript&logoColor=white)
 ![Tiptap](https://img.shields.io/badge/Tiptap-000000?logo=tiptap&logoColor=white)
 ![AES-256-GCM-SIV](https://img.shields.io/badge/AES--256--GCM--SIV-4B32C3)
-[![License](https://img.shields.io/badge/License-see_LICENSE-blue)](LICENSE)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue)](LICENSE)
 
 [Get started](#getting-started) · [How it works](#how-it-works) · [Features](#features) · [Security](#security) · [Stack](#stack)
 
@@ -222,5 +222,4 @@ platform.
 
 ## License
 
-See [LICENSE](LICENSE). Because corporate vultures can contribute back or get
-lost.
+[MIT](LICENSE).
