@@ -331,5 +331,12 @@
 	"settings_ai_loading_models": "Caricamento…",
 	"settings_ai_models_loaded": "{count} modelli disponibili",
 	"settings_ai_models_failed": "Impossibile caricare i modelli: {error}",
-	"settings_ai_privacy": "Questo endpoint è l'unico punto in cui il testo delle note lascia il tuo computer non cifrato, e solo perché hai fatto una domanda. La chiave API resta nelle impostazioni cifrate."
+	"settings_ai_privacy": "Questo endpoint è l'unico punto in cui il testo delle note lascia il tuo computer non cifrato, e solo perché hai fatto una domanda. La chiave API resta nelle impostazioni cifrate.",
+	"statusbar_terminal": "Terminale",
+	"terminal_new": "Nuovo terminale",
+	"terminal_hide": "Nascondi il pannello del terminale",
+	"terminal_close_tab": "Chiudi terminale",
+	"terminal_tab_title": "Terminale {n}",
+	"terminal_exited": "Processo terminato con codice {code}",
+	"terminal_copy_failed": "Impossibile copiare negli appunti"
 }

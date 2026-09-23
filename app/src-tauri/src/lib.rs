@@ -7,6 +7,7 @@ mod s3;
 mod session;
 mod settings;
 mod sync;
+mod terminal;
 mod text;
 mod text_transform;
 
@@ -52,6 +53,7 @@ pub fn run() {
         .manage(WatcherState(Mutex::new(None)))
         .manage(VaultWatcherState(Mutex::new(None)))
         .manage(VaultPathState(Mutex::new(String::new())))
+        .manage(terminal::TerminalState::new())
         .register_uri_scheme_protocol("localfile", |_app, request| {
             let decoded = percent_encoding::percent_decode_str(request.uri().path())
                 .decode_utf8_lossy()
@@ -234,9 +236,25 @@ pub fn run() {
             sync::sync_upload_manifest,
             sync::sync_delete_files,
             sync::path_to_s3_key,
+            terminal::pty_spawn,
+            terminal::pty_write,
+            terminal::pty_resize,
+            terminal::pty_kill,
+            terminal::pty_kill_all,
         ])
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            // Shells are separate processes, so quitting the app would leave them
+            // running with the vault as their cwd. Both exit events are covered:
+            // ExitRequested when the app decides to quit, Exit for the last word.
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                terminal::kill_all(&app.state::<terminal::TerminalState>());
+            }
+        });
 }
 
 /// Build the tauri-specta command/type registry. Used only by [`export_bindings`]
@@ -318,6 +336,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync::sync_upload_manifest,
         sync::sync_delete_files,
         sync::path_to_s3_key,
+        terminal::pty_spawn,
+        terminal::pty_write,
+        terminal::pty_resize,
+        terminal::pty_kill,
+        terminal::pty_kill_all,
     ])
 }
 

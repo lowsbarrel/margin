@@ -1,4 +1,5 @@
 import { panes, remapPath } from '$lib/stores/panes.svelte';
+import { terminals } from '$lib/stores/terminals.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { vault } from '$lib/stores/vault.svelte';
@@ -160,6 +161,7 @@ export function handleLogout(onBeforeLogout?: () => void) {
 	onBeforeLogout?.();
 	stopAutoSync();
 	clearSyncCredentials();
+	terminals.reset();
 	panes.reset();
 	files.clear();
 	unwatchFile();

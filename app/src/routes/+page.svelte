@@ -10,6 +10,8 @@
 	import Settings from '$lib/components/Settings.svelte';
 	import HistoryPanel from '$lib/components/HistoryPanel.svelte';
 	import BacklinksPanel from '$lib/components/BacklinksPanel.svelte';
+	import TerminalPanel from '$lib/components/TerminalPanel.svelte';
+	import { terminals } from '$lib/stores/terminals.svelte';
 	import {
 		readFileBytes,
 		onFileChanged,
@@ -217,7 +219,9 @@
 			expanded_folders: [...files.expandedFolders],
 			sidebar_open: sidebarOpen,
 			sidebar_width: sidebarWidth,
-			sort_order: files.sortOrder
+			sort_order: files.sortOrder,
+			terminal_open: terminals.open,
+			terminal_height: terminals.height
 		};
 		saveWorkspaceState(vault.vaultPath, vault.encryptionKey, wsState).catch((err) =>
 			console.warn('Failed to save workspace state:', err)
@@ -235,6 +239,10 @@
 
 			sidebarOpen = ws.sidebar_open;
 			sidebarWidth = ws.sidebar_width ?? sidebarWidth;
+			terminals.height = ws.terminal_height ?? terminals.height;
+			// Tabs are not persisted — a shell is a process, not a file — so an
+			// open panel restores as one fresh terminal.
+			if (ws.terminal_open) terminals.toggle();
 
 			if (
 				(ws.sort_order === 'name' || ws.sort_order === 'date') &&
@@ -340,6 +348,9 @@
 					// Stop autosync now so it can't keep enqueuing writes while we drain;
 					// otherwise the flush loop may never see settled.size hit 0.
 					stopAutoSync();
+					// Shells are separate processes: closing the window must take them
+					// with it, not leave them running in the vault.
+					terminals.reset();
 					// Bound the flush: a stuck/looping write queue (locked file, stalled
 					// IPC) must never be able to wedge the window permanently open.
 					await Promise.race([
@@ -466,6 +477,8 @@
 		const _sidebarWidth = sidebarWidth;
 		const _expanded = files.expandedFolders;
 		const _sort = files.sortOrder;
+		const _terminalOpen = terminals.open;
+		const _terminalHeight = terminals.height;
 
 		scheduleWorkspaceSave();
 	});
@@ -549,6 +562,8 @@
 			{/if}
 		</div>
 
+		<TerminalPanel />
+
 		<StatusBar
 			onlogout={onLogout}
 			onsettings={() => (showSettings = true)}
@@ -562,6 +577,8 @@
 			backlinksActive={showBacklinks}
 			viewMode={panes.activeTab?.type === 'markdown' ? panes.activeTab.viewMode : 'rich'}
 			ontoggleviewmode={toggleViewMode}
+			onterminal={() => terminals.toggle()}
+			terminalActive={terminals.open}
 		/>
 	</div>
 
@@ -599,6 +616,15 @@
 		// Shift changes the character the key reports ("f" → "F"), so compare on a
 		// lowercased key and test the modifier separately.
 		const key = e.key.toLowerCase();
+
+		// Terminal panel. Matched on the character rather than the physical key:
+		// layouts where `\` sits on that key (the plan gives Ctrl+\ to the sidebar)
+		// keep their sidebar shortcut.
+		if (!e.shiftKey && key === '`') {
+			e.preventDefault();
+			terminals.toggle();
+			return;
+		}
 
 		// Spotlight. Cmd/Ctrl+K is the primary binding; Cmd/Ctrl+P is kept as an
 		// alias for the quick switcher it grew out of, and Cmd/Ctrl+Shift+F — which

@@ -21,7 +21,8 @@
 		Moon,
 		FileDown,
 		Link2,
-		FileCode
+		FileCode,
+		SquareTerminal
 	} from '@lucide/svelte';
 	import {
 		Sun,
@@ -48,6 +49,8 @@
 		/** Which surface the active markdown tab is on, for the toggle's state. */
 		viewMode?: ViewMode;
 		ontoggleviewmode?: () => void;
+		onterminal?: () => void;
+		terminalActive?: boolean;
 	}
 
 	let {
@@ -62,7 +65,9 @@
 		onbacklinks,
 		backlinksActive = false,
 		viewMode = 'rich',
-		ontoggleviewmode
+		ontoggleviewmode,
+		onterminal,
+		terminalActive = false
 	}: Props = $props();
 	let exporting = $state(false);
 
@@ -190,6 +195,16 @@
 				onclick={onhistory}
 				title={m.statusbar_history()}
 				active={historyActive}
+			/>
+		{/if}
+
+		{#if onterminal}
+			<IconButton
+				icon={SquareTerminal}
+				size="sm"
+				onclick={onterminal}
+				title={m.statusbar_terminal()}
+				active={terminalActive}
 			/>
 		{/if}
 

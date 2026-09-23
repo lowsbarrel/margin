@@ -331,5 +331,12 @@
 	"settings_ai_loading_models": "Loading…",
 	"settings_ai_models_loaded": "{count} models available",
 	"settings_ai_models_failed": "Couldn't load models: {error}",
-	"settings_ai_privacy": "This endpoint is the one place note text leaves your machine unencrypted, and only because you asked a question. The API key stays in your encrypted settings."
+	"settings_ai_privacy": "This endpoint is the one place note text leaves your machine unencrypted, and only because you asked a question. The API key stays in your encrypted settings.",
+	"statusbar_terminal": "Terminal",
+	"terminal_new": "New terminal",
+	"terminal_hide": "Hide terminal panel",
+	"terminal_close_tab": "Close terminal",
+	"terminal_tab_title": "Terminal {n}",
+	"terminal_exited": "Process exited with code {code}",
+	"terminal_copy_failed": "Could not copy to the clipboard"
 }
