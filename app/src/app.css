@@ -92,6 +92,23 @@
 		letter-spacing: var(--text-tracking-tight);
 	}
 
+	/* App chrome is not selectable: pressing a row label (left or right button)
+	   must not start a text selection that then survives every later click. The
+	   inverse opt-in is deliberate — only text the user reads or edits. */
+	html {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	input,
+	textarea,
+	[contenteditable='true'],
+	.editor-wrap,
+	pre {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+
 	button {
 		font-family: var(--font-sans);
 		font-size: inherit;
