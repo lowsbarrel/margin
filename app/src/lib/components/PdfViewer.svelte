@@ -35,11 +35,14 @@
 	let visible = $state<boolean[]>([]);
 
 	let pdf: pdfjsLib.PDFDocumentProxy | null = null;
+	// v6 moved destroy off the document proxy onto the loading task that owns it.
+	let loadingTask: pdfjsLib.PDFDocumentLoadingTask | null = null;
 	let observer: IntersectionObserver | null = null;
 
 	onMount(async () => {
 		try {
-			pdf = await pdfjsLib.getDocument({ data }).promise;
+			loadingTask = pdfjsLib.getDocument({ data });
+			pdf = await loadingTask.promise;
 			const slots: PageSlot[] = [];
 			for (let i = 1; i <= pdf.numPages; i++) {
 				const page = await pdf.getPage(i);
@@ -63,7 +66,7 @@
 	onDestroy(() => {
 		observer?.disconnect();
 		observer = null;
-		pdf?.destroy();
+		void loadingTask?.destroy();
 	});
 
 	function handleIntersection(entries: IntersectionObserverEntry[]) {
