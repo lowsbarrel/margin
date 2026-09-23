@@ -115,17 +115,19 @@
 				title={sidebarOpen ? m.sidebar_close_panel() : m.sidebar_open_panel()}
 				active={sidebarOpen}
 			/>
-			<span class="text-hairline">·</span>
 		{/if}
 		{#if editor.tiptap}
+			{#if onsidebartoggle}
+				<span class="text-hairline">·</span>
+			{/if}
 			<span class="tabular-nums"
 				>{m.statusbar_line_col({ line: editor.cursorLine, col: editor.cursorCol })}</span
 			>
 			<span class="text-hairline">·</span>
+			<span class="tabular-nums">{m.statusbar_markdown()}</span>
+			<span class="text-hairline">·</span>
+			<span class="tabular-nums">{m.statusbar_encoding()}</span>
 		{/if}
-		<span class="tabular-nums">{m.statusbar_markdown()}</span>
-		<span class="text-hairline">·</span>
-		<span class="tabular-nums">{m.statusbar_encoding()}</span>
 	</div>
 
 	<div class="flex items-center gap-1.5">
