@@ -1,7 +1,7 @@
 mod export;
 mod search;
 pub(crate) mod tags;
-mod trash;
+pub(crate) mod trash;
 mod walk;
 mod watch;
 
@@ -307,6 +307,13 @@ pub fn set_vault_directory(
         if removed > 0 {
             eprintln!("Purged {removed} expired trash item(s)");
         }
+        // Snapshots for notes that no longer exist (a sync delete on another
+        // device, a rename that failed halfway) can never be restored onto
+        // anything. Swept in the same background pass.
+        let pruned = crate::history::prune_orphans(&purge_root);
+        if pruned > 0 {
+            eprintln!("Pruned {pruned} orphaned history dir(s)");
+        }
     });
     Ok(())
 }
@@ -445,6 +452,34 @@ pub fn delete_entry(
         crate::index::remove_path(&root, &p);
     }
     Ok(())
+}
+
+/// Every item currently in the trash, newest deletion first.
+#[tauri::command]
+#[specta::specta]
+pub fn trash_list(vault_path: &str) -> Result<Vec<trash::TrashItem>, String> {
+    Ok(trash::list_items(vault_path))
+}
+
+/// Put a trashed entry back, returning the vault-relative path it landed on.
+#[tauri::command]
+#[specta::specta]
+pub fn trash_restore(vault_path: &str, id: &str) -> Result<String, String> {
+    trash::restore(vault_path, id)
+}
+
+/// Remove one trashed item for good.
+#[tauri::command]
+#[specta::specta]
+pub fn trash_delete(vault_path: &str, id: &str) -> Result<(), String> {
+    trash::delete(vault_path, id)
+}
+
+/// Remove every trashed item, returning how many went.
+#[tauri::command]
+#[specta::specta]
+pub fn trash_empty(vault_path: &str) -> Result<u32, String> {
+    Ok(trash::empty(vault_path))
 }
 
 /// Error for a write whose destination is already occupied. Names the entry so

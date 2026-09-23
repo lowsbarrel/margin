@@ -9,6 +9,7 @@
 	import StatusBar from '$lib/components/StatusBar.svelte';
 	import Settings from '$lib/components/Settings.svelte';
 	import HistoryPanel from '$lib/components/HistoryPanel.svelte';
+	import TrashDialog from '$lib/components/TrashDialog.svelte';
 	import BacklinksPanel from '$lib/components/BacklinksPanel.svelte';
 	import TerminalPanel from '$lib/components/TerminalPanel.svelte';
 	import { terminals } from '$lib/stores/terminals.svelte';
@@ -61,6 +62,7 @@
 	let showSettings = $state(false);
 	let showSpotlight = $state(false);
 	let showHistory = $state(false);
+	let showTrash = $state(false);
 	let showBacklinks = $state(false);
 	let sidebarOpen = $state(true);
 	let sidebarWidth = $state(280);
@@ -554,9 +556,8 @@
 				<HistoryPanel
 					filePath={panes.activeTab.path}
 					onclose={() => (showHistory = false)}
-					onrestore={(content) => {
-						const active = panes.activeTab;
-						if (active) panes.applyExternalContent(active.path, content);
+					onrestore={() => {
+						editor.markLocalChange();
 					}}
 				/>
 			{/if}
@@ -573,6 +574,7 @@
 			{sidebarOpen}
 			onhistory={() => (showHistory = !showHistory)}
 			historyActive={showHistory}
+			ontrash={() => (showTrash = true)}
 			onbacklinks={() => (showBacklinks = !showBacklinks)}
 			backlinksActive={showBacklinks}
 			viewMode={panes.activeTab?.type === 'markdown' ? panes.activeTab.viewMode : 'rich'}
@@ -581,6 +583,17 @@
 			terminalActive={terminals.open}
 		/>
 	</div>
+
+	{#if showTrash}
+		<TrashDialog
+			onclose={() => (showTrash = false)}
+			onrestored={async (path) => {
+				if (!vault.vaultPath) return;
+				await files.refresh();
+				await handleFileSelect(path);
+			}}
+		/>
+	{/if}
 
 	{#if showSettings}
 		<Settings onclose={() => (showSettings = false)} />
