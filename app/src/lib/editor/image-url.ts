@@ -61,14 +61,6 @@ export const LOCALFILE_IMAGE_RE =
 	/!\[([^\]]*)\]\(((?:localfile:\/\/|http:\/\/localfile\.localhost)[^)]+)\)/g;
 
 /**
- * Like {@link LOCALFILE_IMAGE_RE} but anchored to the `localfile://localhost`
- * / `http://localfile.localhost` host form so the prefix can be stripped back
- * to a vault-relative path. Capture groups: 1 = alt text, 2 = the full URL.
- */
-export const LOCALFILE_IMAGE_HOST_RE =
-	/!\[([^\]]*)\]\(((?:localfile:\/\/localhost|http:\/\/localfile\.localhost)\/?[^)]+)\)/g;
-
-/**
  * %20-encode spaces inside any existing localfile image URLs in `md` (both
  * scheme forms). Leaves non-localfile content untouched.
  */

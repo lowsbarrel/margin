@@ -43,6 +43,15 @@ import type {
  */
 const X_PATH_HEADER = 'x-path';
 
+/**
+ * `store_attachment_bytes` carries the clipboard's bytes as the invoke body and
+ * the two pieces of text as headers. A header value is Latin-1, so the folder
+ * and the file name are percent-encoded here and decoded in Rust — a pasted
+ * file name is arbitrary UTF-8.
+ */
+const X_FOLDER_HEADER = 'x-folder';
+const X_NAME_HEADER = 'x-name';
+
 export async function setVaultDirectory(path: string): Promise<void> {
 	const r = await commands.setVaultDirectory(path);
 	if (r.status === 'error') throw r.error;
@@ -76,6 +85,24 @@ export async function writeFileBytesRaw(path: string, content: Uint8Array): Prom
 }
 
 /**
+ * Store pasted bytes as an attachment and return their vault-relative path.
+ * Rust owns the naming, the dedupe and the never-overwrite rule, so the bytes
+ * go over as the invoke body rather than being written to a path chosen here.
+ */
+export async function storeAttachmentBytes(
+	folder: string,
+	name: string,
+	content: Uint8Array
+): Promise<string> {
+	return invoke<string>('store_attachment_bytes', content, {
+		headers: {
+			[X_FOLDER_HEADER]: encodeURIComponent(folder),
+			[X_NAME_HEADER]: encodeURIComponent(name)
+		}
+	});
+}
+
+/**
  * Save raw bytes to an arbitrary path *outside* the vault containment check.
  * For explicit "save as / export" flows where the destination was chosen by
  * the user through the native save dialog (e.g. exporting a note to PDF onto
@@ -101,13 +128,18 @@ export async function walkDirectory(root: string, includeHidden = false): Promis
 	return r.data;
 }
 
-/** Build a flat sorted list of visible tree rows in one native call. */
+/**
+ * Build a flat sorted list of visible tree rows in one native call.
+ * `hidden` holds absolute paths the tree must not draw; everything else in the
+ * app still walks them.
+ */
 export async function buildVisibleTree(
 	root: string,
 	expanded: string[],
-	sortBy: string
+	sortBy: string,
+	hidden: string[]
 ): Promise<TreeEntry[]> {
-	const r = await commands.buildVisibleTree(root, expanded, sortBy);
+	const r = await commands.buildVisibleTree(root, expanded, sortBy, hidden);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
@@ -117,9 +149,10 @@ export async function buildSubtree(
 	folder: string,
 	depthOffset: number,
 	expanded: string[],
-	sortBy: string
+	sortBy: string,
+	hidden: string[]
 ): Promise<TreeEntry[]> {
-	const r = await commands.buildSubtree(folder, depthOffset, expanded, sortBy);
+	const r = await commands.buildSubtree(folder, depthOffset, expanded, sortBy, hidden);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
@@ -164,6 +197,24 @@ export async function importExternalFile(from: string, to: string): Promise<void
 export async function copyDirectory(from: string, to: string): Promise<void> {
 	const r = await commands.copyDirectory(from, to);
 	if (r.status === 'error') throw r.error;
+}
+
+/**
+ * Read a file from outside the vault and store it in `folder` under a name
+ * derived from its contents. Returns the vault-relative path; the same bytes
+ * pasted or dropped twice resolve to the same file.
+ */
+export async function importAttachment(from: string, folder: string): Promise<string> {
+	const r = await commands.importAttachment(from, folder);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+/** Attachments in `folder` that no note in the vault refers to. */
+export async function unusedAttachments(folder: string): Promise<string[]> {
+	const r = await commands.unusedAttachments(folder);
+	if (r.status === 'error') throw r.error;
+	return r.data;
 }
 
 /**

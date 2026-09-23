@@ -1,16 +1,16 @@
-import type { Editor } from '@tiptap/core';
-import { insertPastedFile } from '$lib/editor/attachments';
+import {
+	captureInsertionPoint,
+	insertPastedFile,
+	type AttachmentTarget
+} from '$lib/editor/attachments';
+import { toast } from '$lib/stores/toast.svelte';
+import * as m from '$lib/paraglide/messages.js';
 
 /**
  * Handle pasting images/files into the editor.
  * Supports clipboard DataTransfer and Windows screenshot fallback (Win+Shift+S).
  */
-export function handleEditorPaste(
-	event: ClipboardEvent,
-	editor: Editor,
-	vaultPath: string,
-	attachmentFolder: string
-): void {
+export function handleEditorPaste(event: ClipboardEvent, target: AttachmentTarget): void {
 	const clipData = event.clipboardData;
 	if (!clipData) return;
 
@@ -41,11 +41,11 @@ export function handleEditorPaste(
 	event.preventDefault();
 	event.stopPropagation();
 
-	const ed = editor;
-	const vp = vaultPath;
-	const af = attachmentFolder;
+	// Read before the first await: a clipboard image read is async, and the
+	// caret must not be wherever the user left it by the time the bytes land.
+	const at = captureInsertionPoint(target.editor);
 
-	(async () => {
+	void (async () => {
 		if (pastedFiles.length === 0 && hasImageType) {
 			try {
 				const items = await navigator.clipboard.read();
@@ -62,15 +62,12 @@ export function handleEditorPaste(
 			}
 		}
 
+		let cursor = at;
 		for (const file of pastedFiles) {
 			try {
-				await insertPastedFile(file, {
-					editor: ed,
-					vaultPath: vp,
-					attachmentFolder: af
-				});
+				cursor = await insertPastedFile(file, target, cursor);
 			} catch (err) {
-				console.error('Failed to paste attachment:', err);
+				toast.error(m.toast_attachment_paste_failed({ name: file.name, error: String(err) }));
 			}
 		}
 	})();

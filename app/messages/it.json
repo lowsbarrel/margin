@@ -127,9 +127,9 @@
 	"toast_configure_s3": "Configura prima S3",
 	"toast_copied": "Copiato negli appunti",
 	"settings_attachments_title": "Allegati",
-	"settings_attachments_hint": "Scegli una cartella nel tuo vault per immagini e file incollati. Incolla o trascina file nell'editor e verranno salvati qui.",
+	"settings_attachments_hint": "Immagini e file incollati o trascinati vengono salvati qui. La cartella è nascosta nell'albero dei file; sincronizzazione, esportazione e ricerca la vedono comunque.",
 	"settings_attachments_label": "Cartella allegati",
-	"settings_attachments_none": "— Nessuna —",
+	"settings_attachments_none": "Predefinita (attachments)",
 	"toast_file_read_failed": "Impossibile leggere il file: {error}",
 	"pdf_load_failed": "Impossibile caricare il PDF: {error}",
 	"statusbar_history": "Cronologia file",
@@ -366,5 +366,14 @@
 	"history_diff_current": "Differenze con la nota attuale",
 	"history_diff_added": "{count} aggiunte",
 	"history_diff_removed": "{count} rimosse",
-	"history_diff_too_large": "Troppo grande per il confronto riga per riga"
+	"history_diff_too_large": "Troppo grande per il confronto riga per riga",
+	"settings_attachments_clean_scan": "Trova allegati inutilizzati",
+	"settings_attachments_clean_scanning": "Scansione…",
+	"settings_attachments_clean_found": "{count} file a cui nessuna nota fa riferimento:",
+	"settings_attachments_clean_none": "Nessun allegato inutilizzato",
+	"settings_attachments_clean_delete": "Sposta {count} nel cestino",
+	"settings_attachments_clean_cancel": "Annulla",
+	"settings_attachments_clean_done": "{count} file spostati nel cestino",
+	"settings_attachments_clean_failed": "Impossibile cercare gli allegati inutilizzati: {error}",
+	"toast_attachment_paste_failed": "Impossibile salvare {name}: {error}"
 }
