@@ -22,7 +22,8 @@
 		FileDown,
 		Link2,
 		FileCode,
-		SquareTerminal
+		SquareTerminal,
+		Trash2
 	} from '@lucide/svelte';
 	import {
 		Sun,
@@ -44,6 +45,7 @@
 		sidebarOpen?: boolean;
 		onhistory?: () => void;
 		historyActive?: boolean;
+		ontrash?: () => void;
 		onbacklinks?: () => void;
 		backlinksActive?: boolean;
 		/** Which surface the active markdown tab is on, for the toggle's state. */
@@ -62,6 +64,7 @@
 		sidebarOpen = false,
 		onhistory,
 		historyActive = false,
+		ontrash,
 		onbacklinks,
 		backlinksActive = false,
 		viewMode = 'rich',
@@ -206,6 +209,10 @@
 				title={m.statusbar_terminal()}
 				active={terminalActive}
 			/>
+		{/if}
+
+		{#if ontrash}
+			<IconButton icon={Trash2} size="sm" onclick={ontrash} title={m.statusbar_trash()} />
 		{/if}
 
 		{#if onsettings}

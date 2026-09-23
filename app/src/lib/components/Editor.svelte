@@ -162,6 +162,11 @@
 	const SNAPSHOT_INTERVAL_MS = 5 * 60 * 1000; // 5 minutes between snapshots
 	let lastSnapshotTime = 0;
 	let lastSnapshotMd: string | null = null;
+	/**
+	 * The text this editor last put on disk — the state the next save departs
+	 * from. Seeded from the file as opened, which is what a first save replaces.
+	 */
+	let lastSavedText = untrack(() => initialContent ?? null);
 
 	// The tab's path changes underneath us when the sidebar renames or moves the
 	// note; without this, saves keep writing to the path the file no longer has.
@@ -221,6 +226,9 @@
 					const from = Math.min(prevFrom, size);
 					const to = Math.min(prevTo, size);
 					tiptap.commands.setTextSelection({ from, to });
+					// The adopted text is what is on disk now; the next save departs
+					// from it, not from the buffer this replaced.
+					lastSavedText = initialContent;
 				});
 			}
 		}
@@ -229,12 +237,23 @@
 	function saveNow(text: string) {
 		if (!alive) return;
 		onsave?.(text);
+		// Keep the state the note is leaving. A copy of what is about to be
+		// written is something the app still holds on disk, so it can never be
+		// the version anyone needs back.
+		const departing = lastSavedText;
+		if (
+			departing !== null &&
+			departing !== text &&
+			Date.now() - lastSnapshotTime >= SNAPSHOT_INTERVAL_MS
+		) {
+			snapshot(departing);
+		}
 		const encoder = new TextEncoder();
 		const encoded = encoder.encode(text);
 		writeFileBytes(currentPath, encoded)
 			.then(() => {
 				editorStore.setDirty(false);
-				if (Date.now() - lastSnapshotTime >= SNAPSHOT_INTERVAL_MS) snapshot(text);
+				lastSavedText = text;
 			})
 			.catch((err) => {
 				console.error('Save failed:', err);
@@ -266,9 +285,9 @@
 	}
 
 	/**
-	 * Keep a copy of `text` in the note's history. Skipped when the last snapshot
-	 * already holds this content, so the periodic interval and the pre-overwrite
-	 * snapshot don't duplicate each other.
+	 * Keep `text` in the note's history. Skipped when this editor's last snapshot
+	 * already holds it; the backend also drops a snapshot byte-identical to the
+	 * newest one on disk, which is what makes the dedupe survive a restart.
 	 */
 	function snapshot(text: string) {
 		if (!vault.vaultPath || text === lastSnapshotMd) return;

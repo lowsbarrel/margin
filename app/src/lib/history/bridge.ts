@@ -1,7 +1,7 @@
-import { commands, type Snapshot } from '$lib/bindings';
+import { commands, type Snapshot, type TrashItem } from '$lib/bindings';
 import { toBytes, fromBytes } from '$lib/ipc';
 
-export type { Snapshot };
+export type { Snapshot, TrashItem };
 
 export async function saveSnapshot(
 	vaultPath: string,
@@ -51,4 +51,29 @@ export async function renameHistory(
 ): Promise<void> {
 	const r = await commands.renameHistory(vaultPath, oldPath, newPath);
 	if (r.status === 'error') throw r.error;
+}
+
+/** Every deleted entry still in `.margin/trash`, newest first. */
+export async function listTrash(vaultPath: string): Promise<TrashItem[]> {
+	const r = await commands.trashList(vaultPath);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+/** Restore one trashed entry; resolves with the vault-relative path it landed on. */
+export async function restoreTrash(vaultPath: string, id: string): Promise<string> {
+	const r = await commands.trashRestore(vaultPath, id);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+export async function deleteTrash(vaultPath: string, id: string): Promise<void> {
+	const r = await commands.trashDelete(vaultPath, id);
+	if (r.status === 'error') throw r.error;
+}
+
+export async function emptyTrash(vaultPath: string): Promise<number> {
+	const r = await commands.trashEmpty(vaultPath);
+	if (r.status === 'error') throw r.error;
+	return r.data;
 }

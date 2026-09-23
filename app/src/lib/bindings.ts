@@ -30,6 +30,14 @@ export const commands = {
 	 */
 	buildSubtree: (folder: string, depthOffset: number, expanded: string[], sortBy: string) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_subtree", { folder, depthOffset, expanded, sortBy })),
 	deleteEntry: (path: string) => typedError<null, string>(__TAURI_INVOKE("delete_entry", { path })),
+	/**  Every item currently in the trash, newest deletion first. */
+	trashList: (vaultPath: string) => typedError<TrashItem[], string>(__TAURI_INVOKE("trash_list", { vaultPath })),
+	/**  Put a trashed entry back, returning the vault-relative path it landed on. */
+	trashRestore: (vaultPath: string, id: string) => typedError<string, string>(__TAURI_INVOKE("trash_restore", { vaultPath, id })),
+	/**  Remove one trashed item for good. */
+	trashDelete: (vaultPath: string, id: string) => typedError<null, string>(__TAURI_INVOKE("trash_delete", { vaultPath, id })),
+	/**  Remove every trashed item, returning how many went. */
+	trashEmpty: (vaultPath: string) => typedError<number, string>(__TAURI_INVOKE("trash_empty", { vaultPath })),
 	renameEntry: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("rename_entry", { from, to })),
 	createDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_directory", { path })),
 	fileExists: (path: string) => __TAURI_INVOKE<boolean>("file_exists", { path }),
@@ -176,11 +184,7 @@ export const commands = {
 	saveVaultProfile: (profile: VaultProfile) => typedError<null, string>(__TAURI_INVOKE("save_vault_profile", { profile })),
 	/**  Delete a vault profile by vault_path */
 	deleteVaultProfile: (vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("delete_vault_profile", { vaultPath })),
-	/**
-	 *  Save a snapshot of the given file content.
-	 *  The snapshot is stored as `<timestamp>.md` inside the history directory.
-	 *  If the number of snapshots exceeds the limit, the oldest are pruned.
-	 */
+	/**  Save a snapshot of the given file content. */
 	saveSnapshot: (vaultPath: string, filePath: string, content: number[]) => typedError<string, string>(__TAURI_INVOKE("save_snapshot", { vaultPath, filePath, content })),
 	/**  List all snapshots for a given file, sorted newest-first. */
 	listSnapshots: (vaultPath: string, filePath: string) => typedError<Snapshot[], string>(__TAURI_INVOKE("list_snapshots", { vaultPath, filePath })),
@@ -189,9 +193,9 @@ export const commands = {
 	/**  Delete a specific snapshot. */
 	deleteSnapshot: (vaultPath: string, filePath: string, snapshotFilename: string) => typedError<null, string>(__TAURI_INVOKE("delete_snapshot", { vaultPath, filePath, snapshotFilename })),
 	/**
-	 *  Delete all snapshots for a given file. Returns the number of snapshots
-	 *  deleted as a u32 (not u64) so specta can export it; the count is bounded by
-	 *  `MAX_SNAPSHOTS_PER_FILE` and never approaches u32::MAX.
+	 *  Delete all snapshots for a given file. Returns the count as a u32 (not u64)
+	 *  so specta can export it; retention caps a note at `RETENTION_HARD_CAP`
+	 *  snapshots, so the count never approaches u32::MAX.
 	 */
 	clearSnapshots: (vaultPath: string, filePath: string) => typedError<number, string>(__TAURI_INVOKE("clear_snapshots", { vaultPath, filePath })),
 	/**  Move/rename the history directory when a file or directory is renamed. */
@@ -386,7 +390,7 @@ export type SearchHit = {
 };
 
 export type Snapshot = {
-	/**  Filename of the snapshot (e.g. "1712928000.md") */
+	/**  Filename of the snapshot (e.g. "1712928000123.md") */
 	filename: string,
 	/**  Unix timestamp (seconds) when the snapshot was taken */
 	timestamp: number,
@@ -415,6 +419,22 @@ export type TextNode = {
 	text: string,
 	/**  ProseMirror position of the first character of this text node. */
 	pos: number,
+};
+
+/**  A deleted entry, as the trash dialog lists it. */
+export type TrashItem = {
+	/**
+	 *  The item's directory name under `.margin/trash` — the handle the UI
+	 *  passes back to restore or purge it.
+	 */
+	id: string,
+	name: string,
+	/**  Vault-relative path the entry had before it was deleted. */
+	path: string,
+	is_dir: boolean,
+	/**  Unix milliseconds (f64 because specta cannot export u64). */
+	deleted_at: number | null,
+	has_history: boolean,
 };
 
 /**  A single row in the file tree, pre-sorted and depth-annotated. */
