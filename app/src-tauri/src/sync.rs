@@ -444,6 +444,8 @@ pub async fn sync_download_files(
     let skipped = run_bounded(resolved, |tasks, (rel, dest, mtime)| {
         let bucket = bucket.clone();
         let encryption_key = encryption_key.clone();
+        let vault = vault_path.clone();
+        let history_path = format!("{vault_path}/{rel}");
         let key = format!(
             "{}files/{}.enc",
             s3_prefix,
@@ -474,6 +476,23 @@ pub async fn sync_download_files(
                     .await
                     .map_err(|e| format!("Failed to create directory: {e}"))?;
             }
+
+            // A download replaces whatever the note held locally. Keep those
+            // bytes as a snapshot first, so pulling a remote change is
+            // recoverable — this is the only write that can discard a local
+            // version without the user asking.
+            if dest.exists() {
+                let local = tokio::fs::read(&dest).await.unwrap_or_default();
+                if local != dec {
+                    let vault = vault.clone();
+                    let history_path = history_path.clone();
+                    let _ = tokio::task::spawn_blocking(move || {
+                        crate::history::save_snapshot_inner(&vault, &history_path, &local)
+                    })
+                    .await;
+                }
+            }
+
             tokio::fs::write(&dest, &dec)
                 .await
                 .map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;

@@ -10,7 +10,10 @@
 		type Snapshot
 	} from '$lib/history/bridge';
 	import { writeFileBytes, readFileBytes } from '$lib/fs/bridge';
+	import { flushEditorWrites } from '$lib/fs/writeQueue';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
+	import { panes } from '$lib/stores/panes.svelte';
+	import { diffLines, countChanges, type DiffLine } from '$lib/utils/line-diff';
 	import { IconButton } from '$lib/ui';
 	import { RotateCcwClock, Trash2, RotateCcw, X, Clock } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -23,14 +26,12 @@
 
 	let { filePath, onclose, onrestore }: Props = $props();
 
-	// Cap the in-DOM snapshot preview so very large notes don't lay out hundreds
-	// of KB into a single text node on every preview toggle.
-	const PREVIEW_MAX_CHARS = 20_000;
-
 	let snapshots = $state<Snapshot[]>([]);
 	let loading = $state(true);
-	let previewContent = $state<string | null>(null);
+	/** The snapshot open below the list, and its comparison against the file. */
 	let previewFilename = $state<string | null>(null);
+	/** null while nothing is open or the two versions are too large to compare. */
+	let diff = $state<DiffLine[] | null>(null);
 
 	// Generation token to discard stale async results when filePath changes
 	// rapidly (e.g. fast tab switching with the history panel open).
@@ -60,20 +61,30 @@
 		}
 	}
 
+	/**
+	 * Show a snapshot against what the note holds now. The whole snapshot is
+	 * decoded and diffed — truncating it would hide the change the user is
+	 * looking for, which is usually near the end of a long note.
+	 */
 	async function handlePreview(snapshot: Snapshot) {
 		if (!vault.vaultPath) return;
 		if (previewFilename === snapshot.filename) {
-			previewContent = null;
-			previewFilename = null;
+			clearPreview();
 			return;
 		}
+		const generation = loadGeneration;
 		try {
 			const bytes = await readSnapshot(vault.vaultPath, filePath, snapshot.filename);
+			if (generation !== loadGeneration) return;
 			const decoded = new TextDecoder().decode(bytes);
-			previewContent =
-				decoded.length > PREVIEW_MAX_CHARS
-					? `${decoded.slice(0, PREVIEW_MAX_CHARS)}\n\n… (preview truncated)`
-					: decoded;
+			let current = '';
+			try {
+				current = new TextDecoder().decode(await readFileBytes(filePath));
+			} catch (err) {
+				console.warn('Could not read the current note for the diff:', err);
+			}
+			if (generation !== loadGeneration) return;
+			diff = diffLines(decoded, current);
 			previewFilename = snapshot.filename;
 		} catch (err) {
 			console.error('Failed to read snapshot:', err);
@@ -81,9 +92,18 @@
 		}
 	}
 
+	function clearPreview() {
+		previewFilename = null;
+		diff = null;
+	}
+
 	async function handleRestore(snapshot: Snapshot) {
 		if (!vault.vaultPath) return;
 		try {
+			// Land the debounced edit and the write queue before reading the file:
+			// the pre-restore snapshot must hold the text the user actually has,
+			// not a version up to one debounce behind it.
+			await flushEditorWrites();
 			try {
 				const currentBytes = await readFileBytes(filePath);
 				await saveSnapshot(vault.vaultPath, filePath, currentBytes);
@@ -97,6 +117,9 @@
 			await writeFileBytes(filePath, new TextEncoder().encode(content));
 			editorStore.setDirty(false);
 
+			// Every pane holding this note, not just the active one: the others
+			// would otherwise keep the pre-restore text and overwrite the restore.
+			panes.applyRestoredContent(filePath, content);
 			onrestore?.(content);
 			await loadSnapshots(); // Refresh list to show the pre-restore snapshot
 			toast.success(m.history_restored());
@@ -111,10 +134,7 @@
 		try {
 			await deleteSnapshot(vault.vaultPath, filePath, snapshot.filename);
 			snapshots = snapshots.filter((s) => s.filename !== snapshot.filename);
-			if (previewFilename === snapshot.filename) {
-				previewContent = null;
-				previewFilename = null;
-			}
+			if (previewFilename === snapshot.filename) clearPreview();
 		} catch (err) {
 			console.error('Delete failed:', err);
 			toast.error(m.history_delete_failed());
@@ -126,8 +146,7 @@
 		try {
 			const count = await clearSnapshots(vault.vaultPath, filePath);
 			snapshots = [];
-			previewContent = null;
-			previewFilename = null;
+			clearPreview();
 			toast.success(m.history_cleared({ count: String(count) }));
 		} catch (err) {
 			console.error('Clear failed:', err);
@@ -288,12 +307,55 @@
 							</div>
 						</button>
 
-						{#if previewFilename === snapshot.filename && previewContent !== null}
-							<div
-								class="mx-2 my-1 max-h-75 overflow-auto rounded-sm border border-border bg-background p-2"
-							>
-								<pre
-									class="m-0 font-mono text-xs leading-normal wrap-break-word whitespace-pre-wrap text-muted-foreground">{previewContent}</pre>
+						{#if previewFilename === snapshot.filename}
+							<div class="mx-2 my-1 overflow-hidden rounded-sm border border-border bg-background">
+								<div
+									class="flex items-center justify-between gap-2 border-b border-border px-2 py-1 text-xs text-subtle-foreground"
+								>
+									<span>{m.history_diff_current()}</span>
+									{#if diff}
+										{@const changes = countChanges(diff)}
+										<span class="flex shrink-0 items-center gap-1.5 tabular-nums">
+											<span class="text-positive">+{changes.added}</span>
+											<span class="text-destructive">−{changes.removed}</span>
+										</span>
+									{/if}
+								</div>
+								{#if diff}
+									<!-- The whole snapshot, line numbered: a change near the end of a
+									     long note is what the user came here to find. -->
+									<div class="max-h-100 overflow-auto py-1 font-mono text-xs leading-normal">
+										{#each diff as line, i (i)}
+											<div
+												class={line.kind === 'added'
+													? 'bg-surface-2 text-positive'
+													: line.kind === 'removed'
+														? 'bg-surface-2 text-destructive'
+														: 'text-muted-foreground'}
+											>
+												<span
+													class="inline-block w-9 shrink-0 pr-1.5 text-right text-subtle-foreground tabular-nums select-none"
+													>{line.before ?? ''}</span
+												>
+												<span
+													class="inline-block w-9 shrink-0 pr-1.5 text-right text-subtle-foreground tabular-nums select-none"
+													>{line.after ?? ''}</span
+												>
+												<span class="whitespace-pre"
+													>{line.kind === 'added'
+														? '+ '
+														: line.kind === 'removed'
+															? '- '
+															: '  '}{line.text}</span
+												>
+											</div>
+										{/each}
+									</div>
+								{:else}
+									<div class="px-2 py-1 text-xs text-subtle-foreground">
+										{m.history_diff_too_large()}
+									</div>
+								{/if}
 							</div>
 						{/if}
 					{/each}

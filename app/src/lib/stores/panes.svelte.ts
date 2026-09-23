@@ -546,6 +546,27 @@ export const panes = {
 		return true;
 	},
 
+	/**
+	 * Apply restored content to *every* pane showing `path`, not just the active
+	 * one: a history restore rewrites the file, so a second pane holding the same
+	 * note would otherwise keep the old text and clobber the restore on its next
+	 * autosave. Returns how many panes were updated.
+	 */
+	applyRestoredContent(path: string, content: string): number {
+		let updated = 0;
+		for (let pi = 0; pi < _panes.length; pi++) {
+			const pane = _panes[pi];
+			if (!pane.tabs.some((t) => t.path === path && t.content !== content)) continue;
+			_panes[pi] = {
+				...pane,
+				tabs: pane.tabs.map((t) => (t.path === path ? { ...t, content } : t)),
+				externalContentVersion: pane.externalContentVersion + 1
+			};
+			updated++;
+		}
+		return updated;
+	},
+
 	broadcastContent(sourcePaneIndex: number, filePath: string, content: string) {
 		// Only relevant when the same file is open in another pane.
 		if (_panes.length < 2) return;
