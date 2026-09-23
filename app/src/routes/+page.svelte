@@ -570,7 +570,11 @@
 	{/if}
 
 	{#if showSpotlight}
-		<Spotlight onselect={handleFileSelect} onclose={() => (showSpotlight = false)} />
+		<Spotlight
+			onselect={handleFileSelect}
+			onclose={() => (showSpotlight = false)}
+			onsettings={() => (showSettings = true)}
+		/>
 	{/if}
 {:else}
 	<Login />

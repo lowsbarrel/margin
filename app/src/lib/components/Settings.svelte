@@ -7,8 +7,11 @@
 	import { GlassModal } from '$lib/ui';
 	import { listDirectory } from '$lib/fs/bridge';
 	import * as m from '$lib/paraglide/messages.js';
+	import { llmConfigure, type ApiFormat } from '$lib/ai/bridge';
+	import { ask } from '$lib/stores/ask.svelte';
 	import SettingsVault from './settings/SettingsVault.svelte';
 	import SettingsCloud from './settings/SettingsCloud.svelte';
+	import SettingsAi from './settings/SettingsAi.svelte';
 	import SettingsAttachments from './settings/SettingsAttachments.svelte';
 	import SettingsLocale from './settings/SettingsLocale.svelte';
 	import SettingsAppearance from './settings/SettingsAppearance.svelte';
@@ -31,6 +34,10 @@
 	let autoSync = $state(false);
 	let conflictStrategy = $state<ConflictStrategy>('local_wins');
 	let vaultFolders = $state<string[]>([]);
+	let llmFormat = $state<ApiFormat>('openai');
+	let llmBaseUrl = $state('');
+	let llmApiKey = $state('');
+	let llmModel = $state('');
 
 	$effect(() => {
 		if (vault.vaultPath && vault.encryptionKey) {
@@ -45,6 +52,24 @@
 				attachmentFolder = settings?.attachment_folder ?? '';
 				autoSync = settings?.auto_sync ?? false;
 				conflictStrategy = (settings?.conflict_strategy as ConflictStrategy) ?? 'local_wins';
+				if (settings?.llm) {
+					llmFormat = settings.llm.api_format;
+					llmBaseUrl = settings.llm.base_url ?? '';
+					llmApiKey = settings.llm.api_key ?? '';
+					llmModel = settings.llm.model;
+				}
+				// Hand the endpoint to Rust here, where the key is in hand, so the
+				// answer loop never needs it over IPC again.
+				if (settings?.llm) {
+					llmConfigure(settings.llm)
+						.then(() => ask.markConfigured(true))
+						.catch((err) => {
+							console.warn('Failed to configure AI:', err);
+							ask.markConfigured(false);
+						});
+				} else {
+					ask.markConfigured(false);
+				}
 			});
 			listDirectory(vault.vaultPath).then((entries) => {
 				vaultFolders = entries
@@ -68,11 +93,22 @@
 	function getAppSettings(): AppSettings {
 		const config = getS3Config();
 		const hasS3 = config.endpoint && config.bucket && config.access_key && config.secret_key;
+		// A model is what makes the endpoint usable; without one there is nothing
+		// to ask, so the AI section stays unconfigured rather than half-saved.
+		const model = llmModel.trim();
 		return {
 			s3: hasS3 ? config : null,
 			attachment_folder: attachmentFolder.trim() || null,
 			auto_sync: autoSync || null,
-			conflict_strategy: conflictStrategy
+			conflict_strategy: conflictStrategy,
+			llm: model
+				? {
+						api_format: llmFormat,
+						base_url: llmBaseUrl.trim(),
+						api_key: llmApiKey.trim(),
+						model
+					}
+				: null
 		};
 	}
 
@@ -87,6 +123,10 @@
 		attachmentFolder = settings.attachment_folder ?? '';
 		autoSync = settings.auto_sync ?? false;
 		conflictStrategy = (settings.conflict_strategy as ConflictStrategy) ?? 'local_wins';
+		llmFormat = settings.llm?.api_format ?? 'openai';
+		llmBaseUrl = settings.llm?.base_url ?? '';
+		llmApiKey = settings.llm?.api_key ?? '';
+		llmModel = settings.llm?.model ?? '';
 	}
 
 	async function handleClose() {
@@ -99,6 +139,9 @@
 		try {
 			const settings = getAppSettings();
 			if (settings.s3) await s3Configure(settings.s3);
+			// Rust state, not the settings file, is what the answer loop reads.
+			if (settings.llm) await llmConfigure(settings.llm);
+			ask.markConfigured(Boolean(settings.llm));
 			await saveSettings(vault.vaultPath, vault.encryptionKey, settings);
 
 			if (autoSync && settings.s3 && vault.vaultId && vault.encryptionKey) {
@@ -126,6 +169,12 @@
 		bind:secretKey
 		bind:autoSync
 		bind:conflictStrategy
+	/>
+	<SettingsAi
+		bind:apiFormat={llmFormat}
+		bind:baseUrl={llmBaseUrl}
+		bind:apiKey={llmApiKey}
+		bind:model={llmModel}
 	/>
 	<SettingsAttachments bind:attachmentFolder {vaultFolders} />
 	<SettingsLocale />

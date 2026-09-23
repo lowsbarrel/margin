@@ -27,7 +27,7 @@ A fact is defined once and imported everywhere else.
 | ------------------------------ | -------------------------------------------- |
 | Filesystem, crypto, S3, search | a module under `src-tauri/src/`              |
 | The typed IPC surface          | `src/lib/bindings.ts` (generated)            |
-| Raw-byte IPC                   | `src/lib/{crypto,fs,s3}/bridge.ts`           |
+| Raw IPC (bytes, streamed events) | `src/lib/{crypto,fs,s3}/bridge.ts`, `src/lib/ai/bridge.ts` |
 | App state                      | `src/lib/stores/*.svelte.ts` (runes)         |
 | Raw colour, spacing, type      | `src/lib/styles/tokens.css`                  |
 | Tokens → Tailwind + shadcn     | `src/lib/styles/theme.css`                   |
@@ -55,7 +55,7 @@ A fact is defined once and imported everywhere else.
   deliberate subset: raw-byte commands aren't representable in specta and are
   reached through a `bridge.ts` seam instead.
 - The frontend calls the generated `commands` object. A raw `invoke()` outside
-  the four allowlisted bridge files bypasses the types.
+  the five allowlisted bridge files bypasses the types.
 - After changing a command signature: `bun run gen:bindings`. Commit the result.
 - Colours come from tokens, never literals: `tokens.css` holds the raw values,
   `theme.css` maps them onto Tailwind's `@theme` and shadcn's variable names,
@@ -65,7 +65,11 @@ A fact is defined once and imported everywhere else.
   `shadcn-svelte add`. Restyle through the theme, not by editing it in place.
 - User-facing strings go through Paraglide. Both `en` and `it` are maintained —
   a key added to one and not the other falls back silently.
-- `{@html}` is XSS on note content. It is allowlisted in one file.
+- `{@html}` is XSS on note content. Nothing is allowlisted: content reaches the
+  DOM through ProseMirror, never as an HTML string.
+- The configured AI endpoint is the one place note text leaves the machine
+  unencrypted, and only because the user asked a question there. Its API key is
+  stored in the encrypted settings file; the agent loop reads it from Rust state.
 - Heavy work belongs off the main thread: Rust for CPU-bound work. Never block
   the editor.
 - Heavy editor dependencies load through dynamic `import()`. A top-level import
