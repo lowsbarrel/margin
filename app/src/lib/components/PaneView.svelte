@@ -168,6 +168,7 @@
 					initialContent={tab.content}
 					externalContentVersion={pane.externalContentVersion}
 					title={fileTitle(tab.path)}
+					viewMode={tab.viewMode}
 					active={isActive && paneIndex === panes.activePaneIndex}
 					initialCursorPos={tab.cursorPos}
 					{onrename}

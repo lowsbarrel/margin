@@ -313,5 +313,7 @@
 	"editor_table_add_row": "Add row",
 	"editor_table_add_column": "Add column",
 	"editor_table_row_menu": "Row options",
-	"editor_table_column_menu": "Column options"
+	"editor_table_column_menu": "Column options",
+	"statusbar_view_source": "Source mode",
+	"statusbar_view_rich": "Rich text mode"
 }

@@ -126,6 +126,15 @@
 		if (opened && searchText) scrollEditorToText(searchText);
 	}
 
+	// Editor surface (rich / raw Markdown). `activeTab` hands back the reactive
+	// tab object, so writing the field is enough to move the surface and to have
+	// the workspace autosave effect notice.
+	function toggleViewMode() {
+		const tab = panes.activeTab;
+		if (!tab || tab.type !== 'markdown') return;
+		tab.viewMode = tab.viewMode === 'source' ? 'rich' : 'source';
+	}
+
 	// Tab context menu
 
 	let tabContextMenu = $state<{
@@ -199,6 +208,7 @@
 					path: t.path,
 					type: t.type,
 					pinned: t.pinned,
+					view_mode: t.viewMode,
 					cursor_pos: t.cursorPos ?? null
 				})),
 				active_tab_index: p.activeTabIndex
@@ -451,7 +461,7 @@
 	// Auto-save workspace state when layout changes
 	$effect(() => {
 		const _panes = panes.list.map((p) => ({
-			tabs: p.tabs.map((t) => t.path),
+			tabs: p.tabs.map((t) => [t.path, t.viewMode]),
 			activeTabIndex: p.activeTabIndex
 		}));
 		const _flexes = panes.flexes;
@@ -556,6 +566,8 @@
 			historyActive={showHistory}
 			onbacklinks={() => (showBacklinks = !showBacklinks)}
 			backlinksActive={showBacklinks}
+			viewMode={panes.activeTab?.type === 'markdown' ? panes.activeTab.viewMode : 'rich'}
+			ontoggleviewmode={toggleViewMode}
 		/>
 	</div>
 
@@ -606,6 +618,11 @@
 		if (e.shiftKey && key === 't') {
 			e.preventDefault();
 			panes.reopenClosedTab();
+		}
+		// Toggle the active tab's editor surface.
+		if (e.shiftKey && key === 'e') {
+			e.preventDefault();
+			toggleViewMode();
 		}
 	}}
 	onmousemove={(e) => {

@@ -11,6 +11,7 @@
 	import { vault } from '$lib/stores/vault.svelte';
 	import { writeFileBytes, fileExists } from '$lib/fs/bridge';
 	import { fileTitle } from '$lib/stores/panes.svelte';
+	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { saveSnapshot } from '$lib/history/bridge';
 	import { getCurrentWebview } from '@tauri-apps/api/webview';
 	import { drag } from '$lib/stores/drag.svelte';
@@ -30,6 +31,7 @@
 		handleTauriFileDrop
 	} from '$lib/editor/handlers/drag-drop';
 	import { positionBubbleMenu } from '$lib/editor/handlers/bubble-menu';
+	import type { SourceEditor } from '$lib/editor/source/codemirror';
 	// SearchReplace augments TipTap's Storage interface with both `searchReplace`
 	// and the tiptap-markdown `markdown` storage, so `editor.storage.markdown` is typed.
 	import '$lib/editor/search-replace';
@@ -68,6 +70,8 @@
 		externalContentVersion?: number;
 		title: string;
 		active?: boolean;
+		/** Which surface this tab shows: the rich editor or the raw Markdown. */
+		viewMode?: ViewMode;
 		/** Caret position to restore once, on first mount (workspace restore). */
 		initialCursorPos?: number;
 		onrename?: (oldPath: string, newPath: string) => void | Promise<void>;
@@ -84,6 +88,7 @@
 		externalContentVersion = 0,
 		title: initialTitle,
 		active = true,
+		viewMode = 'rich',
 		initialCursorPos,
 		onrename,
 		onwikilink,
@@ -135,6 +140,21 @@
 	} | null>(null);
 	let showFindReplace = $state(false);
 	let findReplaceMode = $state(false);
+	/** Mount point the CodeMirror source surface is attached to. */
+	let sourceEl: HTMLDivElement | undefined = $state();
+	/** The source surface, created on first use and kept for the tab's life. */
+	let source: SourceEditor | null = null;
+	/** Invalidates an in-flight source-surface setup after a fast mode switch. */
+	let sourceToken = 0;
+	/**
+	 * The exact text the rich document's current content came from, when that is
+	 * known (the file as loaded, an external reload, or a source-mode edit). While
+	 * it stands, switching to source shows that text verbatim instead of a
+	 * serializer round-trip; any edit in the rich editor clears it.
+	 */
+	let sourceSeed: string | null = untrack(() => initialContent);
+	/** Workspace-restored caret offset, held until the source surface exists. */
+	let pendingSourceCursor: number | null = null;
 	const lowlight = createLowlight(common);
 
 	const RENAME_DELAY = 150;
@@ -157,29 +177,41 @@
 
 	// Reload content on external update
 	let lastSeenVersion = untrack(() => externalContentVersion);
-	let externalUpdateToken = 0;
+	// Guards every full-document replacement of the rich editor against an
+	// out-of-order async resolution, whichever path started it.
+	let richReplaceToken = 0;
 	$effect(() => {
 		const v = externalContentVersion;
 		if (v !== lastSeenVersion) {
 			lastSeenVersion = v;
 			if (tiptap && initialContent != null) {
+				const mode = viewMode;
 				// Whatever local text is still queued for the debounced save is
 				// superseded by the incoming content. Snapshot the document as it
 				// stands so the edit survives in history, then drop the stale write
 				// — flushing it would put the old text back on disk over the very
 				// change being adopted.
-				snapshot(serializeDocument(tiptap));
+				snapshot(mode === 'source' && source ? source.getText() : serializeDocument(tiptap));
 				cancelPendingSave();
 				editorStore.setDirty(false);
+				sourceSeed = initialContent;
+
+				// The source surface holds the file's bytes as they are; only the
+				// rich editor needs the image paths resolved before parsing.
+				if (mode === 'source' && source) {
+					source.setText(initialContent);
+					return;
+				}
+
 				// Guard against out-of-order async resolution (mirror bubblePositionToken).
-				const token = ++externalUpdateToken;
+				const token = ++richReplaceToken;
 				transformImagePaths(
 					takeFrontmatter(initialContent),
 					vault.vaultPath,
 					attachmentFolder,
 					'resolve'
 				).then((resolved) => {
-					if (token !== externalUpdateToken || !tiptap) return;
+					if (token !== richReplaceToken || !tiptap) return;
 					// Preserve selection across the full-document replacement.
 					const prev = tiptap.state.selection;
 					const prevFrom = prev.from;
@@ -259,6 +291,10 @@
 
 	/** Report the caret position to the parent so it can be persisted per tab. */
 	function snapshotCursor() {
+		if (viewMode === 'source' && source) {
+			onsnapshotcursor?.(source.getCursorOffset());
+			return;
+		}
 		if (!tiptap) return;
 		onsnapshotcursor?.(tiptap.state.selection.from);
 	}
@@ -268,7 +304,14 @@
 	 * the document so a stale position (file shrank on disk) can't throw.
 	 */
 	function restoreCursorOnce() {
-		if (initialCursorPos == null || !tiptap) return;
+		if (initialCursorPos == null) return;
+		// The persisted position was recorded against whichever surface was up at
+		// the time, so a source-mode tab hands it to CodeMirror instead.
+		if (viewMode === 'source') {
+			pendingSourceCursor = initialCursorPos;
+			return;
+		}
+		if (!tiptap) return;
 		try {
 			const size = tiptap.state.doc.content.size;
 			const pos = Math.min(Math.max(initialCursorPos, 0), Math.max(size - 1, 0));
@@ -509,6 +552,9 @@
 				const text = serializeDocument(e);
 				if (text === lastSavedMd) return;
 				lastSavedMd = text;
+				// The rich document no longer matches any text the source surface
+				// could hold verbatim, so a later switch has to serialize it.
+				sourceSeed = null;
 				// Immediate UI feedback; debounce the actual write to coalesce typing.
 				editorStore.setDirty(true);
 				scheduleSave(text);
@@ -544,6 +590,140 @@
 		editorStore.setTiptap(inst);
 	}
 
+	/**
+	 * The caret's plain-text offset in the rich document, mapped onto the source
+	 * text. Block text is the anchor and document-proportional scroll the floor:
+	 * markdown markers (`**`, `> `) drop out of the rich text, so an anchor that
+	 * cannot be found is expected rather than exceptional.
+	 */
+	function richCursorToSourceOffset(e: Editor, sourceText: string): number {
+		const { doc, selection } = e.state;
+		const from = selection.from;
+		const proportional = Math.round((from / Math.max(doc.content.size, 1)) * sourceText.length);
+		const resolved = doc.resolve(from);
+		if (resolved.depth < 1) return proportional;
+		const anchor = doc.textBetween(resolved.start(1), from, ' ').slice(-24).trim();
+		if (!anchor) return proportional;
+		const at = sourceText.indexOf(anchor);
+		return at === -1 ? proportional : at + anchor.length;
+	}
+
+	/** The reverse of {@link richCursorToSourceOffset}. */
+	function sourceOffsetToRichPos(e: Editor, sourceText: string, offset: number): number {
+		const doc = e.state.doc;
+		const size = doc.content.size;
+		const clamp = (pos: number) => Math.min(Math.max(pos, 0), Math.max(size - 1, 0));
+		const proportional = Math.round((offset / Math.max(sourceText.length, 1)) * size);
+		const anchor = sourceText.slice(Math.max(0, offset - 24), offset).trim();
+		if (!anchor) return clamp(proportional);
+		const plain = doc.textBetween(0, size, '\n');
+		const at = plain.indexOf(anchor);
+		if (at === -1) return clamp(proportional);
+		return clamp(Math.round(((at + anchor.length) / Math.max(plain.length, 1)) * size));
+	}
+
+	/** Status-bar line/column for a plain-text offset. */
+	function reportSourceCursor(text: string, offset: number) {
+		const lineStart = text.lastIndexOf('\n', Math.max(offset - 1, 0));
+		const line = text.slice(0, offset).split('\n').length;
+		editorStore.setCursor(line, offset - lineStart);
+	}
+
+	/** A source-surface edit: the raw text *is* the file, so it saves as-is. */
+	function handleSourceChange(text: string) {
+		if (!alive) return;
+		editorStore.setDirty(true);
+		scheduleSave(text);
+	}
+
+	/** Replace the rich document with `text`, re-parsing it through the load path. */
+	function applyTextToRich(e: Editor, text: string, caretPos: number) {
+		const token = ++richReplaceToken;
+		return transformImagePaths(
+			takeFrontmatter(text),
+			vault.vaultPath,
+			attachmentFolder,
+			'resolve'
+		).then((resolved) => {
+			if (token !== richReplaceToken || !alive) return;
+			e.commands.setContent(resolved, { emitUpdate: false });
+			const size = e.state.doc.content.size;
+			e.commands.setTextSelection(Math.min(Math.max(caretPos, 0), Math.max(size - 1, 0)));
+			e.commands.scrollIntoView();
+		});
+	}
+
+	async function enterSourceMode(e: Editor) {
+		const token = ++sourceToken;
+		// The debounce window would otherwise swallow the last rich keystroke.
+		flushPendingSave();
+		showFindReplace = false;
+
+		const text = sourceSeed ?? serializeDocument(e);
+		let offset = richCursorToSourceOffset(e, text);
+		if (pendingSourceCursor != null) {
+			offset = pendingSourceCursor;
+			pendingSourceCursor = null;
+		}
+
+		if (!source) {
+			if (!sourceEl) return;
+			const { createSourceEditor } = await import('$lib/editor/source/codemirror');
+			if (token !== sourceToken || !alive || !sourceEl) return;
+			source = await createSourceEditor({
+				parent: sourceEl,
+				doc: text,
+				onChange: handleSourceChange,
+				onCursor: (line, col) => editorStore.setCursor(line, col)
+			});
+			source.setCursorOffset(offset);
+		} else if (source.getText() !== text) {
+			source.setText(text);
+			source.setCursorOffset(offset);
+		} else {
+			// Nothing was reseeded, so the surface's own caret is still the better one.
+			offset = source.getCursorOffset();
+		}
+
+		// The mode flipped back while the surface was being built.
+		if (token !== sourceToken || !alive) return;
+
+		// A programmatic cursor move emits no selection event when the offset is
+		// unchanged, so the readout is refreshed from the text either way.
+		reportSourceCursor(text, offset);
+		// A background tab (cached editor) must not pull focus off the active one.
+		if (active) source.focus();
+	}
+
+	function exitSourceMode(e: Editor) {
+		sourceToken++;
+		// Same reason as entering: the source save must land before the rich
+		// editor is rebuilt from it.
+		flushPendingSave();
+		if (!source) return;
+		const text = source.getText();
+		const offset = source.getCursorOffset();
+		sourceSeed = text;
+		void applyTextToRich(e, text, sourceOffsetToRichPos(e, text, offset));
+	}
+
+	// The surface follows the tab's mode: the rich editor stays alive (hidden)
+	// while the source view is up, so neither switch pays a re-parse it can avoid.
+	$effect(() => {
+		const mode = viewMode;
+		const e = tiptap;
+		if (!e) return;
+		untrack(() => {
+			if (mode === 'source') void enterSourceMode(e);
+			else exitSourceMode(e);
+		});
+	});
+
+	// A hidden tab measures as empty; remeasure when it comes back to the front.
+	$effect(() => {
+		if (active && viewMode === 'source' && source) source.requestMeasure();
+	});
+
 	onMount(() => {
 		transformImagePaths(
 			takeFrontmatter(initialContent),
@@ -559,10 +739,14 @@
 		// Find & Replace keyboard shortcuts
 		function handleFindHotkey(e: KeyboardEvent) {
 			if ((e.metaKey || e.ctrlKey) && e.key === 'f') {
+				// CodeMirror's own search keymap already opened its panel on this
+				// event; the TipTap panel would land on the hidden rich editor.
+				if (viewMode === 'source') return;
 				e.preventDefault();
 				findReplaceMode = false;
 				showFindReplace = true;
 			} else if ((e.metaKey || e.ctrlKey) && e.key === 'h') {
+				if (viewMode === 'source') return;
 				e.preventDefault();
 				findReplaceMode = true;
 				showFindReplace = true;
@@ -630,6 +814,9 @@
 		if (showFindReplace && tiptap) {
 			tiptap.commands.clearSearch();
 		}
+		sourceToken++;
+		source?.destroy();
+		source = null;
 		if (editorStore.tiptap === tiptap) {
 			editorStore.setTiptap(null);
 		}
@@ -645,8 +832,14 @@
 <!-- `editor-container` carries no styling any more, but the name must stay: it is
      the scroll-parent hook that content-drag, search-replace, pdf-export and the
      page-level "scroll to match" helper all find via `closest()`. -->
-<div class="editor-container relative flex-1 overflow-y-auto bg-background">
-	{#if showFindReplace}
+<div
+	class="editor-container relative flex-1 bg-background"
+	class:flex={viewMode === 'source'}
+	class:flex-col={viewMode === 'source'}
+	class:overflow-y-auto={viewMode === 'rich'}
+	class:overflow-hidden={viewMode === 'source'}
+>
+	{#if showFindReplace && viewMode === 'rich'}
 		<FindReplace
 			editor={tiptap}
 			showReplace={findReplaceMode}
@@ -670,8 +863,17 @@
 	></div>
 	<!-- `editor-wrap` is the root of the ProseMirror-generated document; the whole
 	     of `editor-styles.css` (plus the list-marker rules in app.css) hangs off
-	     this class name, so it stays. -->
-	<div class="editor-wrap overflow-hidden bg-background" bind:this={container}></div>
+	     this class name, so it stays. Hidden, not torn down, in source mode. -->
+	<div
+		class="editor-wrap overflow-hidden bg-background"
+		class:hidden={viewMode === 'source'}
+		bind:this={container}
+	></div>
+	<!-- Source mode. The outer box mirrors the rich surface's `max-width: 750px`
+	     and `2.5rem` side padding so toggling does not shift the text column. -->
+	<div class="min-h-0 flex-1" class:hidden={viewMode !== 'source'}>
+		<div class="mx-auto h-full w-full max-w-187.5 px-10 pt-4" bind:this={sourceEl}></div>
+	</div>
 </div>
 
 {#if lightboxSrc}

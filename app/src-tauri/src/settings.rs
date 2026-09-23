@@ -124,6 +124,10 @@ pub struct WorkspaceTab {
     // existed loadable — they decode as an unpinned tab with no saved cursor.
     #[serde(default)]
     pub pinned: bool,
+    // Which surface the tab was last on: "rich" or "source". Older workspaces
+    // decode it as the empty string, which the frontend reads as "rich".
+    #[serde(default)]
+    pub view_mode: String,
     // ProseMirror document position of the caret, restored on next launch.
     #[serde(default)]
     pub cursor_pos: Option<u32>,
@@ -186,4 +190,36 @@ pub fn load_workspace_state(
         serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
 
     Ok(Some(state))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Workspaces are encrypted blobs already on users' disks; a new field
+    /// without `#[serde(default)]` would make every existing one fail to load.
+    #[test]
+    fn workspace_tab_decodes_without_newer_fields() {
+        let json = r#"{"path":"a.md","type":"markdown","pinned":true}"#;
+        let tab: WorkspaceTab = serde_json::from_str(json).unwrap();
+        assert_eq!(tab.path, "a.md");
+        assert!(tab.pinned);
+        assert_eq!(tab.view_mode, "");
+        assert_eq!(tab.cursor_pos, None);
+    }
+
+    #[test]
+    fn workspace_tab_round_trips_view_mode() {
+        let tab = WorkspaceTab {
+            path: "a.md".into(),
+            tab_type: "markdown".into(),
+            pinned: false,
+            view_mode: "source".into(),
+            cursor_pos: Some(12),
+        };
+        let json = serde_json::to_string(&tab).unwrap();
+        let back: WorkspaceTab = serde_json::from_str(&json).unwrap();
+        assert_eq!(back.view_mode, "source");
+        assert_eq!(back.cursor_pos, Some(12));
+    }
 }
