@@ -26,17 +26,9 @@
 		oncontextmenuentry: (entry: TreeEntry, event: MouseEvent) => void;
 		onrename: (entry: TreeEntry, newName: string) => void;
 		onmoveentry: (fromPath: string, toDir: string, isDir: boolean) => Promise<void>;
-		ondeleteentry: (path: string, isDir: boolean) => Promise<void>;
 	}
 
-	let {
-		activeFile,
-		onfileselect,
-		oncontextmenuentry,
-		onrename,
-		onmoveentry,
-		ondeleteentry
-	}: Props = $props();
+	let { activeFile, onfileselect, oncontextmenuentry, onrename, onmoveentry }: Props = $props();
 
 	let dropTargetFolder = $state<string | null>(null);
 
@@ -199,7 +191,7 @@
 	$effect(() => {
 		if (drag.active) {
 			function onMove(e: MouseEvent) {
-				tryNativeDrag(e.clientX, e.clientY, dragIconPath, ondeleteentry, nativeDragState);
+				tryNativeDrag(e.clientX, e.clientY, dragIconPath, nativeDragState);
 			}
 			window.addEventListener('mousemove', onMove);
 			return () => {

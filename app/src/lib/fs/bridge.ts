@@ -1,7 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { commands } from '$lib/bindings';
-import { initWriteQueue, queuedWrite, flushWriteQueue } from './writeQueue';
+import { initWriteQueue, queuedWrite, flushWriteQueue, remapRecentWrites } from './writeQueue';
 
 /**
  * Re-exported so call sites (e.g. window-close handlers) can await all pending
@@ -134,6 +134,7 @@ export async function deleteEntry(path: string): Promise<void> {
 export async function renameEntry(from: string, to: string): Promise<void> {
 	const r = await commands.renameEntry(from, to);
 	if (r.status === 'error') throw r.error;
+	remapRecentWrites(from, to);
 }
 
 export async function createDirectory(path: string): Promise<void> {

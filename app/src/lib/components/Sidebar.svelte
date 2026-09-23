@@ -385,11 +385,8 @@
 	// External file drop (OS file manager)
 	async function handleExternalDrop(paths: string[], position: { x: number; y: number }) {
 		if (!vault.vaultPath || !sidebarPanelEl) return;
-		// If this drop originated from our own native drag, flag it and skip import
-		if (drag.nativeDragActive) {
-			drag.markDroppedBackInApp();
-			return;
-		}
+		// If this drop originated from our own native drag, skip import
+		if (drag.nativeDragActive) return;
 		const rect = sidebarPanelEl.getBoundingClientRect();
 		if (
 			position.x < rect.left ||
@@ -562,7 +559,6 @@
 						oncontextmenuentry={openEntryContextMenu}
 						onrename={handleInlineRename}
 						onmoveentry={handleMoveEntry}
-						ondeleteentry={(path, isDir) => ondeleteentry(path, isDir)}
 					/>
 				</div>
 			{:else if activeView === 'favourites'}

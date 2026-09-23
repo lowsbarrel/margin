@@ -6,12 +6,17 @@ import { vault } from '$lib/stores/vault.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import { deleteEntry, unwatchFile, unwatchVault, renameEntry, searchFiles } from '$lib/fs/bridge';
-import { clearHistoryTree, renameHistory } from '$lib/history/bridge';
+import { renameHistory } from '$lib/history/bridge';
+import { flushEditorWrites } from '$lib/fs/writeQueue';
 import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
 
 export async function handleRename(oldPath: string, newPath: string, isDir = false) {
 	if (!vault.vaultPath || oldPath === newPath) return;
 	try {
+		// The editor may still be holding a debounced save for the old path. Land
+		// it before the move, or the queued write recreates the file at the old
+		// path once the rename has already happened.
+		await flushEditorWrites();
 		await unwatchFile();
 
 		let historyRenamed = false;
@@ -80,11 +85,6 @@ export async function handleDelete(path: string, isDir: boolean) {
 			files.setSelectedFolder(vault.vaultPath);
 		}
 
-		try {
-			await clearHistoryTree(vault.vaultPath, path);
-		} catch (err) {
-			console.warn('Failed to clear history for deleted entry:', err);
-		}
 		await deleteEntry(path);
 		favourites.removePath(path);
 		await files.refresh(vault.vaultPath);

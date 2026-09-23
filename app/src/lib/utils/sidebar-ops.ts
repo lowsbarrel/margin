@@ -28,24 +28,30 @@ export type CollisionSuffix = 'numeric' | 'copy';
  * Pick a name that is free in `existing`. `numeric` gives "name 1", `copy`
  * gives "name copy" / "name copy 2" — the two schemes the sidebar used to
  * reimplement inline, kept here so a duplicate and a paste cannot drift apart.
+ *
+ * Names are compared case-folded: macOS and Windows hold `Photo.PNG` and
+ * `photo.png` to be the same name, so a byte-exact comparison would hand out a
+ * path that already exists on disk.
  */
 function uniqueName(name: string, existing: Set<string>, suffix: CollisionSuffix): string {
 	const extIndex = name.lastIndexOf('.');
 	const stem = extIndex > 0 ? name.slice(0, extIndex) : name;
 	const ext = extIndex > 0 ? name.slice(extIndex) : '';
+	const taken = new Set([...existing].map((entry) => entry.toLowerCase()));
+	const isTaken = (candidate: string) => taken.has(candidate.toLowerCase());
 
 	// A duplicate always suffixes: the name it copies is by definition taken.
 	if (suffix === 'copy') {
 		for (let i = 1; ; i++) {
 			const candidate = `${stem} copy${i > 1 ? ` ${i}` : ''}${ext}`;
-			if (!existing.has(candidate)) return candidate;
+			if (!isTaken(candidate)) return candidate;
 		}
 	}
 
-	if (!existing.has(name)) return name;
+	if (!isTaken(name)) return name;
 	for (let i = 1; ; i++) {
 		const candidate = `${stem} ${i}${ext}`;
-		if (!existing.has(candidate)) return candidate;
+		if (!isTaken(candidate)) return candidate;
 	}
 }
 

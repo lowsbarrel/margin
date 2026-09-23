@@ -1,6 +1,7 @@
 mod export;
 mod search;
 pub(crate) mod tags;
+mod trash;
 mod walk;
 mod watch;
 
@@ -221,6 +222,19 @@ fn ensure_in_vault(path: &str, vault: &VaultPathState) -> Result<PathBuf, String
     Ok(resolved)
 }
 
+/// As [`ensure_in_vault`], but keeps the final component as spelled: macOS
+/// `realpath` would fold a case-only rename (`note.md` → `Note.md`) back onto the
+/// source's on-disk name.
+fn ensure_in_vault_keep_name(path: &str, vault: &VaultPathState) -> Result<PathBuf, String> {
+    let target = Path::new(path);
+    let (Some(parent), Some(name)) = (target.parent(), target.file_name()) else {
+        return Err("Invalid path".into());
+    };
+    let mut resolved = ensure_in_vault(&parent.to_string_lossy(), vault)?;
+    resolved.push(name);
+    Ok(resolved)
+}
+
 pub struct WatcherState(pub Mutex<Option<notify::RecommendedWatcher>>);
 
 /// Watches the entire vault directory recursively so the frontend is notified
@@ -277,6 +291,16 @@ pub fn set_vault_directory(
     std::thread::spawn(move || {
         if let Err(e) = crate::index::rebuild(&root) {
             eprintln!("Initial search index build failed: {e}");
+        }
+    });
+    // Expired trash is swept on open rather than on a timer: a vault that is
+    // never opened needs no sweeping. Same rule as the index warm-up — a
+    // failure here is logged, never surfaced.
+    let purge_root = path.to_string();
+    std::thread::spawn(move || {
+        let removed = trash::purge_older_than(&purge_root, trash::PURGE_AGE_MS);
+        if removed > 0 {
+            eprintln!("Purged {removed} expired trash item(s)");
         }
     });
     Ok(())
@@ -405,13 +429,9 @@ pub fn delete_entry(
 ) -> Result<(), String> {
     let p = ensure_in_vault(path, &vault_path_state)?;
     let was_dir = p.is_dir();
-    if was_dir {
-        fs::remove_dir_all(&p).map_err(|e| format!("Failed to delete directory: {e}"))?;
-    } else {
-        fs::remove_file(&p).map_err(|e| format!("Failed to delete file: {e}"))?;
-    }
-    crate::index::tree::invalidate();
     let root = vault_root(&vault_path_state);
+    trash::trash_entry(&root, &p)?;
+    crate::index::tree::invalidate();
     if was_dir {
         // A directory delete removes an unknown number of notes; a prefix sweep
         // is still one statement, versus re-walking the vault to find them.
@@ -422,6 +442,66 @@ pub fn delete_entry(
     Ok(())
 }
 
+/// Error for a write whose destination is already occupied. Names the entry so
+/// the user can tell which one is in the way.
+fn occupied_error(to: &Path) -> String {
+    let name = to
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| path_to_string(to.to_path_buf()));
+    format!("\"{name}\" already exists")
+}
+
+/// Whether a rename from `from` to `to` would replace a *different* entry.
+///
+/// `symlink_metadata` rather than `exists`, so a dangling symlink still counts:
+/// a rename would silently replace the link.
+fn destination_conflicts(from: &Path, to: &Path) -> bool {
+    fs::symlink_metadata(to).is_ok() && !same_entry(from, to)
+}
+
+/// Whether `to` is another spelling of `from` itself — the case-only rename
+/// (`note.md` → `Note.md`) that must be allowed.
+///
+/// On a case-insensitive filesystem the destination "exists" from the moment the
+/// source does, so a plain existence test would forbid the rename. The names
+/// must be equal case-folded *and* the directory must hold no entry whose name
+/// is byte-equal to the destination: on a case-sensitive filesystem holding both
+/// spellings, that byte-equal entry is a different file and the rename must be
+/// refused.
+fn same_entry(from: &Path, to: &Path) -> bool {
+    if from.parent() != to.parent() {
+        return false;
+    }
+    let (Some(from_name), Some(to_name)) = (from.file_name(), to.file_name()) else {
+        return false;
+    };
+    if from_name == to_name {
+        return true;
+    }
+    if from_name.to_string_lossy().to_lowercase() != to_name.to_string_lossy().to_lowercase() {
+        return false;
+    }
+    match fs::read_dir(from.parent().unwrap_or(Path::new("."))) {
+        Ok(entries) => !entries
+            .flatten()
+            .any(|e| e.file_name().as_os_str() == to_name),
+        Err(_) => false,
+    }
+}
+
+/// Rename one entry, refusing to replace whatever is already at `to`.
+fn rename_entry_at(from: &Path, to: &Path) -> Result<(), String> {
+    if destination_conflicts(from, to) {
+        return Err(occupied_error(to));
+    }
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
+    }
+    fs::rename(from, to).map_err(|e| format!("Failed to rename: {e}"))
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn rename_entry(
@@ -430,13 +510,9 @@ pub fn rename_entry(
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
     let from_path = ensure_in_vault(from, &vault_path_state)?;
-    let to_path = ensure_in_vault(to, &vault_path_state)?;
-    if let Some(parent) = to_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-    }
+    let to_path = ensure_in_vault_keep_name(to, &vault_path_state)?;
     let was_dir = from_path.is_dir();
-    fs::rename(&from_path, &to_path).map_err(|e| format!("Failed to rename: {e}"))?;
+    rename_entry_at(&from_path, &to_path)?;
     crate::index::tree::invalidate();
     let root = vault_root(&vault_path_state);
     if was_dir {
@@ -471,6 +547,21 @@ pub fn file_exists(path: &str, vault_path_state: tauri::State<'_, VaultPathState
         .unwrap_or(false)
 }
 
+/// Copy one file to `to`, refusing to replace anything already there. Copies
+/// never get the case-only-rename allowance: a copy onto another spelling of its
+/// own source would truncate the source it is reading from.
+fn copy_file_at(from: &Path, to: &Path) -> Result<(), String> {
+    if fs::symlink_metadata(to).is_ok() {
+        return Err(occupied_error(to));
+    }
+    if let Some(parent) = to.parent() {
+        fs::create_dir_all(parent)
+            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
+    }
+    fs::copy(from, to).map_err(|e| format!("Failed to copy file: {e}"))?;
+    Ok(())
+}
+
 #[tauri::command]
 #[specta::specta]
 pub fn copy_file(
@@ -480,11 +571,7 @@ pub fn copy_file(
 ) -> Result<(), String> {
     let from_path = ensure_in_vault(from, &vault_path_state)?;
     let to_path = ensure_in_vault(to, &vault_path_state)?;
-    if let Some(parent) = to_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-    }
-    fs::copy(&from_path, &to_path).map_err(|e| format!("Failed to copy file: {e}"))?;
+    copy_file_at(&from_path, &to_path)?;
     crate::index::tree::invalidate();
     crate::index::upsert_path(&vault_root(&vault_path_state), &to_path);
     Ok(())
@@ -504,11 +591,7 @@ pub fn import_external_file(
     vault_path_state: tauri::State<'_, VaultPathState>,
 ) -> Result<(), String> {
     let to_path = ensure_in_vault(to, &vault_path_state)?;
-    if let Some(parent) = to_path.parent() {
-        fs::create_dir_all(parent)
-            .map_err(|e| format!("Failed to create parent directory: {e}"))?;
-    }
-    fs::copy(Path::new(from), &to_path).map_err(|e| format!("Failed to import file: {e}"))?;
+    copy_file_at(Path::new(from), &to_path)?;
     crate::index::tree::invalidate();
     crate::index::upsert_path(&vault_root(&vault_path_state), &to_path);
     Ok(())
@@ -537,6 +620,11 @@ pub async fn copy_directory(
 /// followed and the depth cap applies — a symlinked subdirectory can neither
 /// escape the vault nor recurse without bound.
 fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    // Refuse an existing destination: merging a copy into it would interleave
+    // the two trees and overwrite whatever shares a name.
+    if fs::symlink_metadata(dst).is_ok() {
+        return Err(occupied_error(dst));
+    }
     fs::create_dir_all(dst).map_err(|e| format!("Failed to create directory: {e}"))?;
 
     let mut files: Vec<(PathBuf, PathBuf)> = Vec::new();
@@ -642,4 +730,184 @@ pub fn reveal_in_file_manager(path: &str) -> Result<(), String> {
         return Err(format!("File manager exited with status {exit_status}"));
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn temp_dir(tag: &str) -> PathBuf {
+        let dir = std::env::temp_dir().join(format!(
+            "margin-fs-test-{}-{tag}-{:?}",
+            std::process::id(),
+            std::thread::current().id()
+        ));
+        let _ = fs::remove_dir_all(&dir);
+        fs::create_dir_all(&dir).unwrap();
+        dir
+    }
+
+    #[test]
+    fn rename_refuses_an_existing_destination() {
+        let dir = temp_dir("rename-conflict");
+        let from = dir.join("from.md");
+        let to = dir.join("to.md");
+        fs::write(&from, "source").unwrap();
+        fs::write(&to, "target").unwrap();
+
+        let err = rename_entry_at(&from, &to).unwrap_err();
+        assert!(err.contains("to.md"), "error must name the target: {err}");
+        assert_eq!(fs::read_to_string(&to).unwrap(), "target");
+        assert_eq!(fs::read_to_string(&from).unwrap(), "source");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn rename_into_a_free_path_still_renames() {
+        let dir = temp_dir("rename-free");
+        let from = dir.join("from.md");
+        let to = dir.join("nested").join("to.md");
+        fs::write(&from, "source").unwrap();
+
+        rename_entry_at(&from, &to).unwrap();
+
+        assert!(!from.exists());
+        assert_eq!(fs::read_to_string(&to).unwrap(), "source");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn case_only_rename_of_the_same_file_changes_its_spelling() {
+        let dir = temp_dir("rename-case");
+        let lower = dir.join("note.md");
+        fs::write(&lower, "body").unwrap();
+        // On a case-sensitive filesystem `Note.md` is a different, absent file,
+        // so there is no same-entry rename to exercise.
+        if !dir.join("Note.md").exists() {
+            fs::remove_dir_all(&dir).ok();
+            return;
+        }
+        let vault = VaultPathState(Mutex::new(path_to_string(dir.clone())));
+        let from = ensure_in_vault(&path_to_string(lower), &vault).unwrap();
+        let to = ensure_in_vault_keep_name(&path_to_string(dir.join("Note.md")), &vault).unwrap();
+
+        rename_entry_at(&from, &to).unwrap();
+
+        let names: Vec<String> = fs::read_dir(&dir)
+            .unwrap()
+            .flatten()
+            .map(|e| e.file_name().to_string_lossy().into_owned())
+            .collect();
+        assert_eq!(names, ["Note.md"]);
+        assert_eq!(fs::read_to_string(dir.join("Note.md")).unwrap(), "body");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn case_varied_destination_is_a_conflict_when_both_spellings_exist() {
+        let dir = temp_dir("rename-case-conflict");
+        let lower = dir.join("note.md");
+        let upper = dir.join("Note.md");
+        fs::write(&lower, "lower").unwrap();
+        fs::write(&upper, "upper").unwrap();
+        // A case-insensitive filesystem just wrote the same file twice.
+        if fs::read_to_string(&lower).unwrap() == "upper" {
+            fs::remove_dir_all(&dir).ok();
+            return;
+        }
+
+        assert!(rename_entry_at(&lower, &upper).is_err());
+        assert_eq!(fs::read_to_string(&upper).unwrap(), "upper");
+        assert_eq!(fs::read_to_string(&lower).unwrap(), "lower");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_dangling_symlink_still_blocks_a_rename() {
+        let dir = temp_dir("rename-symlink");
+        let from = dir.join("from.md");
+        fs::write(&from, "source").unwrap();
+        let to = dir.join("to.md");
+        std::os::unix::fs::symlink(dir.join("missing.md"), &to).unwrap();
+
+        assert!(rename_entry_at(&from, &to).is_err());
+        assert_eq!(fs::read_to_string(&from).unwrap(), "source");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn copy_and_import_refuse_an_existing_destination() {
+        let dir = temp_dir("copy-conflict");
+        let src = dir.join("inside.md");
+        fs::write(&src, "source").unwrap();
+        let outside = dir.join("outside.png");
+        fs::write(&outside, "imported").unwrap();
+
+        let existing = dir.join("target.md");
+        fs::write(&existing, "target").unwrap();
+        let err = copy_file_at(&src, &existing).unwrap_err();
+        assert!(
+            err.contains("target.md"),
+            "error must name the target: {err}"
+        );
+        assert_eq!(fs::read_to_string(&existing).unwrap(), "target");
+
+        let imported = dir.join("existing.png");
+        fs::write(&imported, "keep").unwrap();
+        let err = copy_file_at(&outside, &imported).unwrap_err();
+        assert!(
+            err.contains("existing.png"),
+            "error must name the target: {err}"
+        );
+        assert_eq!(fs::read_to_string(&imported).unwrap(), "keep");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn copy_into_a_free_path_still_copies() {
+        let dir = temp_dir("copy-free");
+        let src = dir.join("inside.md");
+        fs::write(&src, "source").unwrap();
+        let dst = dir.join("nested").join("copy.md");
+
+        copy_file_at(&src, &dst).unwrap();
+
+        assert_eq!(fs::read_to_string(&dst).unwrap(), "source");
+        assert_eq!(fs::read_to_string(&src).unwrap(), "source");
+
+        fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn copying_a_directory_onto_an_existing_one_is_refused() {
+        let dir = temp_dir("copy-dir");
+        let src = dir.join("src");
+        fs::create_dir_all(src.join("sub")).unwrap();
+        fs::write(src.join("sub").join("a.md"), "a").unwrap();
+        let occupied = dir.join("occupied");
+        fs::create_dir_all(&occupied).unwrap();
+        fs::write(occupied.join("keep.md"), "keep").unwrap();
+
+        assert!(copy_dir_recursive(&src, &occupied).is_err());
+        assert_eq!(
+            fs::read_to_string(occupied.join("keep.md")).unwrap(),
+            "keep"
+        );
+
+        let free = dir.join("free");
+        copy_dir_recursive(&src, &free).unwrap();
+        assert_eq!(
+            fs::read_to_string(free.join("sub").join("a.md")).unwrap(),
+            "a"
+        );
+
+        fs::remove_dir_all(&dir).ok();
+    }
 }
