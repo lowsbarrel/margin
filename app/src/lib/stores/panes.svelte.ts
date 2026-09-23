@@ -9,11 +9,16 @@ import * as m from '$lib/paraglide/messages.js';
 
 export type TabType = 'markdown' | 'image' | 'pdf' | 'canvas' | 'graph' | 'unknown';
 
+/** Which surface a Markdown tab is editing on: the rich editor or the raw text. */
+export type ViewMode = 'rich' | 'source';
+
 export interface Tab {
 	id: number;
 	path: string;
 	content: string;
 	type: TabType;
+	/** Ignored by non-markdown tabs, which have only one surface. */
+	viewMode: ViewMode;
 	blobUrl?: string;
 	pdfData?: Uint8Array;
 	/** Pinned tabs sort to the front of the pane and survive close-others/all. */
@@ -398,6 +403,7 @@ export const panes = {
 			path,
 			content,
 			type: tabType,
+			viewMode: 'rich',
 			blobUrl,
 			pdfData,
 			pinned: false
@@ -427,6 +433,7 @@ export const panes = {
 			path: '__graph__',
 			content: '',
 			type: 'graph',
+			viewMode: 'rich',
 			pinned: false
 		};
 		_panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
@@ -632,6 +639,7 @@ export const panes = {
 				path,
 				content,
 				type,
+				viewMode: wsTab.view_mode === 'source' ? 'source' : 'rich',
 				blobUrl,
 				pdfData,
 				pinned: wsTab.pinned ?? false,
