@@ -196,11 +196,22 @@ fn optional_int(args: &Value, key: &str) -> Option<i64> {
 }
 
 /// Strip the vault prefix so the model reads (and cites) `notes/a.md` rather
-/// than an absolute path with a machine name in it.
+/// than an absolute path with a machine name in it. Paths that went through the
+/// containment check are canonical (`\\?\C:\…` on Windows, `/private/var` on
+/// macOS), so the canonical root is tried when the raw one doesn't match.
 fn rel_path(root: &str, path: &str) -> String {
-    match Path::new(path).strip_prefix(root) {
-        Ok(rel) => rel.to_string_lossy().replace('\\', "/"),
-        Err(_) => path.to_string(),
+    let path = Path::new(path);
+    let rel = path
+        .strip_prefix(root)
+        .ok()
+        .map(Path::to_path_buf)
+        .or_else(|| {
+            let canonical = Path::new(root).canonicalize().ok()?;
+            path.strip_prefix(canonical).ok().map(Path::to_path_buf)
+        });
+    match rel {
+        Some(rel) => rel.to_string_lossy().replace('\\', "/"),
+        None => path.to_string_lossy().into_owned(),
     }
 }
 
@@ -559,11 +570,13 @@ mod tests {
             "grep",
             &json!({"pattern": "Editor", "folder": "journal"}),
         );
-        assert!(out.contains("journal/today.md:2:"), "got {out}");
+        // Vault-relative with forward slashes on every platform, even though the
+        // folder went through canonicalization.
+        assert!(out.starts_with("journal/today.md:2:"), "got {out}");
         assert!(!out.contains("roadmap.md"), "got {out}");
 
         let out = run(&root, "grep", &json!({"pattern": "^Deferred"}));
-        assert!(out.contains("projects/roadmap.md:3:"), "got {out}");
+        assert!(out.starts_with("projects/roadmap.md:3:"), "got {out}");
 
         // An invalid pattern is reported to the model, not fatal.
         let out = run(&root, "grep", &json!({"pattern": "("}));
