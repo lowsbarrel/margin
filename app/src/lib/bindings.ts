@@ -51,6 +51,14 @@ export const commands = {
 	 *  which writes to a user-picked path outside the vault.
 	 */
 	importExternalFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_file", { from, to })),
+	/**
+	 *  Copy a directory from an arbitrary source **outside** the vault into a
+	 *  vault-contained destination. The directory counterpart of
+	 *  [`import_external_file`], for a folder dropped onto the tree from a file
+	 *  manager: only the destination is containment-checked, because the source is
+	 *  user-chosen and may live anywhere.
+	 */
+	importExternalDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_directory", { from, to })),
 	copyDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_directory", { from, to })),
 	revealInFileManager: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_in_file_manager", { path })),
 	/**

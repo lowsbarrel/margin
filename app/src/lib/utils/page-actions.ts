@@ -114,7 +114,7 @@ export function newEntryFolder(): string | null {
 	return vault.vaultPath;
 }
 
-async function ensureFolderExpanded(path: string) {
+export async function ensureFolderExpanded(path: string) {
 	const vaultPath = vault.vaultPath;
 	if (!vaultPath || path === vaultPath || files.expandedFolders.has(path)) return;
 	await files.expandFolder(path);

@@ -17,7 +17,7 @@
 	import { clipboard } from '$lib/stores/clipboard.svelte';
 	import { installExternalDropRouter } from '$lib/utils/external-drop';
 	import { IconButton } from '$lib/ui';
-	import { handleNewFolder, handleNewNote } from '$lib/utils/page-actions';
+	import { ensureFolderExpanded, handleNewFolder, handleNewNote } from '$lib/utils/page-actions';
 	// Static / non-interactive glyphs stay on lucide; the registry has no
 	// animated equivalent for PanelLeftClose.
 	import { PanelLeftClose, ArrowDownAZ, ArrowDownWideNarrow, ChevronsDownUp } from '@lucide/svelte';
