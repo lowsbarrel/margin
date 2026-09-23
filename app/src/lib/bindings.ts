@@ -419,6 +419,7 @@ export type WorkspaceTab = {
 	path: string,
 	type: string,
 	pinned?: boolean,
+	view_mode?: string,
 	cursor_pos?: number | null,
 };
 

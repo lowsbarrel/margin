@@ -313,5 +313,7 @@
 	"editor_table_add_row": "Aggiungi riga",
 	"editor_table_add_column": "Aggiungi colonna",
 	"editor_table_row_menu": "Opzioni riga",
-	"editor_table_column_menu": "Opzioni colonna"
+	"editor_table_column_menu": "Opzioni colonna",
+	"statusbar_view_source": "Modalità sorgente",
+	"statusbar_view_rich": "Modalità formattata"
 }

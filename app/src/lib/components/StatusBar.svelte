@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { editor } from '$lib/stores/editor.svelte';
+	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -12,7 +13,16 @@
 	// The sync-status glyphs are indicators, not controls — they stay static, so
 	// brushing past them with the pointer doesn't set something wiggling.
 	// `Moon` has no animated counterpart in the registry.
-	import { CloudOff, Loader, Check, CircleAlert, Moon, FileDown, Link2 } from '@lucide/svelte';
+	import {
+		CloudOff,
+		Loader,
+		Check,
+		CircleAlert,
+		Moon,
+		FileDown,
+		Link2,
+		FileCode
+	} from '@lucide/svelte';
 	import {
 		Sun,
 		LogOut,
@@ -32,6 +42,9 @@
 		historyActive?: boolean;
 		onbacklinks?: () => void;
 		backlinksActive?: boolean;
+		/** Which surface the active markdown tab is on, for the toggle's state. */
+		viewMode?: ViewMode;
+		ontoggleviewmode?: () => void;
 	}
 
 	let {
@@ -42,7 +55,9 @@
 		onhistory,
 		historyActive = false,
 		onbacklinks,
-		backlinksActive = false
+		backlinksActive = false,
+		viewMode = 'rich',
+		ontoggleviewmode
 	}: Props = $props();
 	let exporting = $state(false);
 
@@ -140,6 +155,16 @@
 				onclick={onbacklinks}
 				title={m.statusbar_backlinks()}
 				active={backlinksActive}
+			/>
+		{/if}
+
+		{#if ontoggleviewmode && editor.tiptap}
+			<IconButton
+				icon={FileCode}
+				size="sm"
+				onclick={ontoggleviewmode}
+				title={viewMode === 'source' ? m.statusbar_view_rich() : m.statusbar_view_source()}
+				active={viewMode === 'source'}
 			/>
 		{/if}
 
