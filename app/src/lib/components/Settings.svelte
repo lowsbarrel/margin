@@ -6,7 +6,7 @@
 	import { startAutoSync, stopAutoSync, type ConflictStrategy } from '$lib/sync/s3sync';
 	import { GlassModal } from '$lib/ui';
 	import * as m from '$lib/paraglide/messages.js';
-	import { llmConfigure, type ApiFormat } from '$lib/ai/bridge';
+	import { llmConfigure, type ApiFormat, type Effort } from '$lib/ai/bridge';
 	import { ask } from '$lib/stores/ask.svelte';
 	import SettingsVault from './settings/SettingsVault.svelte';
 	import SettingsCloud from './settings/SettingsCloud.svelte';
@@ -37,6 +37,7 @@
 	let llmBaseUrl = $state('');
 	let llmApiKey = $state('');
 	let llmModel = $state('');
+	let llmEffort = $state<Effort | null>(null);
 
 	$effect(() => {
 		if (vault.vaultPath && vault.encryptionKey) {
@@ -56,6 +57,7 @@
 					llmBaseUrl = settings.llm.base_url ?? '';
 					llmApiKey = settings.llm.api_key ?? '';
 					llmModel = settings.llm.model;
+					llmEffort = settings.llm.effort ?? null;
 				}
 				// Hand the endpoint to Rust here, where the key is in hand, so the
 				// answer loop never needs it over IPC again.
@@ -99,7 +101,8 @@
 						api_format: llmFormat,
 						base_url: llmBaseUrl.trim(),
 						api_key: llmApiKey.trim(),
-						model
+						model,
+						effort: llmEffort
 					}
 				: null
 		};
@@ -120,6 +123,7 @@
 		llmBaseUrl = settings.llm?.base_url ?? '';
 		llmApiKey = settings.llm?.api_key ?? '';
 		llmModel = settings.llm?.model ?? '';
+		llmEffort = settings.llm?.effort ?? null;
 	}
 
 	async function handleClose() {
@@ -168,6 +172,7 @@
 		bind:baseUrl={llmBaseUrl}
 		bind:apiKey={llmApiKey}
 		bind:model={llmModel}
+		bind:effort={llmEffort}
 	/>
 	<SettingsLocale />
 	<SettingsAppearance />
