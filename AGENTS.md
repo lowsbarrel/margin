@@ -25,9 +25,9 @@ A fact is defined once and imported everywhere else.
 
 | Concept                        | Its one home                                 |
 | ------------------------------ | -------------------------------------------- |
-| Filesystem, crypto, S3, search | a module under `src-tauri/src/`              |
+| Filesystem, crypto, S3, search, AI, PTYs | a module under `src-tauri/src/`    |
 | The typed IPC surface          | `src/lib/bindings.ts` (generated)            |
-| Raw IPC (bytes, streamed events) | `src/lib/{crypto,fs,s3}/bridge.ts`, `src/lib/ai/bridge.ts` |
+| Raw IPC (bytes, streamed events) | `src/lib/{ai,crypto,fs,s3,terminal}/bridge.ts` |
 | App state                      | `src/lib/stores/*.svelte.ts` (runes)         |
 | Raw colour, spacing, type      | `src/lib/styles/tokens.css`                  |
 | Tokens → Tailwind + shadcn     | `src/lib/styles/theme.css`                   |
