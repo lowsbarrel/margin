@@ -1,37 +1,13 @@
-import { s3Configure, s3Download, type S3Config } from '$lib/s3/bridge';
-import { decryptBlob } from '$lib/crypto/bridge';
-import {
-	readFileBytes,
-	writeFileBytes,
-	walkDirectory,
-	createDirectory,
-	deleteEntry,
-	setMtime
-} from '$lib/fs/bridge';
+import { s3Configure, type S3Config } from '$lib/s3/bridge';
 import { editor } from '$lib/stores/editor.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
-import type { ManifestEntry, Manifest } from './s3sync-manifest';
-import { validateManifest } from './s3sync-manifest';
-import { nowSeconds } from './s3sync-diff';
-import {
-	hashFilesBatch,
-	loadManifest,
-	saveManifest,
-	computeSyncActionsNative,
-	collectTombstonesNative,
-	mergeTombstonesNative,
-	pruneTombstonesNative,
-	syncUploadFiles,
-	syncDownloadFiles,
-	syncUploadManifest,
-	syncDeleteFiles,
-	pathToS3Key,
-	type SyncAction
-} from './bridge';
-
-// ── Types ──
+import { buildManifests } from './s3sync-manifest';
+import { planSync } from './s3sync-plan';
+import { executeTransfer } from './s3sync-transfer';
+import { checkAbort } from './s3sync-abort';
+import { saveManifest, syncUploadManifest } from './bridge';
 
 export type ConflictStrategy = 'local_wins' | 'keep_newer';
 
@@ -39,10 +15,7 @@ export interface SyncOptions {
 	conflictStrategy?: ConflictStrategy;
 }
 
-// ─── Abort / state ───────────────────────────────────────────────────────
-
 let activeSyncAbort: AbortController | null = null;
-/** Resolves when no sync is in flight. Used as a mutex to prevent concurrent syncs. */
 let syncLock: Promise<void> = Promise.resolve();
 
 export function cancelSync(): void {
@@ -54,107 +27,8 @@ export function isSyncing(): boolean {
 	return activeSyncAbort !== null;
 }
 
-function checkAbort(signal: AbortSignal): void {
-	if (signal.aborted) throw new Error('Sync cancelled');
-}
-
-/** A cause fit to show a user: an Error's message, without the `Error:` prefix. */
 function errorText(err: unknown): string {
 	return err instanceof Error ? err.message : String(err);
-}
-
-// ── Helpers ──
-
-interface LocalFile {
-	path: string;
-	fullPath: string;
-	modified: number;
-}
-
-async function walkVault(basePath: string): Promise<LocalFile[]> {
-	const all = await walkDirectory(basePath);
-	return all
-		.filter((e) => !e.is_dir)
-		.map((e) => {
-			const relativePath = e.path.slice(basePath.length + 1);
-			return { path: relativePath, fullPath: e.path, modified: e.modified };
-		});
-}
-
-let conflictCounter = 0;
-
-function conflictCopyName(path: string): string {
-	const now = new Date();
-	const ts = [
-		now.getFullYear(),
-		String(now.getMonth() + 1).padStart(2, '0'),
-		String(now.getDate()).padStart(2, '0'),
-		'-',
-		String(now.getHours()).padStart(2, '0'),
-		String(now.getMinutes()).padStart(2, '0'),
-		String(now.getSeconds()).padStart(2, '0')
-	].join('');
-	// Append a monotonic counter to guarantee uniqueness within the same second
-	const seq = ++conflictCounter;
-	const suffix = `sync-conflict-${ts}-${seq}`;
-	const dot = path.lastIndexOf('.');
-	if (dot > 0) return `${path.slice(0, dot)}.${suffix}${path.slice(dot)}`;
-	return `${path}.${suffix}`;
-}
-
-function isMissingRemoteManifestError(err: unknown): boolean {
-	const message = String(err);
-	return message.includes('NoSuchKey') || message.includes('Not Found') || message.includes('404');
-}
-
-async function writeConflictCopy(
-	vaultPath: string,
-	path: string,
-	content: Uint8Array,
-	hash: string,
-	mergedFiles: Map<string, ManifestEntry>,
-	s3Prefix: string,
-	encryptionKey: number[]
-): Promise<string> {
-	const conflictPath = conflictCopyName(path);
-	const modified = nowSeconds();
-
-	await ensureParentDir(vaultPath, conflictPath);
-	await writeFileBytes(`${vaultPath}/${conflictPath}`, content);
-	await setMtime(`${vaultPath}/${conflictPath}`, modified);
-	await syncUploadFiles(vaultPath, s3Prefix, [conflictPath], encryptionKey);
-
-	mergedFiles.set(conflictPath, {
-		path: conflictPath,
-		hash,
-		modified
-	});
-
-	return conflictPath;
-}
-
-async function ensureParentDir(vaultPath: string, relativePath: string): Promise<void> {
-	const parts = relativePath.split('/');
-	if (parts.length > 1) {
-		await createDirectory(`${vaultPath}/${parts.slice(0, -1).join('/')}`);
-	}
-}
-
-// ── Main sync ──
-
-function markTombstone(
-	path: string,
-	tombstones: Map<string, ManifestEntry>,
-	mergedFiles: Map<string, ManifestEntry>,
-	fallbackMaps: Map<string, ManifestEntry>[]
-): void {
-	const existing =
-		mergedFiles.get(path) ??
-		fallbackMaps.reduce<ManifestEntry | undefined>((acc, m) => acc ?? m.get(path), undefined);
-	if (existing) {
-		tombstones.set(path, { ...existing, deleted_at: nowSeconds() });
-	}
-	mergedFiles.delete(path);
 }
 
 export function syncToS3(
@@ -164,12 +38,11 @@ export function syncToS3(
 	s3Config: S3Config,
 	options?: SyncOptions
 ): Promise<void> {
-	// Chain onto the sync lock so only one sync runs at a time.
-	// If a sync is already in flight it finishes first, then this one starts.
 	const ticket = syncLock.then(() =>
 		doSyncToS3(vaultPath, vaultId, encryptionKey, s3Config, options)
 	);
-	syncLock = ticket.catch(() => {}); // swallow so the chain never rejects
+	// Swallow so a failed sync never rejects the chain the next one waits on.
+	syncLock = ticket.catch(() => {});
 	return ticket;
 }
 
@@ -193,320 +66,33 @@ async function doSyncToS3(
 		await s3Configure(s3Config);
 		const s3Prefix = `${vaultId}/`;
 
-		// 1. Load base manifest (last synced state) — fully in Rust
-		checkAbort(signal);
-		const baseManifest = await loadManifest(vaultPath, encryptionKey);
-		const baseMap = new Map(baseManifest.files.map((e) => [e.path, e]));
-
-		// 2. Build current local manifest
-		//    Optimisation: skip hashing files whose mtime matches the base entry.
-		//    Files that need hashing are batched into a single native call.
-		const localFiles = await walkVault(vaultPath);
-		checkAbort(signal);
-
-		const localManifest: Manifest = { version: 3, files: [] };
-		const unchangedEntries: ManifestEntry[] = [];
-		const pathsToHash: string[] = [];
-		const pathsMeta: { path: string; modified: number }[] = [];
-
-		for (const file of localFiles) {
-			const baseEntry = baseMap.get(file.path);
-			if (baseEntry && !baseEntry.deleted_at && baseEntry.modified === file.modified) {
-				// mtime unchanged & not a tombstone — reuse previous hash
-				unchangedEntries.push(baseEntry);
-			} else {
-				pathsToHash.push(file.path);
-				pathsMeta.push({ path: file.path, modified: file.modified });
-			}
-		}
-
-		const hashes = pathsToHash.length > 0 ? await hashFilesBatch(vaultPath, pathsToHash) : [];
-		checkAbort(signal);
-
-		localManifest.files.push(...unchangedEntries);
-		for (let i = 0; i < pathsToHash.length; i++) {
-			localManifest.files.push({
-				path: pathsMeta[i].path,
-				hash: hashes[i],
-				modified: pathsMeta[i].modified
-			});
-		}
-
-		// 3. Download remote manifest
-		let remoteManifest: Manifest = { version: 3, files: [] };
-		try {
-			checkAbort(signal);
-			const encManifest = await s3Download(`${s3Prefix}manifest.enc`);
-			const decManifest = await decryptBlob(encManifest, encryptionKey);
-			const parsed = validateManifest(JSON.parse(new TextDecoder().decode(decManifest)));
-			// Discard legacy v2 manifests — S3 keys used plaintext paths.
-			// Treating it as empty forces a full re-upload with HMAC keys.
-			if (parsed.version >= 3) {
-				remoteManifest = parsed;
-			}
-		} catch (err) {
-			if (signal.aborted) throw new Error('Sync cancelled', { cause: err });
-			if (!isMissingRemoteManifestError(err)) {
-				throw new Error(`Failed to download remote manifest: ${err}`, { cause: err });
-			}
-			// If base has files but remote fetch fails, abort — otherwise the
-			// 3-way diff treats every file as "deleted on remote" and wipes them.
-			if (baseManifest.files.length > 0) {
-				throw new Error(`Failed to download remote manifest: ${err}`, { cause: err });
-			}
-			// Base is empty — first sync, no remote manifest expected
-		}
-
-		// 4. Build maps & compute 3-way diff — fully in Rust
-		const localMap = new Map(localManifest.files.map((e) => [e.path, e]));
-		const remoteMap = new Map(remoteManifest.files.map((e) => [e.path, e]));
-		const actions = await computeSyncActionsNative(
-			baseManifest.files,
-			localManifest.files,
-			remoteManifest.files
-		);
-		checkAbort(signal);
-
-		// 5. Execute each action
-		const conflicts: string[] = [];
-		const mergedFiles = new Map<string, ManifestEntry>();
-		// Remote-manifest entries whose blob is missing on S3 (HTTP 404). They are
-		// kept OUT of `mergedFiles` (so the saved local base excludes them and they
-		// re-download next sync) but re-injected into the manifest uploaded to S3
-		// (so other devices that still hold the file don't see it as deleted).
-		const missingRemoteBlobs = new Map<string, ManifestEntry>();
+		const plan = await planSync(vaultPath, s3Prefix, encryptionKey, signal);
+		const actionsTotal = plan.actions.length;
 		let actionsDone = 0;
-		const actionsTotal = actions.length;
 		editor.setSyncProgress(actionsTotal > 0 ? { total: actionsTotal, done: 0 } : null);
 
-		const baseTombstones = await collectTombstonesNative(baseManifest.files);
-		const remoteTombstones = await collectTombstonesNative(remoteManifest.files);
-		const mergedTombstonesList = await mergeTombstonesNative(baseTombstones, remoteTombstones);
-		const tombstones = new Map(mergedTombstonesList.map((e) => [e.path, e]));
-
-		for (const entry of localManifest.files) mergedFiles.set(entry.path, entry);
-
-		// ── Partition actions by kind so each batch-capable command is
-		//    invoked ONCE with all its paths, instead of one IPC per file. ──
-		const uploadPaths: string[] = []; // 'upload' + 'conflict-delete-remote'
-		const downloadPaths: string[] = []; // 'download' + 'conflict-delete-local'
-		const downloadMtimes: number[] = []; // parallel to downloadPaths
-		const deleteRemotePaths: string[] = []; // 'delete-remote'
-		const deleteLocalPaths: string[] = []; // 'delete-local'
-		const conflictActions: SyncAction[] = []; // 'conflict' (read-modify-write)
-
-		for (const action of actions) {
-			switch (action.kind) {
-				case 'upload':
-				case 'conflict-delete-remote':
-					uploadPaths.push(action.path);
-					break;
-				case 'download':
-				case 'conflict-delete-local': {
-					const remoteEntry = remoteMap.get(action.path)!;
-					downloadPaths.push(action.path);
-					downloadMtimes.push(remoteEntry.modified);
-					break;
-				}
-				case 'delete-remote':
-					deleteRemotePaths.push(action.path);
-					break;
-				case 'delete-local':
-					deleteLocalPaths.push(action.path);
-					break;
-				case 'conflict':
-					conflictActions.push(action);
-					break;
-				default: {
-					// Compile-time exhaustiveness: if a new SyncActionKind is added on
-					// the Rust side without a branch here, this fails to type-check.
-					const _exhaustive: never = action.kind;
-					console.error('[s3sync] Unhandled sync action kind:', _exhaustive);
-				}
+		const result = await executeTransfer(plan, {
+			vaultPath,
+			s3Prefix,
+			encryptionKey,
+			conflictStrategy,
+			signal,
+			onProgress: (advance: number) => {
+				actionsDone += advance;
+				editor.setSyncProgress({ total: actionsTotal, done: actionsDone });
 			}
-		}
-
-		const reportProgress = (advance: number): void => {
-			actionsDone += advance;
-			editor.setSyncProgress({ total: actionsTotal, done: actionsDone });
-		};
-
-		// ── Local add / modify (+ modified-locally / deleted-remotely) → push ──
-		if (uploadPaths.length > 0) {
-			checkAbort(signal);
-			await syncUploadFiles(vaultPath, s3Prefix, uploadPaths, encryptionKey);
-			for (const path of uploadPaths) tombstones.delete(path);
-			reportProgress(uploadPaths.length);
-		}
-
-		// ── Remote add / modify (+ deleted-locally / modified-remotely) → pull ─
-		//    The Rust side stamps mtime from `downloadMtimes`, so no per-file
-		//    setMtime follow-up is needed here.
-		if (downloadPaths.length > 0) {
-			checkAbort(signal);
-			const skipped = await syncDownloadFiles(
-				vaultPath,
-				s3Prefix,
-				downloadPaths,
-				downloadMtimes,
-				encryptionKey
-			);
-			const skippedSet = new Set(skipped);
-			for (let i = 0; i < downloadPaths.length; i++) {
-				const path = downloadPaths[i];
-				const remoteEntry = remoteMap.get(path)!;
-				if (skippedSet.has(path)) {
-					// Blob missing on S3 — don't record it locally (so it retries next
-					// sync) but preserve the remote entry so peers keep their copy.
-					missingRemoteBlobs.set(path, remoteEntry);
-					continue;
-				}
-				mergedFiles.set(path, {
-					path: remoteEntry.path,
-					hash: remoteEntry.hash,
-					modified: remoteEntry.modified
-				});
-				tombstones.delete(path);
-			}
-			if (skipped.length > 0) {
-				console.warn('[s3sync] Skipped files whose blob is missing on S3:', skipped);
-			}
-			reportProgress(downloadPaths.length);
-		}
-
-		// ── Locally deleted → delete from S3 (one batch) ──────────────────────
-		if (deleteRemotePaths.length > 0) {
-			checkAbort(signal);
-			try {
-				await syncDeleteFiles(s3Prefix, deleteRemotePaths, encryptionKey);
-			} catch {
-				/* already gone */
-			}
-			for (const path of deleteRemotePaths) {
-				markTombstone(path, tombstones, mergedFiles, [baseMap]);
-			}
-			reportProgress(deleteRemotePaths.length);
-		}
-
-		// ── Remotely deleted → delete locally (per-file local fs) ─────────────
-		for (const path of deleteLocalPaths) {
-			checkAbort(signal);
-			try {
-				await deleteEntry(`${vaultPath}/${path}`);
-			} catch {
-				/* already gone */
-			}
-			markTombstone(path, tombstones, mergedFiles, [remoteMap]);
-			reportProgress(1);
-		}
-
-		// ── Conflict: both sides modified → read-modify-write per item ────────
-		for (const action of conflictActions) {
-			checkAbort(signal);
-			const localEntry = localMap.get(action.path)!;
-			const remoteEntry = remoteMap.get(action.path)!;
-
-			const remoteWins =
-				conflictStrategy === 'keep_newer' && remoteEntry.modified > localEntry.modified;
-
-			if (remoteWins) {
-				// Remote is newer → keep remote, save local as conflict copy
-				const localData = await readFileBytes(`${vaultPath}/${action.path}`);
-				await writeConflictCopy(
-					vaultPath,
-					action.path,
-					localData,
-					localEntry.hash,
-					mergedFiles,
-					s3Prefix,
-					encryptionKey
-				);
-
-				const skipped = await syncDownloadFiles(
-					vaultPath,
-					s3Prefix,
-					[action.path],
-					[remoteEntry.modified],
-					encryptionKey
-				);
-
-				if (skipped.includes(action.path)) {
-					// Remote blob missing — can't take the remote side. Keep the local
-					// file as-is (its entry stays in mergedFiles) and preserve the remote
-					// manifest entry so it isn't dropped for peers.
-					missingRemoteBlobs.set(action.path, remoteEntry);
-					console.warn('[s3sync] Conflict: remote blob missing, kept local:', action.path);
-				} else {
-					mergedFiles.set(action.path, {
-						path: remoteEntry.path,
-						hash: remoteEntry.hash,
-						modified: remoteEntry.modified
-					});
-				}
-			} else {
-				// Local wins (default) → save remote as conflict copy
-				const s3Key = await pathToS3Key(action.path, encryptionKey);
-				const encrypted = await s3Download(`${s3Prefix}files/${s3Key}.enc`);
-				const decrypted = await decryptBlob(encrypted, encryptionKey);
-				await writeConflictCopy(
-					vaultPath,
-					action.path,
-					decrypted,
-					remoteEntry.hash,
-					mergedFiles,
-					s3Prefix,
-					encryptionKey
-				);
-
-				await syncUploadFiles(vaultPath, s3Prefix, [action.path], encryptionKey);
-			}
-
-			tombstones.delete(action.path);
-			conflicts.push(action.path);
-			reportProgress(1);
-		}
-
-		// Preserve the original behaviour of also counting the
-		// deleted-locally/modified-remotely ('conflict-delete-local') and
-		// modified-locally/deleted-remotely ('conflict-delete-remote') cases as
-		// conflicts. Their file I/O was already batched above; here we only
-		// record them in the conflicts list (used for the completion toast).
-		for (const action of actions) {
-			if (action.kind === 'conflict-delete-local' || action.kind === 'conflict-delete-remote') {
-				conflicts.push(action.path);
-			}
-		}
-
+		});
 		checkAbort(signal);
 
-		// 6. Upload merged manifest to S3 (live files + pruned tombstones)
-		const prunedTombstones = await pruneTombstonesNative(
-			Array.from(tombstones.values()),
-			nowSeconds()
+		const { local, uploaded } = await buildManifests(
+			result.mergedFiles,
+			result.tombstones,
+			result.missingRemoteBlobs
 		);
-		// Local base: only files we actually hold on disk (+ tombstones). Excludes
-		// any blob that 404'd, so the next sync re-attempts its download instead of
-		// treating the absent file as a local deletion.
-		const newBaseManifest: Manifest = {
-			version: 3,
-			files: [...Array.from(mergedFiles.values()), ...prunedTombstones]
-		};
-		// Remote manifest: same, plus the preserved entries for blobs missing on S3
-		// — so a peer that still holds the file doesn't see it as deleted-on-remote.
-		const uploadedManifest: Manifest =
-			missingRemoteBlobs.size > 0
-				? {
-						version: 3,
-						files: [...newBaseManifest.files, ...Array.from(missingRemoteBlobs.values())]
-					}
-				: newBaseManifest;
-		await syncUploadManifest(s3Prefix, encryptionKey, uploadedManifest);
+		await syncUploadManifest(s3Prefix, encryptionKey, uploaded);
+		await saveManifest(vaultPath, encryptionKey, local);
 
-		// 7. Persist the local base for next sync — fully in Rust
-		await saveManifest(vaultPath, encryptionKey, newBaseManifest);
-
-		// 8. Refresh file tree if anything changed on disk
-		const hadFsChanges = actions.some(
+		const hadFsChanges = plan.actions.some(
 			(a) =>
 				a.kind === 'download' ||
 				a.kind === 'delete-local' ||
@@ -519,8 +105,8 @@ async function doSyncToS3(
 
 		editor.setSyncStatus('synced');
 
-		if (conflicts.length > 0) {
-			toast.info(m.toast_sync_conflicts({ count: String(conflicts.length) }));
+		if (result.conflicts.length > 0) {
+			toast.info(m.toast_sync_conflicts({ count: String(result.conflicts.length) }));
 		}
 	} catch (err) {
 		if (signal.aborted) {
@@ -528,8 +114,6 @@ async function doSyncToS3(
 			return;
 		}
 		console.error('[s3sync] Sync failed:', err);
-		// Carry the cause into the store — the status-bar chip shows it on hover,
-		// which is the only place a background failure can explain itself.
 		editor.setSyncStatus('error', errorText(err));
 		throw err;
 	} finally {
@@ -539,8 +123,6 @@ async function doSyncToS3(
 	}
 }
 
-// ─── Sync credentials ────────────────────────────────────────────────────
-
 let syncCredentials: {
 	vaultPath: string;
 	vaultId: string;
@@ -549,7 +131,6 @@ let syncCredentials: {
 	options?: SyncOptions;
 } | null = null;
 
-/** Store sync credentials so the manual sync button works even without auto-sync. */
 export function setSyncCredentials(
 	vaultPath: string,
 	vaultId: string,
@@ -560,16 +141,12 @@ export function setSyncCredentials(
 	syncCredentials = { vaultPath, vaultId, encryptionKey, s3Config, options };
 }
 
-/** Clear stored sync credentials (e.g. on logout). */
 export function clearSyncCredentials(): void {
 	syncCredentials = null;
 }
 
-// ── Auto-sync ──
-
 let autoSyncInterval: ReturnType<typeof setInterval> | null = null;
 
-/** Begin periodic background sync. Call once after unlock when S3 is configured. */
 export function startAutoSync(
 	vaultPath: string,
 	vaultId: string,
@@ -581,7 +158,6 @@ export function startAutoSync(
 	stopAutoSync();
 	syncCredentials = { vaultPath, vaultId, encryptionKey, s3Config, options };
 
-	// Run a sync immediately on start
 	runQuietSync();
 
 	autoSyncInterval = setInterval(() => {
@@ -589,7 +165,6 @@ export function startAutoSync(
 	}, intervalMs);
 }
 
-/** Stop periodic sync (does not clear credentials). */
 export function stopAutoSync(): void {
 	if (autoSyncInterval) {
 		clearInterval(autoSyncInterval);
@@ -597,11 +172,6 @@ export function stopAutoSync(): void {
 	}
 }
 
-/**
- * Background sync. Stays silent about everything, including not running at all:
- * it fires on a timer, so a toast here would interrupt work the user isn't doing.
- * A failure still reaches the status-bar chip via `setSyncStatus`.
- */
 export async function runQuietSync(): Promise<void> {
 	const creds = syncCredentials;
 	if (!creds || isSyncing()) return;
@@ -613,16 +183,9 @@ export async function runQuietSync(): Promise<void> {
 			creds.s3Config,
 			creds.options
 		);
-	} catch {
-		// Already reported through the store; nothing to add for a timer tick.
-	}
+	} catch {}
 }
 
-/**
- * Sync the user asked for (the status-bar button). Unlike the background run it
- * always accounts for itself — including the case where it can't start, which
- * otherwise looks exactly like a button that does nothing.
- */
 export async function runManualSync(): Promise<void> {
 	const creds = syncCredentials;
 	if (!creds) {

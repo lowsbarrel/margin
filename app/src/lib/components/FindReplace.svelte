@@ -13,9 +13,6 @@
 	let { editor, showReplace = false, onclose }: Props = $props();
 
 	let searchInput = $state<HTMLInputElement | null>(null);
-	// Follows the `showReplace` prop, but stays user-overridable: the replace
-	// toggle in the toolbar assigns to it, and that assignment holds until the
-	// prop changes again (a writable $derived, not $state mirrored by an effect).
 	let replaceVisible = $derived(showReplace);
 	let searchValue = $state('');
 	let replaceValue = $state('');
@@ -41,12 +38,6 @@
 		}
 	});
 
-	// The match search runs asynchronously (Rust IPC), so `storage.totalMatches`
-	// is only populated a tick or two after a command dispatches — reading it
-	// synchronously right after `setSearchTerm()` always yields the *previous*
-	// query's numbers. Mirror it off every transaction instead, otherwise the
-	// counter lags a keystroke behind and the next/prev buttons (disabled on
-	// `totalMatches === 0`) stay greyed out on a query that does have matches.
 	$effect(() => {
 		const ed = editor;
 		if (!ed) {
@@ -137,8 +128,6 @@
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<!-- Floats over the editor, so it earns a shadow — on a solid surface with a
-     hairline border, per the house style. -->
 <div
 	class="absolute top-2 right-4 z-60 flex min-w-[320px] flex-col gap-1 rounded-sm border border-border bg-surface-1 px-2 py-1.5 shadow-(--shadow-lg)"
 	onkeydown={handleKeydown}

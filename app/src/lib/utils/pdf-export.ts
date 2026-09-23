@@ -7,9 +7,7 @@ import { mimeForPath } from '$lib/utils/mime';
 import { save } from '@tauri-apps/plugin-dialog';
 import { isLocalfileUrl, stripLocalfilePrefix } from '$lib/editor/image-url';
 
-// getHTML() serializes mermaid as its source text and code blocks without
-// syntax highlighting (lowlight highlights via view-only decorations). So we
-// re-render both into the offscreen PDF container before rasterizing.
+// getHTML() drops lowlight's decorations and leaves mermaid as source text, so both are re-rendered.
 const pdfLowlight = createLowlight(common);
 let pdfMermaidSeq = 0;
 
@@ -20,7 +18,6 @@ interface HastNode {
 	children?: HastNode[];
 }
 
-/** Serialize a lowlight hast tree to highlighted HTML (`<span class="hljs-…">`). */
 function hastToHtml(nodes: readonly HastNode[]): string {
 	let out = '';
 	for (const node of nodes) {
@@ -35,7 +32,6 @@ function hastToHtml(nodes: readonly HastNode[]): string {
 	return out;
 }
 
-/** Replace each `<pre><code>` body with lowlight-highlighted markup in place. */
 function highlightCodeBlocks(container: HTMLElement): void {
 	container.querySelectorAll('pre code').forEach((codeEl) => {
 		const text = codeEl.textContent ?? '';
@@ -47,21 +43,17 @@ function highlightCodeBlocks(container: HTMLElement): void {
 					? pdfLowlight.highlight(lang, text)
 					: pdfLowlight.highlightAuto(text);
 			codeEl.innerHTML = hastToHtml(tree.children as unknown as HastNode[]);
-		} catch {
-			/* unknown language / highlight failure — keep the plain text */
-		}
+		} catch {}
 	});
 }
 
-/** Render each mermaid source block into an inline SVG, forcing a light theme. */
 async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
 	const blocks = Array.from(container.querySelectorAll<HTMLElement>('[data-type="mermaid"]'));
 	for (const el of blocks) {
 		const code = el.getAttribute('data-mermaid') ?? el.textContent ?? '';
 		if (!code.trim()) continue;
 		try {
-			// Force the light theme (the PDF page is white) and SVG text labels
-			// instead of foreignObject HTML, which html2canvas can't rasterize.
+			// html2canvas cannot rasterize foreignObject labels, so the PDF gets SVG text labels.
 			const directive = "%%{init: {'theme':'default','flowchart':{'htmlLabels':false}}}%%\n";
 			const { svg } = await mermaid.render(`pdf-mmd-${++pdfMermaidSeq}`, directive + code);
 			el.innerHTML = svg;
@@ -72,10 +64,6 @@ async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
 	}
 }
 
-/**
- * PDF render styles injected into the offscreen container.
- * Keeps heavy CSS strings out of the component layer.
- */
 const PDF_STYLES = `
 	#pdf-render h1 { font-size: 2rem; font-weight: 700; margin: 1.5em 0 0.5em; }
 	#pdf-render h2 { font-size: 1.5rem; font-weight: 600; margin: 1.4em 0 0.4em; }
@@ -126,10 +114,8 @@ const PDF_STYLES = `
 		text-overflow: ellipsis;
 		white-space: nowrap;
 	}
-	/* Mermaid diagrams (rendered inline before rasterizing) */
 	#pdf-render [data-type="mermaid"] { margin: 0.75em 0; text-align: center; }
 	#pdf-render [data-type="mermaid"] svg { max-width: 100%; height: auto; }
-	/* Callouts */
 	#pdf-render .callout { display: flex; gap: 10px; margin: 0.75em 0; padding: 10px 14px; border-radius: 6px; border-left: 4px solid #888; background: #f5f5f5; }
 	#pdf-render .callout-indicator { flex-shrink: 0; }
 	#pdf-render .callout-content { flex: 1; min-width: 0; }
@@ -140,7 +126,6 @@ const PDF_STYLES = `
 	#pdf-render .callout-success { border-left-color: #22a06b; background: #e6f4ea; }
 	#pdf-render .callout-warning { border-left-color: #f59e0b; background: #fef7e6; }
 	#pdf-render .callout-danger { border-left-color: #e5484d; background: #fde8e8; }
-	/* Code syntax highlighting (github-light subset) */
 	#pdf-render .hljs-comment, #pdf-render .hljs-quote { color: #6a737d; font-style: italic; }
 	#pdf-render .hljs-keyword, #pdf-render .hljs-selector-tag, #pdf-render .hljs-built_in, #pdf-render .hljs-name, #pdf-render .hljs-tag { color: #d73a49; }
 	#pdf-render .hljs-string, #pdf-render .hljs-attr, #pdf-render .hljs-template-string, #pdf-render .hljs-regexp, #pdf-render .hljs-addition { color: #032f62; }
@@ -152,7 +137,6 @@ const PDF_STYLES = `
 	#pdf-render .hljs-deletion { color: #b31d28; }
 `;
 
-/** Convert a localfile image element to an inline base64 data URL. */
 async function inlineLocalImage(img: HTMLImageElement): Promise<void> {
 	const src = img.getAttribute('src') ?? '';
 	if (!isLocalfileUrl(src)) return;
@@ -174,7 +158,6 @@ async function inlineLocalImage(img: HTMLImageElement): Promise<void> {
 	}
 }
 
-/** Build an offscreen DOM container with the HTML content styled for PDF. */
 function buildPdfContainer(title: string, html: string): HTMLDivElement {
 	const container = document.createElement('div');
 	container.style.cssText = `
@@ -196,12 +179,6 @@ function escapeHtml(str: string): string {
 	return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
-/**
- * Export the current editor content as a PDF file.
- *
- * @param tiptap  The active tiptap Editor instance
- * @param successMessage  Localized success toast message
- */
 export async function exportPdf(tiptap: Editor, successMessage: string): Promise<void> {
 	const editorEl = tiptap.options.element;
 	const el = editorEl instanceof HTMLElement ? editorEl : null;
@@ -220,17 +197,11 @@ export async function exportPdf(tiptap: Editor, successMessage: string): Promise
 	document.body.appendChild(container);
 
 	try {
-		// Inline local images so html2canvas can render them
 		const images = container.querySelectorAll('img');
 		await Promise.all(Array.from(images).map(inlineLocalImage));
-
-		// getHTML() carries mermaid as source text and code without highlighting —
-		// render the diagrams and re-highlight code into the container first.
 		await renderMermaidBlocks(container);
 		highlightCodeBlocks(container);
 
-		// html2canvas-pro is a maintained fork with the same API that supports
-		// modern CSS (oklch colors, flex/grid) which upstream html2canvas breaks on.
 		const { default: html2canvas } = await import('html2canvas-pro');
 		const { jsPDF } = await import('jspdf');
 
@@ -240,14 +211,11 @@ export async function exportPdf(tiptap: Editor, successMessage: string): Promise
 			backgroundColor: '#ffffff'
 		});
 
-		const imgWidth = 210; // A4 width in mm
-		const pageHeight = 297; // A4 height in mm
+		const imgWidth = 210;
+		const pageHeight = 297;
 
 		const pdf = new jsPDF('p', 'mm', 'a4');
 
-		// Pixel height of one A4 page in the source canvas, so each PDF page gets a
-		// freshly sliced canvas instead of one tall bitmap shifted by a negative
-		// offset (which can leave seams and slice content mid-line).
 		const pxPerPage = Math.floor((pageHeight * canvas.width) / imgWidth);
 		const totalPages = Math.max(1, Math.ceil(canvas.height / pxPerPage));
 

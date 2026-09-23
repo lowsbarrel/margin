@@ -53,14 +53,12 @@ export async function renameHistory(
 	if (r.status === 'error') throw r.error;
 }
 
-/** Every deleted entry still in `.margin/trash`, newest first. */
 export async function listTrash(vaultPath: string): Promise<TrashItem[]> {
 	const r = await commands.trashList(vaultPath);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-/** Restore one trashed entry; resolves with the vault-relative path it landed on. */
 export async function restoreTrash(vaultPath: string, id: string): Promise<string> {
 	const r = await commands.trashRestore(vaultPath, id);
 	if (r.status === 'error') throw r.error;

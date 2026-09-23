@@ -1,4 +1,3 @@
-use super::{VaultWatcherState, WatcherState};
 use notify::{Event, EventKind, RecursiveMode, Watcher, recommended_watcher};
 use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -6,21 +5,15 @@ use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Emitter, Manager};
 
-/// Quiet-window length for coalescing a burst of vault filesystem events into a
-/// single `vault-fs-changed` emission. A single logical operation (save, git
-/// checkout, sync apply) produces many raw Create/Modify/Remove events; without
-/// debouncing that becomes an IPC storm and repeated full re-walks on the JS
-/// side. 300ms matches the frontend's own coalescing timer.
+pub struct WatcherState(pub Mutex<Option<notify::RecommendedWatcher>>);
+
+pub struct VaultWatcherState(pub Mutex<Option<notify::RecommendedWatcher>>);
+
 const VAULT_DEBOUNCE: Duration = Duration::from_millis(300);
 
-/// Zero-dependency trailing-edge debouncer. `notify()` is called for every raw
-/// fs event; it emits `vault-fs-changed` (empty payload) at most once per
-/// ~300ms quiet window via a single coalescing timer thread.
 struct VaultDebouncer {
     app: AppHandle,
-    /// Instant of the most recent fs event in the current burst.
     last_event: Mutex<Instant>,
-    /// True while a timer thread is alive and will eventually emit.
     timer_active: AtomicBool,
 }
 
@@ -33,13 +26,10 @@ impl VaultDebouncer {
         })
     }
 
-    /// Record an fs event and ensure a timer is scheduled to emit after the
-    /// quiet window. Bursts only ever keep a single timer thread alive.
     fn notify(self: &Arc<Self>) {
         if let Ok(mut last) = self.last_event.lock() {
             *last = Instant::now();
         }
-        // Only spawn a timer if one isn't already running (CAS false -> true).
         if self
             .timer_active
             .compare_exchange(false, true, Ordering::AcqRel, Ordering::Acquire)
@@ -50,7 +40,6 @@ impl VaultDebouncer {
         let this = Arc::clone(self);
         std::thread::spawn(move || {
             loop {
-                // Sleep until the quiet window has elapsed since the last event.
                 let remaining = {
                     let last = match this.last_event.lock() {
                         Ok(l) => *l,
@@ -63,11 +52,8 @@ impl VaultDebouncer {
                     _ => break,
                 }
             }
-            // Allow a new burst to schedule a fresh timer before we emit, so an
-            // event arriving right after this point is not silently dropped.
             this.timer_active.store(false, Ordering::Release);
-            // Drop the cached vault tree *before* telling the frontend, so the
-            // refresh that follows can never be answered from a stale snapshot.
+            // The cached vault tree is dropped before the frontend is told, so its refresh cannot read a stale tree.
             crate::index::tree::invalidate();
             let _ = this.app.emit("vault-fs-changed", ());
         });
@@ -114,8 +100,6 @@ pub fn unwatch_file(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
-/// Watch the entire vault directory recursively. Emits `"vault-fs-changed"`
-/// immediately whenever a non-hidden file is created, modified or deleted.
 #[tauri::command]
 #[specta::specta]
 pub fn watch_vault(app: AppHandle, path: String) -> Result<(), String> {
@@ -131,7 +115,6 @@ pub fn watch_vault(app: AppHandle, path: String) -> Result<(), String> {
         if let Ok(event) = res {
             match event.kind {
                 EventKind::Modify(_) | EventKind::Create(_) | EventKind::Remove(_) => {
-                    // Skip hidden files/folders (. prefix) — includes .margin/, .git/, etc.
                     let all_hidden = event.paths.iter().all(|p| {
                         p.strip_prefix(&vault_root)
                             .map(|rel| {
@@ -147,7 +130,6 @@ pub fn watch_vault(app: AppHandle, path: String) -> Result<(), String> {
                     if all_hidden {
                         return;
                     }
-                    // Coalesce bursts: emit at most once per ~300ms quiet window.
                     debouncer.notify();
                 }
                 _ => {}

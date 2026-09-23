@@ -3,17 +3,6 @@
 	import { ChevronDown } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
-	/**
-	 * Shared utility strings for the toolbar's buttons. `is-active` is toggled
-	 * imperatively from `updateActiveStates()` (and from the editor's bubble-menu
-	 * handler), so its styling has to hang off the class itself rather than a
-	 * Svelte `class:` directive.
-	 *
-	 * The `!` modifiers exist because `src/app.css` styles bare `button`,
-	 * `input` and `select` outside any cascade layer, which outranks every
-	 * Tailwind utility (utilities live in `@layer utilities`). Only the
-	 * properties those element rules actually set need it.
-	 */
 	const TOOLBAR_BTN =
 		'flex size-7 items-center justify-center rounded-xs p-0 text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground [&.is-active]:bg-accent [&.is-active]:text-accent-foreground';
 	const LINK_BTN =
@@ -121,8 +110,6 @@
 		return 'text';
 	}
 
-	// `isActive()` is a plain call, not a signal: without this the select keeps
-	// showing the block type of wherever the caret used to be.
 	let selectionVersion = $state(0);
 
 	$effect(() => {
@@ -286,10 +273,7 @@
 </div>
 
 <style>
-	/* Everything else on this toolbar is expressed as utilities in the markup.
-	   This rule can't be: the class is attached by a ProseMirror decoration
-	   (`$lib/editor/selection-preserve.ts`) to text nodes the editor owns, and
-	   the two values are system colours with no token equivalent. */
+	/* `.selection-preserved` is applied by $lib/editor/selection-preserve.ts; Highlight/HighlightText are OS system colours with no token. */
 	:global(.selection-preserved) {
 		background: Highlight;
 		color: HighlightText;

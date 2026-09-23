@@ -34,14 +34,6 @@
 		onchange?.(target.value);
 	}
 
-	/* `field-sizing-fixed` and `min-h-0` undo shadcn's auto-growing textarea:
-	   this component sizes itself from the `rows` prop, and `field-sizing-content`
-	   would silently ignore it.
-
-	   The `!` modifiers win back the properties app.css claims on the bare
-	   `textarea` element from outside any cascade layer (background, border
-	   colour, padding, font-size/family, radius). Its focus ring and placeholder
-	   colour already match the design, so they are left in place. */
 	const BASE =
 		'w-full resize-y field-sizing-fixed min-h-0 leading-5 bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-(--color-text-disabled) disabled:cursor-not-allowed';
 

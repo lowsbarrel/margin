@@ -1,7 +1,4 @@
-// Floating table UI is positioned in viewport coordinates, so it hangs off a
-// fixed layer on `body`: the editor pane clips its own overflow and would cut
-// the handles near its edges.
-
+// The editor pane clips its own overflow, so viewport-positioned table UI hangs off a fixed body-level layer.
 const LAYER_CLASS = 'table-ui-layer';
 
 let layer: HTMLElement | null = null;
@@ -14,7 +11,6 @@ export function getTableUiLayer(): HTMLElement {
 	return layer;
 }
 
-/** Drop the layer once nothing is left inside it. */
 export function releaseTableUiLayer(): void {
 	if (layer?.childElementCount === 0) {
 		layer.remove();

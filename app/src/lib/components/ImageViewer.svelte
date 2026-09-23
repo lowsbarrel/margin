@@ -5,21 +5,14 @@
 	import { fileNameFromSrc } from '$lib/utils/mime';
 	import * as m from '$lib/paraglide/messages.js';
 
-	// Padding and radius are restated because app.css's base button rule gives
-	// every bare <button> its own box; these utilities sit in `@layer utilities`
-	// and so override it.
 	const CONTROL =
 		'flex h-6.5 min-w-6.5 items-center justify-center rounded-xs bg-transparent px-1.5 text-sm text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground';
 
 	interface Props {
 		src: string;
-		/** File name for the caption; derived from `src` when the caller has none. */
 		name?: string;
-		/** Bytes on disk, when the caller knows them. */
 		size?: number;
-		/** `lightbox` overlays its chrome on the (always dark) lightbox scrim. */
 		variant?: 'tab' | 'lightbox';
-		/** Called for a click on the area around the image, never for a pan. */
 		onbackgroundclick?: () => void;
 	}
 
@@ -35,7 +28,6 @@
 	let viewportH = $state(0);
 	let natural = $state<{ w: number; h: number } | null>(null);
 	let failed = $state(false);
-	/** Scale to fall back to once the user zooms away from fit. */
 	let zoom = $state(1);
 	let fitMode = $state(true);
 	let panning = $state(false);
@@ -45,7 +37,6 @@
 	let isLightbox = $derived(variant === 'lightbox');
 
 	let displayName = $derived(name ?? fileNameFromSrc(src));
-	// Fit never upscales: blowing a 16px icon up to fill the pane is blur, not help.
 	let fitted = $derived(
 		natural && viewportW > 0 && viewportH > 0
 			? Math.min(1, viewportW / natural.w, viewportH / natural.h)
@@ -63,7 +54,6 @@
 	$effect(() => {
 		const el = viewportEl;
 		if (!el) return;
-		// contentRect excludes the scrollbar, so "fit" means fit the visible area.
 		const observer = new ResizeObserver(([entry]) => {
 			viewportW = entry.contentRect.width;
 			viewportH = entry.contentRect.height;
@@ -72,12 +62,7 @@
 		return () => observer.disconnect();
 	});
 
-	/**
-	 * Rescales around a point in viewport coordinates, by keeping the image
-	 * pixel under that point where it is: scroll is adjusted by the same delta
-	 * the re-laid-out box moved, which is why the size is set as width/height
-	 * rather than a transform — a transform leaves overflow unscrollable.
-	 */
+	// Sized by width/height rather than by a transform: a transform leaves the overflow unscrollable.
 	async function zoomTo(next: number, clientX?: number, clientY?: number) {
 		const clamped = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, next));
 		const previous = scale;
@@ -103,7 +88,6 @@
 	}
 
 	function handleWheel(e: WheelEvent) {
-		// Plain wheel belongs to the scroller: past 100% that is how the far edge is reached.
 		if (!e.ctrlKey && !e.metaKey) return;
 		e.preventDefault();
 		const factor = Math.min(2, Math.max(0.5, Math.exp(-e.deltaY * 0.005)));
@@ -122,7 +106,6 @@
 		e.preventDefault();
 	}
 
-	/** Natural size is what every zoom is relative to, so it is read on load. */
 	function handleLoad(e: Event) {
 		const img = e.currentTarget as HTMLImageElement;
 		natural = { w: img.naturalWidth, h: img.naturalHeight };
@@ -172,16 +155,11 @@
 	}
 </script>
 
-<!-- Zoom keys sit on the wrapper so they keep working while focus is on one of
-     the toolbar buttons; the viewport is the scroll surface those keys zoom. -->
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div
 	class="relative flex h-full w-full flex-col overflow-hidden {isLightbox ? '' : 'bg-surface-2'}"
 	onkeydown={handleKeydown}
 >
-	<!-- Focusable so the zoom keys have a target, pannable by pointer, and in the
-	     lightbox closable from the background — which Escape already does for
-	     anyone not using a mouse. -->
 	<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 	<!-- svelte-ignore a11y_no_noninteractive_element_interactions -->
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -282,7 +260,6 @@
 </div>
 
 <style>
-	/* Transparency checkerboard, two token surfaces only. */
 	.image-canvas {
 		background-color: var(--color-bg-primary);
 		background-image:

@@ -4,15 +4,7 @@
 	import { vault } from '$lib/stores/vault.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	// `pdf-export` is NOT imported statically. It pulls in mermaid, lowlight,
-	// jspdf and html2canvas-pro at module scope, so a static import here put
-	// several megabytes of PDF machinery into the boot chunk purely because the
-	// status bar renders an export button. It is loaded on first click instead —
-	// the module is cached afterwards, so only the first export pays.
 	import { IconButton } from '$lib/ui';
-	// The sync-status glyphs are indicators, not controls — they stay static, so
-	// brushing past them with the pointer doesn't set something wiggling.
-	// `Moon` has no animated counterpart in the registry.
 	import {
 		CloudOff,
 		Loader,
@@ -48,7 +40,6 @@
 		ontrash?: () => void;
 		onbacklinks?: () => void;
 		backlinksActive?: boolean;
-		/** Which surface the active markdown tab is on, for the toggle's state. */
 		viewMode?: ViewMode;
 		ontoggleviewmode?: () => void;
 		onterminal?: () => void;
@@ -74,8 +65,6 @@
 	}: Props = $props();
 	let exporting = $state(false);
 
-	// One class string per sync state rather than a base + overrides, so two
-	// colour utilities never race for the same property inside the same layer.
 	let syncChipClass = $derived(
 		editor.syncStatus === 'synced'
 			? 'bg-surface-2 text-positive'
@@ -131,9 +120,6 @@
 	</div>
 
 	<div class="flex items-center gap-1.5">
-		<!-- `title` carries the failure reason. Without it the chip could only say
-		     *that* sync broke, which made a genuine failure and an unconfigured
-		     vault look identical. `cursor-help` advertises that hovering explains. -->
 		<span
 			class="flex items-center gap-1.25 rounded-full px-2 py-0.75 {syncChipClass}"
 			class:cursor-help={!!editor.syncError}

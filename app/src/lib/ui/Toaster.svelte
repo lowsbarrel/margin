@@ -7,8 +7,6 @@
 {#if toast.items.length > 0}
 	<div class="pointer-events-none fixed right-4 bottom-11 z-200 flex flex-col gap-2">
 		{#each toast.items as item (item.id)}
-			<!-- Toasts float above everything, so they get a real shadow — but still
-			     on a solid surface with a hairline border rather than a blurred pane. -->
 			<div
 				class="toast-in pointer-events-auto flex max-w-95 items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-(--shadow-lg)"
 				role="alert"
@@ -31,8 +29,6 @@
 				</span>
 				<span class="min-w-0 flex-1 font-sans text-sm tracking-normal">{item.message}</span>
 				{#if item.action}
-					<!-- `!` modifiers: app.css styles the bare `button` element outside any
-					     cascade layer, so it outranks plain padding/font-size/radius utilities. -->
 					<button
 						class="shrink-0 cursor-pointer rounded-sm bg-primary px-2.5 py-1 text-xs font-medium text-primary-foreground transition-opacity duration-120 ease-out hover:opacity-[0.86]"
 						onclick={() => {
@@ -55,8 +51,6 @@
 {/if}
 
 <style>
-	/* The one rule with no utility equivalent: `tw-animate-css` is not installed,
-	   so there is no `animate-in` enter keyframe to lean on. */
 	.toast-in {
 		animation: toast-in var(--duration-base) var(--ease-out);
 	}

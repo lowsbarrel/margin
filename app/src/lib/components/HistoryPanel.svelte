@@ -10,7 +10,7 @@
 		type Snapshot
 	} from '$lib/history/bridge';
 	import { writeFileBytes, readFileBytes } from '$lib/fs/bridge';
-	import { flushEditorWrites } from '$lib/fs/writeQueue';
+	import { flushEditorWrites } from '$lib/fs/write-queue';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
 	import { panes } from '$lib/stores/panes.svelte';
 	import { diffLines, countChanges, type DiffLine } from '$lib/utils/line-diff';
@@ -29,13 +29,9 @@
 
 	let snapshots = $state<Snapshot[]>([]);
 	let loading = $state(true);
-	/** The snapshot open below the list, and its comparison against the file. */
 	let previewFilename = $state<string | null>(null);
-	/** null while nothing is open or the two versions are too large to compare. */
 	let diff = $state<DiffLine[] | null>(null);
 
-	// Generation token to discard stale async results when filePath changes
-	// rapidly (e.g. fast tab switching with the history panel open).
 	let loadGeneration = 0;
 
 	$effect(() => {
@@ -62,11 +58,6 @@
 		}
 	}
 
-	/**
-	 * Show a snapshot against what the note holds now. The whole snapshot is
-	 * decoded and diffed — truncating it would hide the change the user is
-	 * looking for, which is usually near the end of a long note.
-	 */
 	async function handlePreview(snapshot: Snapshot) {
 		if (!vault.vaultPath) return;
 		if (previewFilename === snapshot.filename) {
@@ -101,9 +92,7 @@
 	async function handleRestore(snapshot: Snapshot) {
 		if (!vault.vaultPath) return;
 		try {
-			// Land the debounced edit and the write queue before reading the file:
-			// the pre-restore snapshot must hold the text the user actually has,
-			// not a version up to one debounce behind it.
+			// Land the debounced edit first: the pre-restore snapshot must hold what the user sees.
 			await flushEditorWrites();
 			try {
 				const currentBytes = await readFileBytes(filePath);
@@ -118,11 +107,10 @@
 			await writeFileBytes(filePath, new TextEncoder().encode(content));
 			editorStore.setDirty(false);
 
-			// Every pane holding this note, not just the active one: the others
-			// would otherwise keep the pre-restore text and overwrite the restore.
+			// Every pane holding this note, not just the active one: the others keep the old text.
 			panes.applyRestoredContent(filePath, content);
 			onrestore?.(content);
-			await loadSnapshots(); // Refresh list to show the pre-restore snapshot
+			await loadSnapshots();
 			toast.success(m.history_restored());
 		} catch (err) {
 			console.error('Restore failed:', err);
@@ -166,10 +154,6 @@
 			});
 		}
 
-		// Built by construction rather than by mutating a copy of `now`: the
-		// day-before-the-first is handled by the Date constructor's own rollover,
-		// and an immutable Date can't drift out of step with the value it was
-		// derived from.
 		const yesterday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1);
 		if (date.getDate() === yesterday.getDate() && date.getMonth() === yesterday.getMonth()) {
 			return `${m.history_yesterday()} ${date.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}`;
@@ -194,10 +178,6 @@
 	}
 
 	function groupByDay(items: Snapshot[]): { label: string; snapshots: Snapshot[] }[] {
-		// The result array *is* the group list, in first-seen order; the lookup
-		// alongside it only points at buckets already in that array. A
-		// null-prototype record keeps arbitrary date labels from colliding with
-		// Object.prototype keys.
 		const groups: { label: string; snapshots: Snapshot[] }[] = [];
 		const byLabel: Record<string, Snapshot[]> = Object.create(null);
 
@@ -266,7 +246,6 @@
 						{group.label}
 					</div>
 					{#each group.snapshots as snapshot (snapshot.filename)}
-						<!-- `!` counters `src/app.css`'s unlayered bare-`button` padding/radius. -->
 						<button
 							class="group flex w-full items-center justify-between rounded-xs p-2 text-left text-sm transition-colors hover:bg-surface-3 hover:text-foreground {previewFilename ===
 							snapshot.filename
@@ -317,8 +296,6 @@
 									{/if}
 								</div>
 								{#if diff}
-									<!-- The whole snapshot, line numbered: a change near the end of a
-									     long note is what the user came here to find. -->
 									<div class="max-h-100 overflow-auto py-1 font-mono text-xs leading-normal">
 										{#each diff as line, i (i)}
 											<div

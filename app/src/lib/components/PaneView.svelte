@@ -43,20 +43,13 @@
 		paneActiveTab ? toBreadcrumbs(paneActiveTab.path, vault.vaultPath) : []
 	);
 
-	// The active tab lifts onto the canvas colour and carries a 2px orange
-	// underline. The underline is an ::after pseudo-element so it doesn't shift
-	// the tab's box the way a real border would.
 	const ACTIVE_TAB =
 		"bg-background text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-brand after:content-['']";
 	const INACTIVE_TAB = 'text-subtle-foreground hover:bg-surface-3 hover:text-muted-foreground';
 
 	const DROP_ZONE_BASE = 'pointer-events-auto flex items-center justify-center transition-colors';
 
-	/**
-	 * Drop-zone chrome. Class names are spelled out in full rather than
-	 * assembled from fragments — Tailwind scans this file as plain text, so an
-	 * interpolated `border-${edge}` would never be generated.
-	 */
+	// Tailwind scans plain text: the border-edge classes stay literal, only which one is dynamic.
 	function dropZoneClass(zone: 'left' | 'center' | 'right', fileDrag: boolean, active: boolean) {
 		if (zone === 'center') {
 			return `${DROP_ZONE_BASE} flex-40 ${active ? 'bg-brand/22' : ''}`;
@@ -74,11 +67,6 @@
 	}
 </script>
 
-<!-- `!` utilities: app.css's base `button` rule is unlayered, so it outranks
-     everything Tailwind emits into `@layer utilities`. Padding and radius on a
-     <button> only stick when marked important. -->
-
-<!-- Tab Bar -->
 <div class="flex h-10 min-h-10 items-center overflow-hidden border-b border-border bg-surface-1">
 	<div
 		class="flex flex-1 scrollbar-none overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
@@ -135,13 +123,10 @@
 	{/if}
 </div>
 
-<!-- Breadcrumbs -->
 {#if paneActiveTab && paneCrumbs.length > 0}
 	<div
 		class="flex min-h-7.5 items-center gap-1 overflow-x-auto border-b border-border bg-background px-4 py-1.5 text-xs whitespace-nowrap text-subtle-foreground"
 	>
-		<!-- Keyed on the path prefix each crumb stands for: crumb labels alone can
-		     repeat within one path (`notes/ideas/notes`), but prefixes cannot. -->
 		{#each paneCrumbs as crumb, i (paneCrumbs.slice(0, i + 1).join('/'))}
 			{#if i > 0}
 				<ChevronRight size={12} />
@@ -155,7 +140,6 @@
 	</div>
 {/if}
 
-<!-- Editor / Viewer -->
 <main class="relative flex flex-1 flex-col overflow-hidden bg-background">
 	{#if paneActiveTab}
 		{#each pane.tabs.filter((t) => t.type === 'markdown') as tab (tab.id)}
@@ -190,8 +174,6 @@
 			{/key}
 		{:else if paneActiveTab.type === 'pdf' && paneActiveTab.pdfData}
 			{#key paneActiveTab.id}
-				<!-- pdfjs-dist is the heaviest viewer dependency and most sessions never
-				     open a PDF, so its chunk is fetched on demand. -->
 				{#await import('$lib/components/PdfViewer.svelte') then { default: PdfViewer }}
 					<PdfViewer
 						data={paneActiveTab.pdfData}
@@ -228,7 +210,6 @@
 	{/if}
 </main>
 
-<!-- Drop overlay -->
 {#if drag.active && !(drag.item?.kind === 'tab' && drag.item.paneIndex === paneIndex)}
 	{@const fileDrag = drag.item?.kind === 'file'}
 	{@const leftActive = dropTarget?.paneIndex === paneIndex && dropTarget.zone === 'left'}

@@ -64,9 +64,6 @@
 
 <style>
 	div {
-		/* Local change from the upstream registry: inline-flex instead of
-		   inline-block, so the wrapper adds no line-height gap when it sits
-		   inside margin's flex button rows. */
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;

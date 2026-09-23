@@ -5,10 +5,9 @@ import { walkDirectory } from '$lib/fs/bridge';
 import { fuzzyFilterFiles, type FuzzyEntry } from './text-transform-bridge';
 import { createSuggestionRenderer } from './suggestion-renderer.svelte';
 
-/** Cached markdown file list (5s TTL). */
 let cachedFiles: FuzzyEntry[] = [];
 let cacheTimestamp = 0;
-const CACHE_TTL = 5000; // 5 seconds
+const CACHE_TTL = 5000;
 
 async function loadAllFiles(): Promise<void> {
 	if (!vault.vaultPath) return;

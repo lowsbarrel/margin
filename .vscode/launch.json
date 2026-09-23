@@ -2,9 +2,6 @@
 	"version": "0.2.0",
 	"configurations": [
 		{
-			// Debugs the Rust side. `beforeDevCommand` in tauri.conf.json starts
-			// vite, so the frontend comes up on its own; use the webview's own
-			// devtools for the Svelte half.
 			"name": "Tauri: debug Rust",
 			"type": "lldb",
 			"request": "launch",

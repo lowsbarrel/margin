@@ -20,9 +20,7 @@
 	let left = $state(untrack(() => x));
 	let top = $state(untrack(() => y));
 
-	// The anchor is passed in rather than read off `x`/`y` inside: the clamping
-	// happens after `await tick()`, and reads past an await are not tracked by
-	// the effect below. Taking them as arguments makes the dependency real.
+	// Reads past `await tick()` are not tracked, so the anchor arrives as an argument.
 	async function positionMenu(anchorX: number, anchorY: number) {
 		await tick();
 		if (!menuEl) return;
@@ -58,9 +56,7 @@
 		}
 	}
 
-	// Capture: a scroll of the tree's inner viewport does not bubble, and leaving
-	// the menu floating over rows it no longer belongs to invites acting on an
-	// entry that has scrolled away.
+	// A scroll of the tree's inner viewport does not bubble, so it is captured here.
 	function handleDocumentScroll() {
 		onclose();
 	}
@@ -79,10 +75,6 @@
 	onscrollcapture={handleDocumentScroll}
 />
 
-<!-- Surface (solid fill, hairline border, shadow) comes from the shared
-     `.surface-popover` class; the rest is utilities. The `!` modifiers counter
-     `src/app.css`'s unlayered bare-`button` rule, which outranks utilities on
-     the properties it sets (padding, weight, disabled cursor). -->
 <div
 	class="surface-popover fixed z-200 min-w-44 p-1 outline-none"
 	bind:this={menuEl}

@@ -2,10 +2,7 @@ import type { SlashMenuItem } from './slash-command';
 import { getLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages.js';
 
-/**
- * Built per call rather than at module scope: the labels come from Paraglide,
- * which resolves them against the locale current at call time.
- */
+// Built per call: Paraglide resolves the labels against the locale current at call time.
 function buildItems(): SlashMenuItem[] {
 	return [
 		{
@@ -52,9 +49,7 @@ function buildItems(): SlashMenuItem[] {
 			command: ({ editor, range }) => {
 				editor.chain().focus().deleteRange(range).run();
 
-				// When inside a bullet/ordered list, indent first so that
-				// toggleTaskList converts only the nested inner list instead
-				// of replacing the entire parent list.
+				// Indent first, or toggleTaskList replaces the whole parent list instead of the nested one.
 				if (editor.isActive('bulletList') || editor.isActive('orderedList')) {
 					const sunk = editor.chain().sinkListItem('listItem').run();
 					if (sunk) {
@@ -181,8 +176,6 @@ function buildItems(): SlashMenuItem[] {
 			icon: '🔗',
 			searchTerms: ['embed', 'transclude', 'include', 'note', 'reference'],
 			command: ({ editor, range }) => {
-				// Insert the `![[` opener; typing the title then `]]` converts it to an
-				// embed via NoteEmbed's input rule.
 				editor.chain().focus().deleteRange(range).insertContent('![[').run();
 			}
 		}

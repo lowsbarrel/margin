@@ -6,17 +6,7 @@ pub struct TextMatch {
     pub to: u32,
 }
 
-/// Fast substring search on a flattened ProseMirror document.
-///
-/// `text`        – the concatenated text content of every text node.
-/// `pm_offsets`  – parallel array: pm_offsets[i] is the ProseMirror position of text[i].
-/// `gaps`        – sorted indices into `text` where a block boundary exists
-///                 (i.e. pm_offsets[i] != pm_offsets[i-1] + 1). Matches that
-///                 span a gap are rejected.
-/// `needle`      – the search term.
-/// `case_sensitive` – whether to compare case-sensitively.
-///
-/// Returns `(from, to)` pairs in ProseMirror position space.
+// `gaps` holds sorted indices into `text` where a new block starts: a match crosses one when idx < g < idx+pat_len, and g == idx is fine.
 #[tauri::command]
 #[specta::specta]
 pub fn search_in_text(
@@ -36,11 +26,7 @@ pub fn search_in_text(
         haystack = text;
         pattern = needle;
     } else {
-        // ASCII-fold (length-preserving) rather than full Unicode `to_lowercase`:
-        // the byte index `idx` found in the lowered haystack is used to index
-        // `pm_offsets` (which is parallel to the ORIGINAL `text`). A Unicode fold
-        // can change byte length and desync those positions. Limitation: only
-        // ASCII letters are matched case-insensitively.
+        // ASCII-fold only: a Unicode fold changes byte length, and `idx` indexes `pm_offsets`, which is parallel to the original text.
         haystack = text.to_ascii_lowercase();
         pattern = needle.to_ascii_lowercase();
     };
@@ -60,10 +46,6 @@ pub fn search_in_text(
             None => break,
         };
 
-        // Check if this match spans a block boundary.
-        // A gap at index g means text[g] is in a different block than text[g-1].
-        // So a match [idx..idx+pat_len) crosses a gap if any gap g satisfies idx < g < idx+pat_len.
-        // (gap at idx itself is fine — the match starts at a new block.)
         let crosses_gap = has_gap_in_range(&gaps, (idx + 1) as u32, (idx + pat_len) as u32);
 
         if !crosses_gap {
@@ -78,7 +60,6 @@ pub fn search_in_text(
     results
 }
 
-/// Binary-search check: is there any gap value g where lo <= g < hi?
 fn has_gap_in_range(gaps: &[u32], lo: u32, hi: u32) -> bool {
     if gaps.is_empty() || lo >= hi {
         return false;
@@ -114,10 +95,9 @@ mod tests {
 
     #[test]
     fn test_search_rejects_cross_block() {
-        // "ab" with a gap at index 1 (block boundary between a and b)
         let text = "ab".to_string();
-        let offsets = vec![0, 5]; // gap: positions aren't consecutive
-        let gaps = vec![1]; // gap at index 1
+        let offsets = vec![0, 5];
+        let gaps = vec![1];
         let results = search_in_text(text, offsets, gaps, "ab".into(), true);
         assert_eq!(results.len(), 0);
     }

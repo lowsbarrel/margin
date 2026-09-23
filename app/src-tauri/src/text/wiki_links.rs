@@ -3,7 +3,6 @@ use serde::{Deserialize, Serialize};
 #[derive(Deserialize, specta::Type)]
 pub struct TextNode {
     pub text: String,
-    /// ProseMirror position of the first character of this text node.
     pub pos: u32,
 }
 
@@ -14,29 +13,22 @@ pub struct WikiLinkMatch {
     pub title: String,
 }
 
-/// A single parsed `[[title]]` wiki-link: byte offsets into the source text
-/// (`start` points at the first `[`, `end` is just past the closing `]]`) plus
-/// the trimmed title. This is the single source of truth for wiki-link parsing
-/// rules, shared by every caller that scans note text for links.
 pub struct ParsedWikiLink {
     pub start: usize,
     pub end: usize,
     pub title: String,
 }
 
-/// Parse all `[[title]]` wiki-links from `text`, rejecting `![[image embeds]]`,
-/// empty titles, and titles containing `[`, `]` or a newline.
 pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut results = Vec::new();
     if len < 4 {
-        return results; // minimum: [[x]]
+        return results;
     }
 
     let mut i = 0;
     while i + 3 < len {
-        // Look for [[ not preceded by !
         if bytes[i] == b'[' && bytes[i + 1] == b'[' {
             if i > 0 && bytes[i - 1] == b'!' {
                 i += 2;
@@ -44,7 +36,6 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
             }
             if let Some(close) = find_close_brackets(bytes, i + 2) {
                 let title_bytes = &bytes[i + 2..close];
-                // Reject if title contains [ or ] or newline
                 if !title_bytes
                     .iter()
                     .any(|&b| b == b'[' || b == b']' || b == b'\n')
@@ -54,7 +45,7 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
                     if !title.is_empty() {
                         results.push(ParsedWikiLink {
                             start: i,
-                            end: close + 2, // past the ]]
+                            end: close + 2,
                             title: title.to_string(),
                         });
                     }
@@ -69,13 +60,6 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
     results
 }
 
-/// Extract `[[title]]` wiki-links from a batch of ProseMirror text nodes.
-///
-/// Each `TextNode` carries the node's text content and its ProseMirror start
-/// position. Returns `(from, to, title)` triples in PM position space.
-///
-/// This replaces the per-node regex scan in JS — a single IPC call handles
-/// all text nodes at once.
 #[tauri::command]
 #[specta::specta]
 pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
@@ -83,7 +67,7 @@ pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
 
     for node in &nodes {
         for link in parse_wiki_links(&node.text) {
-            // Convert byte offsets to char offsets for correct PM mapping.
+            // ProseMirror positions count chars while the parser works in bytes, so both ends are re-counted.
             let char_start = node.text[..link.start].chars().count();
             let char_end = node.text[..link.end].chars().count();
             results.push(WikiLinkMatch {
@@ -97,7 +81,6 @@ pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
     results
 }
 
-/// Find the position of `]]` starting from `start` in `bytes`.
 fn find_close_brackets(bytes: &[u8], start: usize) -> Option<usize> {
     let mut i = start;
     while i + 1 < bytes.len() {

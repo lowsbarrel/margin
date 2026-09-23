@@ -2,10 +2,6 @@ import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 import { mount, unmount, type Component } from 'svelte';
 import type { SuggestionKeyDownProps, SuggestionProps } from '@tiptap/suggestion';
 
-/**
- * Props every suggestion menu component (SlashMenu/MentionMenu)
- * accepts. The factory mounts the component with these props.
- */
 export interface SuggestionMenuProps<TItem> {
 	items: TItem[];
 	selectedIndex: number;
@@ -13,18 +9,10 @@ export interface SuggestionMenuProps<TItem> {
 	onhover: (index: number) => void;
 }
 
-/**
- * Minimal interface exposed by the mounted menu components. Each menu
- * `export function scrollToSelected()`, which the factory calls on arrow nav.
- */
 export interface SuggestionMenuExports {
 	scrollToSelected: () => void;
 }
 
-/**
- * The object returned by a suggestion renderer, matching the shape that
- * `@tiptap/suggestion`'s `render()` callback must produce.
- */
 export interface SuggestionRenderer<TItem> {
 	onStart: (props: SuggestionProps<TItem, TItem>) => void | Promise<void>;
 	onUpdate: (props: SuggestionProps<TItem, TItem>) => void | Promise<void>;
@@ -33,23 +21,11 @@ export interface SuggestionRenderer<TItem> {
 }
 
 export interface CreateSuggestionRendererOptions<TItem> {
-	/** The Svelte menu component to mount (SlashMenu/MentionMenu). */
 	component: Component<SuggestionMenuProps<TItem>, SuggestionMenuExports>;
-	/** Compute the items to show for the given query. May be async. */
 	getItems: (query: string) => TItem[] | Promise<TItem[]>;
-	/**
-	 * Optional hook run once before `getItems` on every start/update (used by
-	 * the mention variant to warm its cached file list).
-	 */
 	loadItems?: () => Promise<void>;
 }
 
-/**
- * Builds a `@tiptap/suggestion` renderer factory. The returned function is the
- * `render` callback: invoking it produces a fresh {@link SuggestionRenderer}
- * that owns floating-ui positioning, mount/unmount, keyboard navigation and the
- * reactive `items`/`selectedIndex` state.
- */
 export function createSuggestionRenderer<TItem>(
 	opts: CreateSuggestionRendererOptions<TItem>
 ): () => SuggestionRenderer<TItem> {
@@ -61,9 +37,7 @@ export function createSuggestionRenderer<TItem>(
 		let selectedIndex = $state(0);
 		let command: ((item: TItem) => void) | null = null;
 		let instance: SuggestionMenuExports | null = null;
-		// Bumped by every onStart and by onExit. A refresh awaits IPC, so the menu
-		// can close during it; a stale generation means the wrapper never gets
-		// mounted (or the unmounted one is never touched again).
+		// A refresh awaits IPC and the menu can close mid-flight; a stale generation must not mount it.
 		let generation = 0;
 
 		function updatePosition(clientRect: () => DOMRect | null): void {

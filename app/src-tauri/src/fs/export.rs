@@ -41,7 +41,6 @@ fn export_vault_zip_blocking(vault_path: &str, dest_path: &str) -> Result<(), St
         Ok(())
     }
 
-    // Walk errors cannot cross `walk_dir`'s visitor, so capture the first one.
     let mut error: Option<String> = None;
     walk_dir(root, &mut |item| {
         if item.name.starts_with('.') || error.is_some() {
@@ -75,9 +74,6 @@ fn export_vault_zip_blocking(vault_path: &str, dest_path: &str) -> Result<(), St
     Ok(())
 }
 
-// ─── Unsynced-changes check (fully Rust-side) ────────────────────────────
-
-/// Collect all non-hidden files in the vault, returning (relative_path, mtime_secs).
 fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
     let mut result = Vec::new();
     walk_dir_capped(root, 0, crate::fs::MAX_WALK_DEPTH, &mut |item| {
@@ -95,11 +91,6 @@ fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
     result
 }
 
-/// Check whether the vault has local changes compared to the last-synced
-/// base manifest.
-///
-/// Caches the result for up to 2 seconds to avoid repeated full vault walks
-/// when called in quick succession (e.g. on every vault-fs-changed event).
 #[tauri::command]
 #[specta::specta]
 pub async fn has_unsynced_changes(
@@ -116,9 +107,6 @@ fn has_unsynced_changes_blocking(
     encryption_key: Vec<u8>,
 ) -> Result<bool, String> {
     struct CachedResult {
-        /// Vault this result belongs to — without it, switching vaults within
-        /// the TTL window could return a stale result from the previous vault
-        /// if the two manifests happened to share an mtime (e.g. both 0/missing).
         vault_path: String,
         result: bool,
         manifest_mtime: u64,
@@ -130,7 +118,6 @@ fn has_unsynced_changes_blocking(
 
     let manifest_path = Path::new(vault_path).join(".margin").join("sync-base.enc");
 
-    // Get manifest mtime for cache invalidation
     let manifest_mtime = fs::metadata(&manifest_path)
         .and_then(|m| m.modified())
         .ok()
@@ -139,7 +126,7 @@ fn has_unsynced_changes_blocking(
         .unwrap_or(0);
 
     if let Ok(guard) = CACHE.lock()
-        && let Some(ref cached) = *guard
+        && let Some(cached) = guard.as_ref()
         && cached.vault_path == vault_path
         && cached.manifest_mtime == manifest_mtime
         && cached.checked_at.elapsed().as_secs() < CACHE_TTL_SECS

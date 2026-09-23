@@ -17,7 +17,8 @@ import NoteEmbed from '$lib/editor/note-embed';
 import WikiLink from '$lib/editor/wiki-link';
 import Callout from '$lib/editor/callout';
 import { TableMarkdown } from '$lib/editor/table-markdown';
-import { MathBlock, MathInline } from '$lib/editor/math';
+import { MathBlock } from '$lib/editor/math-block';
+import { MathInline } from '$lib/editor/math-inline';
 import { Mermaid } from '$lib/editor/mermaid';
 import SlashCommand from '$lib/editor/slash-command';
 import { getSlashMenuItems } from '$lib/editor/menu-items';
@@ -36,39 +37,26 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { createLowlight } from 'lowlight';
 import * as m from '$lib/paraglide/messages.js';
 
-/** The instance returned by lowlight's `createLowlight` — forwarded, never inspected. */
 export type Lowlight = ReturnType<typeof createLowlight>;
 
-/**
- * Minimal structural type for the markdown-it surface touched here. markdown-it@14
- * ships no bundled .d.ts and @types/markdown-it is not a dependency, so we declare
- * just the member we call instead of falling back to `any`.
- */
 interface MarkdownIt {
 	use(plugin: unknown): MarkdownIt;
 }
 
 declare module 'tiptap-markdown' {
-	// tiptap-markdown hangs a serializer on its storage at runtime but leaves it
-	// out of the shipped .d.ts; declare the part we read.
 	interface MarkdownStorage {
 		serializer?: { serialize(content: Fragment): string };
+		parser?: { parse(markdown: string): string };
 	}
 }
 
 interface CreateExtensionsOptions {
 	lowlight: Lowlight | null;
 	attachmentFolder?: string | null;
-	/** Build a trimmed, non-interactive set for read-only transclusion previews. */
 	embed?: boolean;
-	/** Transclusion nesting level passed through to NoteEmbed. */
 	embedDepth?: number;
 }
 
-// Consumes legacy `==highlight==` syntax in existing notes without bringing a
-// highlight mark back into the schema: the markdown-it rule still parses it on
-// load (so code blocks and inline code are respected), but with no Highlight
-// extension present ProseMirror keeps only the inner text.
 const LegacyHighlightStrip = Extension.create({
 	name: 'legacyHighlightStrip',
 	addStorage() {
@@ -96,9 +84,6 @@ export function createEditorExtensions({
 			codeBlock: false,
 			link: false,
 			underline: false,
-			// StarterKit bundles its own trailing node, which appends a paragraph
-			// after a heading too. The one below is the app's (headings are a valid
-			// end for a short note); registering both is a duplicate extension.
 			trailingNode: false,
 			dropcursor: {
 				width: 3,
@@ -153,15 +138,12 @@ export function createEditorExtensions({
 
 						const taskItemNode = $from.node(taskItemDepth);
 
-						// Empty task item → delete it (and the taskList if last)
 						if (taskItemNode.content.size <= 2) {
 							if (taskListNode.childCount === 1) {
-								// Last task item: remove the whole taskList
 								const taskListPos = $from.before(taskListDepth);
 								const tr = state.tr.delete(taskListPos, taskListPos + taskListNode.nodeSize);
 								editor.view.dispatch(tr);
 							} else {
-								// Remove just this task item
 								const taskItemPos = $from.before(taskItemDepth);
 								const tr = state.tr.delete(taskItemPos, taskItemPos + taskItemNode.nodeSize);
 								editor.view.dispatch(tr);
@@ -169,7 +151,6 @@ export function createEditorExtensions({
 							return true;
 						}
 
-						// Non-empty task item → lift out of task list into parent
 						return editor.commands.liftListItem('taskItem');
 					}
 				};
@@ -211,8 +192,7 @@ export function createEditorExtensions({
 			inline: false,
 			allowBase64: true
 		}),
-		// NoteEmbed must precede FileEmbed so it claims `![[Note]]` / `![[Note.md]]`
-		// before the file-embed markdown rule sees them.
+		// NoteEmbed must precede FileEmbed so it claims `![[Note]]` / `![[Note.md]]` first.
 		NoteEmbed.configure({
 			attachmentFolder: attachmentFolder || 'attachments',
 			lowlight,
@@ -245,7 +225,6 @@ export function createEditorExtensions({
 
 	if (!embed) {
 		exts.push(
-			// Serialize lists as markdown on copy; tables use default PM serializer
 			Extension.create({
 				name: 'selectiveClipboardMarkdown',
 				priority: 100,
@@ -254,10 +233,7 @@ export function createEditorExtensions({
 						new Plugin({
 							key: new PluginKey('selectiveClipboardMarkdown'),
 							props: {
-								// Declining is spelled as an empty string: ProseMirror's
-								// `someProp` keeps looking for a handler while the result is
-								// falsy and then falls back to its own text extraction, so ''
-								// hands the selection back to the default serializer.
+								// ProseMirror reads '' as "no handler" and falls back to its own text extraction.
 								clipboardTextSerializer: (slice) => {
 									const listTypes = ['bulletList', 'orderedList', 'taskList'];
 									let topLevelCount = 0;
@@ -280,8 +256,6 @@ export function createEditorExtensions({
 					];
 				}
 			}),
-			// Normalises the clipboard: strips non-Markdown appearance (colour,
-			// highlight, underline, super/subscript, alignment) on both paste and copy.
 			PasteCleanup,
 			SearchReplace,
 			ContentDrag,

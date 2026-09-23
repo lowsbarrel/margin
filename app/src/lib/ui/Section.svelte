@@ -6,8 +6,6 @@
 
 	interface Props {
 		title?: string;
-		/* Lucide-compatible icon — see the note in Button.svelte for why the type
-		   is the passed prop rather than `LucideProps`. */
 		icon?: Component<{ size?: number }>;
 		children: Snippet;
 		collapsible?: boolean;
@@ -23,7 +21,6 @@
 	}
 </script>
 
-<!-- Flat card: a hairline border over the page surface, no shadow. -->
 <section class="flex flex-col overflow-hidden rounded-lg border border-border bg-background">
 	{#if title}
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -31,15 +28,12 @@
 		<div
 			class={cn(
 				'flex items-center justify-between bg-surface-1 px-4 py-3',
-				/* The divider only earns its keep when there is content below it. */
 				(!collapsible || open) && 'border-b border-border',
 				collapsible &&
 					'cursor-pointer transition-colors duration-120 ease-out select-none hover:bg-surface-2'
 			)}
 			onclick={toggle}
 		>
-			<!-- `tracking-normal!` overrides the unlayered `h1..h6` rule in app.css,
-			     which forces tight tracking on every heading. -->
 			<h3 class="m-0 flex items-center gap-2 text-sm font-semibold tracking-normal text-foreground">
 				{#if Icon}<span class="flex items-center text-subtle-foreground"><Icon size={14} /></span
 					>{/if}

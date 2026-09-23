@@ -7,22 +7,17 @@ on:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
-  # Cancel superseded PR runs, but never a push to main.
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
-  # Conventional Commits, enforced (AGENTS.md "Naming"). PR titles matter
-  # because squash merges inherit them. Zero-dependency on purpose: an inline
-  # check keeps the supply chain closed. Titles go through env vars, never
-  # inline interpolation — PR titles are attacker-controlled input.
   conventions:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
         with:
           fetch-depth: 0
       - name: PR title follows Conventional Commits
@@ -47,16 +42,14 @@ jobs:
           done < <(git log --format=%s "$BASE".."$HEAD")
           exit "$bad"
 
-  # The frontend half: everything the pre-commit hook runs, plus the two gates
-  # deliberately left out of it for being slow.
   test:
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: app
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: latest
       - run: bun install --frozen-lockfile
@@ -66,10 +59,6 @@ jobs:
       - run: bun run check
       - run: bun run build
 
-  # The Rust half, on every platform we ship. Margin is full of
-  # `#[cfg(target_os = "…")]` path and shell handling, so a single-platform lint
-  # proves nothing about the branch that only compiles on the other two — and
-  # the alternative is finding out at tag time, when the release build breaks.
   rust:
     strategy:
       fail-fast: false
@@ -80,11 +69,8 @@ jobs:
       run:
         working-directory: app/src-tauri
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
-      # Installed straight from apt rather than through a caching action: the
-      # cache only restores the packages named here, not the transitive `-dev`
-      # ones that carry the .pc files, so pkg-config could not find glib-2.0.
       - name: Install Linux system deps
         if: runner.os == 'Linux'
         run: |
@@ -93,38 +79,32 @@ jobs:
             libwebkit2gtk-4.1-dev librsvg2-dev patchelf libssl-dev \
             libgtk-3-dev libayatana-appindicator3-dev
 
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           toolchain: stable
           components: clippy, rustfmt
 
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: app/src-tauri -> target
 
       - name: Cargo fmt
         run: cargo fmt -- --check
 
-      # --all-targets covers tests and benches; --all-features is deliberately
-      # absent, since it turns on Tauri's custom-protocol feature, which expects
-      # a bundled frontend that is not built at lint time.
       - name: Cargo clippy
         run: cargo clippy --all-targets -- -D warnings
 
       - name: Cargo test
         run: cargo test
 
-  # Known-vulnerable crates. One platform is enough — the advisory database is
-  # not OS-specific — and it is split out so a new CVE in a transitive crate
-  # fails on its own line instead of masking a real clippy regression.
   audit:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: app/src-tauri -> target
       - name: Install cargo-audit
@@ -133,22 +113,18 @@ jobs:
         working-directory: app/src-tauri
         run: cargo audit
 
-  # Proves the thing we actually ship still bundles. `cargo clippy` compiles the
-  # Rust and `vite build` compiles the frontend, but neither exercises the Tauri
-  # bundler, its config, or the icon/capability wiring — and without this the
-  # release workflow only finds out at tag time, when a failure means a bad tag.
   bundle:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2.2.0
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+      - uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6
         with:
           bun-version: latest
-      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4 # stable
+      - uses: dtolnay/rust-toolchain@4cda84d5c5c54efe2404f9d843567869ab1699d4
         with:
           toolchain: stable
-      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32
         with:
           workspaces: app/src-tauri -> target
       - name: Install Linux system deps
@@ -160,12 +136,6 @@ jobs:
       - name: Install JS dependencies
         working-directory: app
         run: bun install --frozen-lockfile
-      # No signing key on purpose: an unsigned bundle still proves the bundler
-      # config is sound, and the updater signature is the release workflow's job.
-      # `createUpdaterArtifacts` has to be turned off to mean it, though —
-      # tauri.conf.json carries the updater pubkey, and with the artifact enabled
-      # `tauri build` fails after bundling because it has no private key to sign
-      # with. Overridden here rather than in the config so releases keep it on.
       - name: Build the bundle
         working-directory: app
         run: bun run tauri build --bundles deb --config '{"bundle":{"createUpdaterArtifacts":false}}'

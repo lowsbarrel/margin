@@ -1,0 +1,188 @@
+.editor-wrap .tableWrapper {
+	margin-top: 1rem;
+	margin-bottom: 1rem;
+	overflow-x: auto;
+}
+
+.editor-wrap table {
+	border-collapse: collapse;
+	margin: 0;
+	table-layout: fixed;
+	width: 100%;
+}
+
+.editor-wrap table td,
+.editor-wrap table th {
+	border: 1px solid var(--color-border-secondary);
+	box-sizing: border-box;
+	min-width: 1em;
+	padding: 3px 5px;
+	position: relative;
+	vertical-align: top;
+}
+
+.editor-wrap table td p,
+.editor-wrap table th p {
+	margin: 0;
+}
+
+.editor-wrap table td p + p,
+.editor-wrap table th p + p {
+	margin-top: 0.75rem;
+}
+
+.editor-wrap table th {
+	background: var(--color-bg-secondary);
+	font-weight: bold;
+	text-align: left;
+}
+
+.editor-wrap .column-resize-handle {
+	background-color: var(--color-bg-brand);
+	bottom: -1px;
+	position: absolute;
+	right: -2px;
+	pointer-events: none;
+	top: 0;
+	width: 4px;
+}
+
+.editor-wrap .selectedCell::after {
+	background: var(--color-brand-24);
+	content: '';
+	left: 0;
+	right: 0;
+	top: 0;
+	bottom: 0;
+	pointer-events: none;
+	position: absolute;
+	z-index: 2;
+}
+
+.table-ui-layer {
+	position: fixed;
+	inset: 0;
+	pointer-events: none;
+	z-index: 60;
+}
+
+.table-drag-handle,
+.table-add-handle {
+	display: none;
+	position: fixed;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	margin: 0;
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-xs);
+	background: var(--color-bg-secondary);
+	color: var(--color-text-secondary);
+	font-family: inherit;
+	font-size: 14px;
+	font-weight: 400;
+	line-height: 1;
+	cursor: pointer;
+	pointer-events: auto;
+	z-index: 61;
+	transition:
+		opacity var(--transition-base),
+		background var(--transition-fast);
+}
+
+.table-drag-handle.is-visible,
+.table-add-handle.is-visible,
+.table-drag-handle:focus-visible,
+.table-add-handle:focus-visible {
+	display: flex;
+}
+
+.table-drag-handle {
+	cursor: grab;
+}
+
+.table-drag-handle::after {
+	content: '⠿';
+	font-size: 10px;
+	color: var(--color-text-secondary);
+}
+
+.table-drag-handle:hover,
+.table-add-handle:hover {
+	background: var(--color-bg-hover);
+	color: var(--color-text-primary);
+}
+
+.table-drag-handle:active {
+	cursor: grabbing;
+}
+
+.table-menu {
+	position: fixed;
+	display: flex;
+	flex-direction: column;
+	min-width: 11rem;
+	padding: 4px;
+	z-index: 70;
+}
+
+.table-menu-item {
+	display: block;
+	width: 100%;
+	padding: 4px 10px;
+	border: none;
+	border-radius: var(--radius-xs);
+	background: transparent;
+	color: var(--color-text-primary);
+	font-family: inherit;
+	font-size: 0.875rem;
+	font-weight: 400;
+	text-align: left;
+	white-space: nowrap;
+	cursor: pointer;
+}
+
+.table-menu-item:hover:not(:disabled),
+.table-menu-item:focus-visible:not(:disabled) {
+	background: var(--color-bg-hover);
+}
+
+.table-menu-item:focus-visible {
+	outline: 2px solid var(--color-border-focus);
+	outline-offset: -2px;
+}
+
+.table-menu-item:disabled {
+	color: var(--color-text-tertiary);
+	cursor: default;
+}
+
+.table-menu-item[data-destructive='true'] {
+	color: var(--color-destructive);
+}
+
+.table-dnd-preview {
+	position: fixed;
+	padding: 0;
+	background-color: var(--color-brand-16);
+	backdrop-filter: blur(2px);
+	border-radius: var(--radius-xs);
+	display: none;
+	pointer-events: none;
+	z-index: 100;
+}
+
+.table-dnd-drop-indicator {
+	position: fixed;
+	background-color: var(--color-text-brand);
+	display: none;
+	pointer-events: none;
+	z-index: 99;
+}
+
+body:has(.table-dnd-drop-indicator[data-dragging='true']) .prosemirror-dropcursor-block,
+body:has(.table-dnd-drop-indicator[data-dragging='true']) .prosemirror-dropcursor-inline {
+	display: none;
+}

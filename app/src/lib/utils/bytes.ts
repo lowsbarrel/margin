@@ -1,6 +1,5 @@
 const UNITS = ['B', 'KB', 'MB', 'GB', 'TB'];
 
-/** Human-readable byte size, e.g. `2.4 MB`. */
 export function formatBytes(bytes: number): string {
 	if (bytes < 1024) return `${bytes} B`;
 	let value = bytes;

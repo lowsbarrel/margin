@@ -9,9 +9,6 @@ export function drawGrid(
 	zoom: number,
 	isDark: boolean
 ) {
-	// Adapt the grid step to zoom so on-screen spacing stays roughly constant
-	// (~40px) and the iteration count stays bounded at far zoom-out instead of
-	// exploding into a dense unreadable mesh.
 	const baseStep = 40;
 	const step = baseStep * Math.pow(2, Math.round(Math.log2(1 / zoom)));
 	const startX = Math.floor(camX / step) * step;
@@ -124,10 +121,6 @@ export interface RenderOptions {
 	activeSnapStart: Point | null;
 }
 
-/**
- * Composites the full canvas scene: grid → drawing layer (offscreen) → snap indicators.
- * Re-uses offscreen to avoid creating new GPU-backed canvases on every frame.
- */
 export function render(
 	opts: RenderOptions,
 	offscreenRef: { canvas: HTMLCanvasElement | null; ctx: CanvasRenderingContext2D | null }
@@ -146,7 +139,6 @@ export function render(
 	drawGrid(ctx, w / dpr, h / dpr, camX, camY, zoom, isDark);
 	ctx.restore();
 
-	// Offscreen canvas for strokes/shapes (eraser compositing)
 	if (!offscreenRef.canvas || offscreenRef.canvas.width !== w || offscreenRef.canvas.height !== h) {
 		if (offscreenRef.canvas) {
 			offscreenRef.canvas.width = 0;
@@ -180,7 +172,6 @@ export function render(
 
 	ctx.drawImage(offscreenRef.canvas, 0, 0, w, h, 0, 0, w / dpr, h / dpr);
 
-	// Snap indicators
 	if (opts.activeSnap || opts.activeSnapStart) {
 		ctx.save();
 		ctx.scale(zoom, zoom);

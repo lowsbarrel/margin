@@ -1,0 +1,48 @@
+.note-embed {
+	margin: var(--space-lg) 0;
+	border: 1px solid var(--color-border-secondary);
+	border-left: 3px solid var(--color-bg-brand);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-secondary);
+	overflow: hidden;
+}
+
+.note-embed .note-embed-header {
+	display: flex;
+	align-items: center;
+	gap: var(--space-sm);
+	padding: var(--space-sm) var(--space-md);
+	font-size: var(--text-size-xs);
+	font-weight: var(--font-weight-semibold);
+	color: var(--color-text-brand);
+	cursor: pointer;
+	border-bottom: 1px solid var(--color-border-secondary);
+	user-select: none;
+	transition: background var(--transition-fast);
+}
+
+.note-embed .note-embed-header:hover {
+	background: var(--color-bg-hover);
+}
+
+.note-embed .note-embed-icon::before {
+	content: '🔗';
+	font-size: var(--text-size-xs);
+}
+
+.note-embed .note-embed-body {
+	padding: var(--space-xs) var(--space-lg) var(--space-sm);
+}
+
+.note-embed .note-embed-body .md-editor {
+	padding: 0;
+	margin: 0;
+	max-width: none;
+}
+
+.note-embed .note-embed-missing,
+.note-embed .note-embed-empty {
+	padding: var(--space-sm) var(--space-lg);
+	color: var(--color-text-tertiary);
+	font-size: var(--text-size-xs);
+}

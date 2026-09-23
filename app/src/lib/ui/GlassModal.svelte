@@ -13,20 +13,12 @@
 
 	let { title, onclose, children, width = '560px' }: Props = $props();
 
-	/* The caller owns the mounted/unmounted state — this component is rendered
-	   inside an `{#if}`. So the dialog is opened on mount and every close route
-	   bits-ui offers (Escape, backdrop click, the X button) funnels through
-	   `onOpenChange` back to `onclose`. */
 	function handleOpenChange(next: boolean) {
 		if (!next) onclose();
 	}
 </script>
 
 <Dialog.Root open onOpenChange={handleOpenChange}>
-	<!-- The panel genuinely floats, so this is one of the few places a shadow is
-	     warranted — paired with a hairline border to keep the edge crisp. The
-	     inline width beats shadcn's `w-full`; the max-widths replace its
-	     `sm:max-w-sm` cap, which would otherwise shrink the modal to 384px. -->
 	<Dialog.Content
 		showCloseButton={false}
 		style="width: {width}"
@@ -50,24 +42,3 @@
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
-
-<style>
-	/* The only rule here that no utility can express: `tw-animate-css` is not
-	   installed, so shadcn's `animate-in`/`zoom-in-95` classes are inert and
-	   there is no built-in enter keyframe. Declared `-global-` because the
-	   animated element belongs to <Dialog.Content>, which Svelte's scoping
-	   classes do not reach.
-
-	   Safe to animate `transform` here: Tailwind v4 centres the panel with the
-	   separate `translate` property, so the two compose instead of colliding. */
-	@keyframes -global-margin-modal-in {
-		from {
-			opacity: 0;
-			transform: translateY(8px);
-		}
-		to {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-</style>

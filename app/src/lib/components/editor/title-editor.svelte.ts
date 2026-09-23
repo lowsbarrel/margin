@@ -1,0 +1,94 @@
+import { untrack } from 'svelte';
+import { fileExists } from '$lib/fs/bridge';
+import { fileTitle } from '$lib/stores/panes.svelte';
+import { toast } from '$lib/stores/toast.svelte';
+import { validateName } from '$lib/utils/filename';
+import * as m from '$lib/paraglide/messages.js';
+
+const RENAME_DELAY = 150;
+
+export interface TitleEditorHost {
+	path(): string;
+	setPath(path: string): void;
+	isAlive(): boolean;
+	focusEditor(): void;
+	onrename(): ((oldPath: string, newPath: string) => void | Promise<void>) | undefined;
+}
+
+export class TitleEditor {
+	private readonly host: TitleEditorHost;
+	text = $state('');
+	pending = false;
+	private timer: ReturnType<typeof setTimeout> | undefined;
+
+	constructor(host: TitleEditorHost, initialTitle: string) {
+		this.host = host;
+		this.text = untrack(() => initialTitle);
+	}
+
+	input(raw: string): void {
+		if (!this.host.isAlive() || !raw) return;
+		if (raw === fileTitle(this.host.path())) return;
+
+		clearTimeout(this.timer);
+		this.timer = setTimeout(() => {
+			if (!this.host.isAlive()) return;
+			const error = validateName(raw);
+			if (error) {
+				toast.error(error);
+				return;
+			}
+			const path = this.host.path();
+			const dir = path.substring(0, path.lastIndexOf('/'));
+			const newPath = `${dir}/${raw}.md`;
+			if (newPath !== path) void this.renameTo(newPath);
+		}, RENAME_DELAY);
+	}
+
+	syncToPath(path: string): void {
+		this.text = fileTitle(path);
+	}
+
+	revert(): void {
+		this.text = fileTitle(this.host.path());
+	}
+
+	blur(): void {
+		if (validateName(this.text.trim())) this.revert();
+	}
+
+	keydown(event: KeyboardEvent): void {
+		if (event.key !== 'Enter') return;
+		event.preventDefault();
+		this.host.focusEditor();
+	}
+
+	async renameTo(newPath: string): Promise<void> {
+		if (this.pending) return;
+		this.pending = true;
+		try {
+			const path = this.host.path();
+			const differsBeyondCase = newPath.toLowerCase() !== path.toLowerCase();
+			if (differsBeyondCase && (await fileExists(newPath))) {
+				toast.error(m.toast_path_exists({ name: newPath.split('/').pop() ?? '' }));
+				this.revert();
+				return;
+			}
+
+			await this.host.onrename()?.(path, newPath);
+			this.host.setPath(newPath);
+			this.text = fileTitle(newPath);
+		} catch (err) {
+			console.error('Rename failed:', err);
+			this.revert();
+			toast.error(m.toast_rename_failed({ error: String(err) }));
+		} finally {
+			this.pending = false;
+		}
+	}
+
+	dispose(): void {
+		clearTimeout(this.timer);
+		this.timer = undefined;
+	}
+}

@@ -2,10 +2,6 @@ import { commands } from '$lib/bindings';
 import type { ManifestEntry_Deserialize, Manifest_Deserialize } from '$lib/bindings';
 import type { ManifestEntry, Manifest } from './s3sync-manifest';
 
-// ── Types ──
-
-// The generated `SyncAction.kind` is a bare `string`; keep the precise
-// string-literal union so the exhaustive `switch` in s3sync.ts still narrows.
 export type SyncActionKind =
 	| 'upload'
 	| 'download'
@@ -20,17 +16,10 @@ export interface SyncAction {
 	path: string;
 }
 
-// The app constructs manifest entries with an optional `deleted_at`
-// (the Serialize variant). The native commands declare their inputs as the
-// Deserialize variant (required-but-nullable `deleted_at`); the two are
-// wire-compatible — serde treats a missing field as `None`. The casts below
-// bridge the variant difference without changing any public signature.
 const asDeserEntries = (entries: ManifestEntry[]): ManifestEntry_Deserialize[] =>
 	entries as ManifestEntry_Deserialize[];
 const asDeserManifest = (manifest: Manifest): Manifest_Deserialize =>
 	manifest as Manifest_Deserialize;
-
-// ── SHA-256 hashing ──
 
 export async function hashFilesBatch(vaultPath: string, paths: string[]): Promise<string[]> {
 	const r = await commands.hashFilesBatch(vaultPath, paths);
@@ -38,9 +27,6 @@ export async function hashFilesBatch(vaultPath: string, paths: string[]): Promis
 	return r.data;
 }
 
-// ── Manifest I/O ──
-
-/** Returns default manifest if missing. */
 export async function loadManifest(vaultPath: string, encryptionKey: number[]): Promise<Manifest> {
 	const r = await commands.loadManifest(vaultPath, encryptionKey);
 	if (r.status === 'error') throw r.error;
@@ -56,8 +42,6 @@ export async function saveManifest(
 	if (r.status === 'error') throw r.error;
 }
 
-// ── 3-way diff ──
-
 export async function computeSyncActionsNative(
 	baseFiles: ManifestEntry[],
 	localFiles: ManifestEntry[],
@@ -69,8 +53,6 @@ export async function computeSyncActionsNative(
 		asDeserEntries(remoteFiles)
 	) as Promise<SyncAction[]>;
 }
-
-// ── Tombstone helpers ──
 
 export async function collectTombstonesNative(files: ManifestEntry[]): Promise<ManifestEntry[]> {
 	return commands.collectTombstones(asDeserEntries(files));
@@ -90,8 +72,6 @@ export async function pruneTombstonesNative(
 	return commands.pruneTombstones(asDeserEntries(tombstones), nowSeconds);
 }
 
-// ── Batch upload / download ──
-
 export async function syncUploadFiles(
 	vaultPath: string,
 	s3Prefix: string,
@@ -102,13 +82,6 @@ export async function syncUploadFiles(
 	if (r.status === 'error') throw r.error;
 }
 
-/**
- * Download, decrypt and write files in a single batch; `mtimes[i]` (seconds
- * since UNIX epoch) stamps the file written for `paths[i]`. Returns the subset
- * of `paths` skipped because their blob is missing on S3 (HTTP 404 — a dangling
- * manifest entry whose upload never landed). These are not fatal; the caller
- * should leave them out of the local base so they're retried on the next sync.
- */
 export async function syncDownloadFiles(
 	vaultPath: string,
 	s3Prefix: string,
@@ -130,9 +103,6 @@ export async function syncUploadManifest(
 	if (r.status === 'error') throw r.error;
 }
 
-// ── Delete files from S3 ──
-
-/** Computes HMAC keys internally. */
 export async function syncDeleteFiles(
 	s3Prefix: string,
 	paths: string[],
@@ -141,8 +111,6 @@ export async function syncDeleteFiles(
 	const r = await commands.syncDeleteFiles(s3Prefix, paths, encryptionKey);
 	if (r.status === 'error') throw r.error;
 }
-
-// ── Path → S3 key mapping ──
 
 export async function pathToS3Key(relPath: string, encryptionKey: number[]): Promise<string> {
 	return commands.pathToS3Key(relPath, encryptionKey);

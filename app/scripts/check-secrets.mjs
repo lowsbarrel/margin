@@ -21,15 +21,11 @@ const PATTERNS = [
 	[/GOCSPX-[A-Za-z0-9_-]{20,}/, 'Google OAuth client secret'],
 	[/xox[baprs]-[A-Za-z0-9-]{10,}/, 'Slack token'],
 	[/gh[pousr]_[A-Za-z0-9]{30,}/, 'GitHub token'],
-	// The vault key is derived from the mnemonic — a committed one is a full
-	// compromise of every note that phrase ever encrypted.
 	[/mnemonic\s*[:=]\s*["'][a-z]+(?: [a-z]+){11}["']/i, 'BIP-39 mnemonic'],
-	// Minisign key that signs updater artifacts; lives only in GitHub secrets.
 	[
 		/(?:TAURI_SIGNING_PRIVATE_KEY|TAURI_PRIVATE_KEY)\s*[:=]\s*["']?(?!\s*$)(?!\$\{\{)[^\s"']{16,}/,
 		'Tauri updater signing key'
 	],
-	// S3 credentials belong in the OS keychain / the user's own config, never here.
 	[/(?:aws_)?secret_access_key\s*[:=]\s*["'][A-Za-z0-9/+=]{30,}["']/i, 'S3 secret access key']
 ];
 

@@ -72,8 +72,6 @@
 	{#if exportString}
 		<div class="relative">
 			<TextArea value={exportString} readonly rows={3} />
-			<!-- Floats over the scrollable textarea, so it blurs whatever text
-			     passes beneath it rather than sitting on an opaque plate. -->
 			<button
 				class="absolute top-2 right-2 flex size-6.5 cursor-pointer items-center justify-center rounded-xs border border-border bg-background p-0 text-subtle-foreground backdrop-blur-md transition-colors duration-150 ease-out hover:text-foreground"
 				onclick={handleCopy}

@@ -1,19 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { commands } from '$lib/bindings';
-import { initWriteQueue, queuedWrite, flushWriteQueue, remapRecentWrites } from './writeQueue';
+import { initWriteQueue, queuedWrite, flushWriteQueue, remapRecentWrites } from './write-queue';
 
-/**
- * Re-exported so call sites (e.g. window-close handlers) can await all pending
- * file writes via the fs bridge. Resolves once the latest queued content for
- * every path has landed on disk.
- */
 export { flushWriteQueue };
 
-/**
- * Boundary types generated from the Rust structs by tauri-specta. Re-exported
- * so existing call sites that import them from this bridge keep working.
- */
 export type {
 	Backlink,
 	FileMetadata,
@@ -37,20 +28,9 @@ import type {
 	WikiLinkMatch
 } from '$lib/bindings';
 
-/**
- * Header key used to smuggle the destination path of `write_file_bytes`.
- * The raw bytes are passed as the invoke args body (avoiding base64 JSON
- * encoding), so the path travels in this request header instead. The Rust
- * `write_file_bytes` command reads the same header — keep the two in sync.
- */
 const X_PATH_HEADER = 'x-path';
 
-/**
- * `store_attachment_bytes` carries the clipboard's bytes as the invoke body and
- * the two pieces of text as headers. A header value is Latin-1, so the folder
- * and the file name are percent-encoded here and decoded in Rust — a pasted
- * file name is arbitrary UTF-8.
- */
+// Header values are Latin-1, so arbitrary UTF-8 names are percent-encoded here.
 const X_FOLDER_HEADER = 'x-folder';
 const X_NAME_HEADER = 'x-name';
 
@@ -72,25 +52,14 @@ async function rawWriteFileBytes(path: string, content: Uint8Array): Promise<voi
 
 initWriteQueue(rawWriteFileBytes);
 
-/**
- * Write file bytes with per-path serialization.
- * Concurrent writes to the same path are queued so only the latest content
- * is written once the current in-flight write completes. No delays.
- */
 export function writeFileBytes(path: string, content: Uint8Array): Promise<void> {
 	return queuedWrite(path, content);
 }
 
-/** Bypass the write queue — use only when serialization is not needed (e.g. writing to a new unique path). */
 export async function writeFileBytesRaw(path: string, content: Uint8Array): Promise<void> {
 	return rawWriteFileBytes(path, content);
 }
 
-/**
- * Store pasted bytes as an attachment and return their vault-relative path.
- * Rust owns the naming, the dedupe and the never-overwrite rule, so the bytes
- * go over as the invoke body rather than being written to a path chosen here.
- */
 export async function storeAttachmentBytes(
 	folder: string,
 	name: string,
@@ -104,13 +73,6 @@ export async function storeAttachmentBytes(
 	});
 }
 
-/**
- * Save raw bytes to an arbitrary path *outside* the vault containment check.
- * For explicit "save as / export" flows where the destination was chosen by
- * the user through the native save dialog (e.g. exporting a note to PDF onto
- * the Desktop). Mirrors `rawWriteFileBytes` but targets the unguarded
- * `save_file_bytes` command — see the matching Rust command, kept in sync.
- */
 export async function saveFileBytes(path: string, content: Uint8Array): Promise<void> {
 	return invoke<void>('save_file_bytes', content, {
 		headers: { [X_PATH_HEADER]: path }
@@ -123,18 +85,12 @@ export async function listDirectory(path: string): Promise<FsEntry[]> {
 	return r.data;
 }
 
-/** Walk entire directory tree in one IPC call. Hidden entries excluded unless includeHidden. */
 export async function walkDirectory(root: string, includeHidden = false): Promise<FsEntry[]> {
 	const r = await commands.walkDirectory(root, includeHidden);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-/**
- * Build a flat sorted list of visible tree rows in one native call.
- * `hidden` holds absolute paths the tree must not draw; everything else in the
- * app still walks them.
- */
 export async function buildVisibleTree(
 	root: string,
 	expanded: string[],
@@ -146,7 +102,6 @@ export async function buildVisibleTree(
 	return r.data;
 }
 
-/** Build subtree for a single folder — used for incremental expand. */
 export async function buildSubtree(
 	folder: string,
 	depthOffset: number,
@@ -179,7 +134,6 @@ export async function fileExists(path: string): Promise<boolean> {
 	return commands.fileExists(path);
 }
 
-/** Size and mtime of one vault file, without reading its bytes. */
 export async function fileMetadata(path: string): Promise<FileMetadata> {
 	const r = await commands.fileMetadata(path);
 	if (r.status === 'error') throw r.error;
@@ -191,13 +145,6 @@ export async function copyFile(from: string, to: string): Promise<void> {
 	if (r.status === 'error') throw r.error;
 }
 
-/**
- * Copy a file from an arbitrary source *outside* the vault into a
- * vault-contained destination — for drag-drop / import of an external file as
- * an attachment. Unlike `copyFile`, the source is NOT containment-checked (the
- * user explicitly chose it); only the destination must resolve inside the
- * vault.
- */
 export async function importExternalFile(from: string, to: string): Promise<void> {
 	const r = await commands.importExternalFile(from, to);
 	if (r.status === 'error') throw r.error;
@@ -208,30 +155,18 @@ export async function copyDirectory(from: string, to: string): Promise<void> {
 	if (r.status === 'error') throw r.error;
 }
 
-/**
- * Read a file from outside the vault and store it in `folder` under a name
- * derived from its contents. Returns the vault-relative path; the same bytes
- * pasted or dropped twice resolve to the same file.
- */
 export async function importAttachment(from: string, folder: string): Promise<string> {
 	const r = await commands.importAttachment(from, folder);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-/** Trash stored attachments in `folder` that no note has used for a week. */
 export async function sweepUnusedAttachments(folder: string): Promise<number> {
 	const r = await commands.sweepUnusedAttachments(folder);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-/**
- * Copy a directory from an arbitrary source *outside* the vault into a
- * vault-contained destination — the directory counterpart of
- * `importExternalFile`, for a folder dropped onto the tree from a file manager.
- * Only the destination is containment-checked.
- */
 export async function importExternalDirectory(from: string, to: string): Promise<void> {
 	const r = await commands.importExternalDirectory(from, to);
 	if (r.status === 'error') throw r.error;
@@ -269,7 +204,6 @@ export async function onVaultFsChanged(callback: () => void): Promise<UnlistenFn
 	});
 }
 
-/** O(n) mtime comparison — no hashing, no per-file IPC. */
 export async function hasUnsyncedChanges(
 	vaultPath: string,
 	encryptionKey: number[]
@@ -285,11 +219,6 @@ export async function searchFiles(root: string, query: string): Promise<FsEntry[
 	return r.data;
 }
 
-/**
- * Ranked full-text content search backed by the SQLite FTS5 index (replaces the
- * old per-query linear scan of every `.md`). Returns whole-note hits ordered by
- * relevance, each with a plain-text snippet for display.
- */
 export async function searchIndex(
 	root: string,
 	query: string,
@@ -300,10 +229,6 @@ export async function searchIndex(
 	return r.data;
 }
 
-/**
- * Rebuild the search index, skipping files whose (mtime, size) are unchanged.
- * Cheap to call repeatedly — used on vault open and on `vault-fs-changed`.
- */
 export async function rebuildIndex(root: string): Promise<number> {
 	const r = await commands.indexRebuild(root);
 	if (r.status === 'error') throw r.error;
@@ -331,17 +256,12 @@ export async function setMtime(path: string, mtime: number): Promise<void> {
 	if (r.status === 'error') throw r.error;
 }
 
-/**
- * Tags, wiki-links and backlinks all come out of the search index — a note is
- * read once, when it is indexed, rather than once per feature that wants it.
- */
 export async function listAllTags(root: string): Promise<TagInfo[]> {
 	const r = await commands.indexTags(root);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-/** Notes linking to `path`, matched on its filename stem. */
 export async function listBacklinks(root: string, path: string): Promise<Backlink[]> {
 	const r = await commands.indexBacklinks(root, path);
 	if (r.status === 'error') throw r.error;
@@ -353,13 +273,6 @@ export async function exportVaultZip(vaultPath: string, destPath: string): Promi
 	if (r.status === 'error') throw r.error;
 }
 
-// ── Text processing (Rust-accelerated) ──
-
-/**
- * Fast substring search on flattened ProseMirror text via Rust memchr.
- * @param pmOffsets Parallel array mapping each char index to its PM position.
- * @param gaps Sorted char indices where a block boundary exists.
- */
 export async function searchInText(
 	text: string,
 	pmOffsets: number[],
@@ -370,7 +283,6 @@ export async function searchInText(
 	return commands.searchInText(text, pmOffsets, gaps, needle, caseSensitive);
 }
 
-/** Extract [[wiki-links]] from ProseMirror text nodes in a single Rust call. */
 export async function extractWikiLinks(nodes: TextNode[]): Promise<WikiLinkMatch[]> {
 	return commands.extractWikiLinks(nodes);
 }

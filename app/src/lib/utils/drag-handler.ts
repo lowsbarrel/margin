@@ -1,12 +1,8 @@
 import { drag } from '$lib/stores/drag.svelte';
 import type { DragItem } from '$lib/stores/drag.svelte';
 
-/**
- * Start a pointer-based drag after a 4px movement threshold.
- *
- * @param onDragStart  Invoked once the drag threshold is crossed.
- * @param onClick      Invoked on mouseup when no drag occurred (a plain click).
- */
+const DRAG_THRESHOLD_PX = 4;
+
 export function startPointerDrag(
 	e: MouseEvent,
 	item: DragItem,
@@ -18,14 +14,15 @@ export function startPointerDrag(
 	const startY = e.clientY;
 	let didDrag = false;
 
-	// A single AbortController removes both listeners atomically on drop, avoiding
-	// the asymmetric teardown where mousemove was removed on threshold-cross but
-	// mouseup only on fire.
 	const ac = new AbortController();
 	const { signal } = ac;
 
 	function onMove(ev: MouseEvent) {
-		if (!didDrag && (Math.abs(ev.clientX - startX) > 4 || Math.abs(ev.clientY - startY) > 4)) {
+		if (
+			!didDrag &&
+			(Math.abs(ev.clientX - startX) > DRAG_THRESHOLD_PX ||
+				Math.abs(ev.clientY - startY) > DRAG_THRESHOLD_PX)
+		) {
 			didDrag = true;
 			drag.start(item, ev.clientX, ev.clientY);
 			onDragStart?.();

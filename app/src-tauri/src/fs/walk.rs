@@ -3,37 +3,21 @@ use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-/// One entry yielded by [`walk_dir`]. Carries the per-entry data every walker
-/// in this crate needs, computed once from the `DirEntry`.
+pub(crate) const MAX_WALK_DEPTH: usize = 10;
+
 pub(crate) struct WalkItem {
     pub name: String,
     pub path: PathBuf,
     pub is_dir: bool,
-    /// The entry itself is a symlink (never followed; `is_dir` is false for a
-    /// symlink even when its target is a directory).
     pub is_symlink: bool,
-    /// Seconds since UNIX epoch (modification time). 0 if unavailable.
     pub modified: u64,
 }
 
-/// Tells [`walk_dir`] what to do after visiting a directory entry.
 pub(crate) enum WalkAction {
-    /// Recurse into this directory.
     Recurse,
-    /// Do not recurse into this directory.
     Skip,
 }
 
-/// Single shared recursive directory walker. Reads `dir`, and for each entry
-/// (hidden filtering is left to the visitor) computes a [`WalkItem`] and
-/// hands it to `visit`. The visitor returns a [`WalkAction`] controlling whether
-/// the walker descends into directory entries.
-///
-/// Symlink-cycle protection: entries that are themselves symlinks are never
-/// recursed into (the visitor still sees them), so a symlink loop inside the
-/// vault cannot cause infinite recursion / stack overflow. This replaces the
-/// previously hand-rolled `read_dir` recursion duplicated across the fs module
-/// (it intentionally stays zero-dependency — no walkdir/ignore/jwalk).
 pub(crate) fn walk_dir<F>(dir: &Path, visit: &mut F)
 where
     F: FnMut(&WalkItem) -> WalkAction,
@@ -65,18 +49,13 @@ where
             modified,
         };
         let action = visit(&item);
-        // Never follow symlinks — prevents infinite recursion on cyclic links.
+        // Symlinks are never followed: a cycle of links inside the vault would recurse without bound.
         if is_dir && !is_symlink && matches!(action, WalkAction::Recurse) {
             walk_dir(&item.path, visit);
         }
     }
 }
 
-/// Depth-bounded recursive walk built on [`walk_dir`]. Descent is driven here
-/// rather than by `walk_dir`'s own recursion so `max_depth` and the symlink
-/// guard both apply; the visitor still chooses whether to descend by returning
-/// [`WalkAction::Recurse`]. Depth counts directory levels — 0 descends nowhere.
-/// Callers bound vault walks with `fs::MAX_WALK_DEPTH`.
 pub(crate) fn walk_dir_capped<F>(dir: &Path, depth: usize, max_depth: usize, visit: &mut F)
 where
     F: FnMut(&WalkItem) -> WalkAction,
@@ -97,9 +76,6 @@ where
     }
 }
 
-/// Recursively walk an entire directory tree in a single call, returning all
-/// entries (files and directories). Hidden entries (starting with `.`) are
-/// skipped unless `include_hidden` is true.
 #[tauri::command]
 #[specta::specta]
 pub fn walk_directory(root: &str, include_hidden: bool) -> Result<Vec<FsEntry>, String> {
@@ -119,12 +95,6 @@ pub fn walk_directory(root: &str, include_hidden: bool) -> Result<Vec<FsEntry>, 
     Ok(entries)
 }
 
-/// Build a flat, sorted, depth-annotated list of every currently-visible
-/// tree row in a single native call.
-///
-/// `hidden` holds absolute paths the tree must not render. Hiding lives here —
-/// in the rows the sidebar draws — and nowhere else: the walker, the watcher,
-/// sync, export and the filename index all still see the folder.
 #[tauri::command]
 #[specta::specta]
 pub fn build_visible_tree(
@@ -147,7 +117,6 @@ pub fn build_visible_tree(
     Ok(results)
 }
 
-/// Normalise the hidden paths once, so the per-entry test is a plain lookup.
 fn hidden_keys(hidden: Vec<String>) -> HashSet<String> {
     hidden
         .into_iter()
@@ -174,10 +143,6 @@ fn build_tree_impl(
         modified: u64,
     }
 
-    // Collect the immediate children of `dir` via the shared walker (with the
-    // visitor always returning `Skip`, so it never descends — recursion below
-    // is driven by the `expanded` set instead). This shares the entry-extraction
-    // boilerplate and the symlink filtering with every other walker.
     let mut entries: Vec<Raw> = Vec::new();
     walk_dir(dir, &mut |item| {
         if !item.name.starts_with('.') {
@@ -191,7 +156,6 @@ fn build_tree_impl(
         WalkAction::Skip
     });
 
-    // Sort: directories always before files, then within each group by sort_by.
     if sort_by == "date" {
         entries.sort_unstable_by(|a, b| match (a.is_dir, b.is_dir) {
             (true, false) => std::cmp::Ordering::Less,
@@ -233,13 +197,10 @@ fn build_tree_impl(
     }
 }
 
-/// Build the subtree for a single folder at a given depth offset.
-/// Used for incremental expand — avoids rebuilding the entire tree.
 #[tauri::command]
 #[specta::specta]
 pub fn build_subtree(
     folder: &str,
-    // u32 (not usize) so specta can export it; tree depth never approaches u32::MAX.
     depth_offset: u32,
     expanded: Vec<String>,
     sort_by: &str,

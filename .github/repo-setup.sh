@@ -1,5 +1,4 @@
 #!/bin/sh
-# Run once, locally, as a repo admin (gh auth login): sh .github/repo-setup.sh
 set -e
 repo=$(gh repo view --json nameWithOwner -q .nameWithOwner)
 

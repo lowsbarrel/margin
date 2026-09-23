@@ -1,29 +1,14 @@
-/**
- * Line diff for the history panel: what a snapshot holds against what the file
- * currently holds.
- *
- * A Myers O(ND) walk with linear-space tracing, because the alternative — an
- * LCS table — allocates rows × columns for two versions of the same note, and
- * notes are exactly the files people edit for months. The walk is bounded: past
- * `MAX_DIFF_LINES` on either side the panel shows the snapshot alone rather than
- * spending seconds diffing a file no one wants to read line by line.
- */
-
 export type DiffKind = 'same' | 'added' | 'removed';
 
 export interface DiffLine {
 	kind: DiffKind;
 	text: string;
-	/** 1-based line number in `before`; null for an added line. */
 	before: number | null;
-	/** 1-based line number in `after`; null for a removed line. */
 	after: number | null;
 }
 
-/** Beyond this many lines on either side, the diff is not attempted. */
 export const MAX_DIFF_LINES = 20_000;
 
-/** Lines with their trailing CR stripped, so CRLF and LF files compare equal. */
 function toLines(text: string): string[] {
 	return text.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
 }
@@ -33,11 +18,6 @@ interface Edit {
 	text: string;
 }
 
-/**
- * The shortest edit script between `a` and `b` (Myers, forward greedy with a
- * per-step trace). Classic middle-snake search; the trace is replayed backwards
- * to emit the edits in order.
- */
 function editScript(a: string[], b: string[]): Edit[] {
 	const n = a.length;
 	const m = b.length;
@@ -76,7 +56,6 @@ function editScript(a: string[], b: string[]): Edit[] {
 	for (let d = found; d >= 0; d--) {
 		const prev = trace[d];
 		if (d === 0) {
-			// The run of common lines from the origin that opened the search.
 			while (x > 0 && y > 0) {
 				x--;
 				y--;
@@ -90,7 +69,6 @@ function editScript(a: string[], b: string[]): Edit[] {
 		const prevX = prev[offset + prevK];
 		const prevY = prevX - prevK;
 
-		// The snake that ended this step, then the single edit that started it.
 		while (x > prevX && y > prevY) {
 			x--;
 			y--;
@@ -108,10 +86,6 @@ function editScript(a: string[], b: string[]): Edit[] {
 	return edits;
 }
 
-/**
- * Line diff of `before` (the snapshot) against `after` (the current file).
- * Returns null when either side is too large to diff.
- */
 export function diffLines(before: string, after: string): DiffLine[] | null {
 	const a = toLines(before);
 	const b = toLines(after);
@@ -133,7 +107,6 @@ export function diffLines(before: string, after: string): DiffLine[] | null {
 	return lines;
 }
 
-/** How many lines differ, for the panel's summary. */
 export function countChanges(lines: DiffLine[]): { added: number; removed: number } {
 	let added = 0;
 	let removed = 0;

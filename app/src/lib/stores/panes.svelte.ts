@@ -1,16 +1,30 @@
-import { IMAGE_EXTS, mimeForPath } from '$lib/utils/mime';
-import { readFileBytes, watchFile, unwatchFile, fileMetadata } from '$lib/fs/bridge';
-import { remapPath } from '$lib/utils/path-remap';
+import { watchFile, unwatchFile } from '$lib/fs/bridge';
 import { files } from '$lib/stores/files.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { vault } from '$lib/stores/vault.svelte';
 import { toast } from '$lib/stores/toast.svelte';
-import type { WorkspacePane } from '$lib/settings/workspace';
 import * as m from '$lib/paraglide/messages.js';
+import { loadTabContent, tabFromContent } from '$lib/stores/tab-content';
+import {
+	applyContentToActiveTab,
+	remapPanePaths,
+	removePathsFromPanes,
+	revokeBlobUrls,
+	updatePanesShowing
+} from '$lib/stores/pane-content';
+import { activeTabOf, createEmptyPane, getTabType, nextTabId } from '$lib/stores/pane-tabs';
+import { closedTabs } from '$lib/stores/closed-tabs.svelte';
+import { closeOneTab, closeTabsExcept, closeUnpinnedTabs } from '$lib/stores/pane-close';
+import {
+	moveTabIntoPane,
+	removeFlexAt,
+	splitAtPane,
+	splitTabToNewPane
+} from '$lib/stores/pane-layout';
+import { restoreLayout } from '$lib/stores/pane-restore';
+import type { WorkspacePane } from '$lib/settings/workspace';
 
 export type TabType = 'markdown' | 'image' | 'pdf' | 'canvas' | 'unknown';
-
-/** Which surface a Markdown tab is editing on: the rich editor or the raw text. */
 export type ViewMode = 'rich' | 'source';
 
 export interface Tab {
@@ -18,21 +32,12 @@ export interface Tab {
 	path: string;
 	content: string;
 	type: TabType;
-	/** Ignored by non-markdown tabs, which have only one surface. */
 	viewMode: ViewMode;
 	blobUrl?: string;
 	pdfData?: Uint8Array;
-	/** Bytes on disk, for viewers that report it. */
 	size?: number;
-	/** Seconds since the epoch, for the tab that describes a file it can't draw. */
 	modified?: number;
-	/** Pinned tabs sort to the front of the pane and survive close-others/all. */
 	pinned: boolean;
-	/**
-	 * Last known ProseMirror caret position. Only consumed once, when the editor
-	 * first mounts (i.e. on workspace restore after a restart) — within a session
-	 * the cached editor instance already keeps its own caret/scroll.
-	 */
 	cursorPos?: number;
 }
 
@@ -41,31 +46,6 @@ export interface Pane {
 	tabs: Tab[];
 	activeTabIndex: number;
 	externalContentVersion: number;
-}
-
-/** Closed tabs, most recent first, reopenable via {@link panes.reopenClosedTab}. */
-const MAX_CLOSED_HISTORY = 10;
-
-let _nextTabId = 0;
-let _nextPaneId = 0;
-
-export function nextTabId(): number {
-	return _nextTabId++;
-}
-
-export function nextPaneId(): number {
-	return _nextPaneId++;
-}
-
-const PDF_EXTS = new Set(['.pdf']);
-
-export function getTabType(path: string): TabType {
-	const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
-	if (ext === '.md') return 'markdown';
-	if (ext === '.canvas') return 'canvas';
-	if (IMAGE_EXTS.has(ext)) return 'image';
-	if (PDF_EXTS.has(ext)) return 'pdf';
-	return 'unknown';
 }
 
 export function fileTitle(path: string): string {
@@ -82,92 +62,50 @@ export function toBreadcrumbs(path: string, vaultPath: string | null): string[] 
 	return parts.map((p, i) => (i === parts.length - 1 ? fileTitle(path) : p));
 }
 
-export function pathMatches(path: string, target: string, isDir: boolean): boolean {
-	return path === target || (isDir && path.startsWith(`${target}/`));
-}
-
-function removeFlexAt(flexes: number[], index: number): number[] {
-	const removed = flexes[index];
-	const next = flexes.filter((_, i) => i !== index);
-	const ni = Math.min(index > 0 ? index - 1 : 0, next.length - 1);
-	if (next.length > 0) next[ni] += removed;
-	return next;
-}
-
-function revokeBlobUrls(tabs: Tab[]): void {
-	for (const t of tabs) {
-		if (t.blobUrl) URL.revokeObjectURL(t.blobUrl);
-	}
-}
-
-function createEmptyPane(): Pane {
-	return {
-		id: nextPaneId(),
-		tabs: [],
-		activeTabIndex: -1,
-		externalContentVersion: 0
-	};
-}
-
-/** The pane's active tab, or null when the index is stale or the pane is empty. */
-function activeTabOf(pane: Pane): Tab | null {
-	const i = pane.activeTabIndex;
-	return i >= 0 && i < pane.tabs.length ? pane.tabs[i] : null;
+async function focusActiveTab(tab: Tab | null): Promise<void> {
+	files.setActiveFile(tab?.path ?? null);
+	editor.setDirty(false);
+	if (tab?.type === 'markdown') await watchFile(tab.path);
 }
 
 let _panes = $state<Pane[]>([createEmptyPane()]);
 let _paneFlexes = $state<number[]>([1]);
 let _activePaneIndex = $state(0);
 let _fileSelectGeneration = 0;
-let _closedTabs = $state<string[]>([]);
-
-function pushClosedTab(tab: Tab): void {
-	_closedTabs = [tab.path, ..._closedTabs.filter((p) => p !== tab.path)].slice(
-		0,
-		MAX_CLOSED_HISTORY
-	);
-}
-
-/** Re-sort a pane's tabs so pinned ones lead, preserving the active tab by id. */
-function applyPinOrder(paneIndex: number, tabs: Tab[], activeId: number | null) {
-	const pinned = tabs.filter((t) => t.pinned);
-	const unpinned = tabs.filter((t) => !t.pinned);
-	const next = [...pinned, ...unpinned];
-	_panes[paneIndex].tabs = next;
-	const idx = activeId == null ? -1 : next.findIndex((t) => t.id === activeId);
-	_panes[paneIndex].activeTabIndex =
-		idx >= 0 ? idx : Math.min(_panes[paneIndex].activeTabIndex, next.length - 1);
-}
 
 export const panes = {
 	get list(): Pane[] {
 		return _panes;
 	},
+
 	get flexes(): number[] {
 		return _paneFlexes;
 	},
+
 	get activePaneIndex(): number {
 		return _activePaneIndex;
 	},
+
 	get activePane(): Pane {
 		return _panes[_activePaneIndex] ?? _panes[0];
 	},
+
 	get activeTab(): Tab | null {
-		const p = _panes[_activePaneIndex] ?? _panes[0];
-		return p && p.activeTabIndex >= 0 && p.activeTabIndex < p.tabs.length
-			? p.tabs[p.activeTabIndex]
-			: null;
+		return activeTabOf(_panes[_activePaneIndex] ?? _panes[0]);
 	},
+
 	get canReopenClosedTab(): boolean {
-		return _closedTabs.length > 0;
+		return closedTabs.count > 0;
 	},
 
 	set list(v: Pane[]) {
 		_panes = v;
 	},
+
 	set flexes(v: number[]) {
 		_paneFlexes = v;
 	},
+
 	set activePaneIndex(v: number) {
 		_activePaneIndex = v;
 	},
@@ -182,84 +120,53 @@ export const panes = {
 		_panes[paneIndex].activeTabIndex = tabIndex;
 		const tab = _panes[paneIndex].tabs[tabIndex];
 
-		if (paneIndex === _activePaneIndex) {
-			files.setActiveFile(tab.path);
-			editor.setDirty(false);
-			if (vault.vaultPath) files.revealFile(tab.path, vault.vaultPath);
-			if (tab.type === 'markdown') await watchFile(tab.path);
-		}
+		if (paneIndex !== _activePaneIndex) return;
+		files.setActiveFile(tab.path);
+		editor.setDirty(false);
+		if (vault.vaultPath) files.revealFile(tab.path, vault.vaultPath);
+		if (tab.type === 'markdown') await watchFile(tab.path);
 	},
 
 	async closeTab(paneIndex: number, tabIndex: number) {
-		const pane = _panes[paneIndex];
-		const closing = pane.tabs[tabIndex];
-		pushClosedTab(closing);
-		revokeBlobUrls([closing]);
+		const result = closeOneTab(_panes, paneIndex, tabIndex);
+		for (const t of result.closed) closedTabs.push(t);
 
-		const oldActiveIndex = pane.activeTabIndex;
-		_panes[paneIndex].tabs = pane.tabs.filter((_, i) => i !== tabIndex);
-
-		if (_panes[paneIndex].tabs.length === 0) {
+		if (result.emptied) {
 			if (_panes.length > 1) {
 				await this.closePane(paneIndex);
 				return;
 			}
-			_panes[paneIndex].activeTabIndex = -1;
 			if (paneIndex === _activePaneIndex) {
 				files.setActiveFile(null);
 				await unwatchFile();
 			}
 			return;
 		}
-
-		if (tabIndex === oldActiveIndex) {
-			const newIndex = Math.min(tabIndex, _panes[paneIndex].tabs.length - 1);
-			_panes[paneIndex].activeTabIndex = -1;
-			await this.switchTab(paneIndex, newIndex);
-		} else if (tabIndex < oldActiveIndex) {
-			_panes[paneIndex].activeTabIndex = oldActiveIndex - 1;
-		}
+		if (result.nextIndex !== null) await this.switchTab(paneIndex, result.nextIndex);
 	},
 
 	async closeOtherTabs(paneIndex: number, tabIndex: number) {
-		const pane = _panes[paneIndex];
-		const keepTab = pane.tabs[tabIndex];
-		// Pinned tabs (other than the kept one) survive; everything else closes.
-		const removed = pane.tabs.filter((t, i) => i !== tabIndex && !t.pinned);
-		const kept = pane.tabs.filter((t, i) => i === tabIndex || t.pinned);
-		for (const t of removed) pushClosedTab(t);
-		revokeBlobUrls(removed);
-		_panes[paneIndex].tabs = kept;
-		_panes[paneIndex].activeTabIndex = kept.findIndex((t) => t.id === keepTab.id);
+		const keepTab = _panes[paneIndex].tabs[tabIndex];
+		const result = closeTabsExcept(_panes, paneIndex, tabIndex);
+		for (const t of result.closed) closedTabs.push(t);
 		if (paneIndex === _activePaneIndex) {
 			await unwatchFile();
-			files.setActiveFile(keepTab.path);
-			editor.setDirty(false);
-			if (keepTab.type === 'markdown') await watchFile(keepTab.path);
+			await focusActiveTab(keepTab);
 		}
 	},
 
 	async closeAllTabs(paneIndex: number) {
-		const pane = _panes[paneIndex];
-		const pinned = pane.tabs.filter((t) => t.pinned);
-		const removed = pane.tabs.filter((t) => !t.pinned);
-		for (const t of removed) pushClosedTab(t);
-		revokeBlobUrls(removed);
+		const result = closeUnpinnedTabs(_panes, paneIndex);
+		for (const t of result.closed) closedTabs.push(t);
 
-		// Pinned tabs keep the pane alive; activate the first of them.
-		if (pinned.length > 0) {
-			_panes[paneIndex].tabs = pinned;
-			_panes[paneIndex].activeTabIndex = -1;
-			await this.switchTab(paneIndex, 0);
+		if (result.nextIndex !== null) {
+			await this.switchTab(paneIndex, result.nextIndex);
 			return;
 		}
-
 		if (_panes.length > 1) {
 			await this.closePane(paneIndex);
 			return;
 		}
-		_panes[paneIndex].tabs = [];
-		_panes[paneIndex].activeTabIndex = -1;
 		if (paneIndex === _activePaneIndex) {
 			files.setActiveFile(null);
 			await unwatchFile();
@@ -273,13 +180,17 @@ export const panes = {
 		if (!tab) return;
 		const activeId = pane.activeTabIndex >= 0 ? (pane.tabs[pane.activeTabIndex]?.id ?? null) : null;
 		const next = pane.tabs.map((t) => (t.id === tab.id ? { ...t, pinned: !t.pinned } : t));
-		applyPinOrder(paneIndex, next, activeId);
+		const pinned = next.filter((t) => t.pinned);
+		const unpinned = next.filter((t) => !t.pinned);
+		_panes[paneIndex].tabs = [...pinned, ...unpinned];
+		const idx = activeId == null ? -1 : _panes[paneIndex].tabs.findIndex((t) => t.id === activeId);
+		_panes[paneIndex].activeTabIndex =
+			idx >= 0 ? idx : Math.min(_panes[paneIndex].activeTabIndex, next.length - 1);
 	},
 
 	async reopenClosedTab(): Promise<boolean> {
-		const path = _closedTabs[0];
+		const path = closedTabs.take();
 		if (!path) return false;
-		_closedTabs = _closedTabs.slice(1);
 		return this.openFile(path);
 	},
 
@@ -287,17 +198,12 @@ export const panes = {
 		if (paneIndex === _activePaneIndex) return;
 		const target = _panes[paneIndex];
 		if (!target) return;
-		// Clamp before reading: a tab removed while this pane was unfocused leaves
-		// its index out of range, and focusing would then show an empty pane.
 		if (target.activeTabIndex >= target.tabs.length) {
 			_panes[paneIndex].activeTabIndex = target.tabs.length - 1;
 		}
 		await unwatchFile();
 		_activePaneIndex = paneIndex;
-		const tab = activeTabOf(_panes[paneIndex]);
-		files.setActiveFile(tab?.path ?? null);
-		editor.setDirty(false);
-		if (tab?.type === 'markdown' && tab.path) await watchFile(tab.path);
+		await focusActiveTab(activeTabOf(_panes[paneIndex]));
 	},
 
 	async closePane(paneIndex: number) {
@@ -308,12 +214,7 @@ export const panes = {
 		_panes = _panes.filter((_, i) => i !== paneIndex);
 		const newActive = Math.min(_activePaneIndex, _panes.length - 1);
 		_activePaneIndex = newActive;
-		const tab =
-			_panes[newActive].activeTabIndex >= 0
-				? _panes[newActive].tabs[_panes[newActive].activeTabIndex]
-				: null;
-		files.setActiveFile(tab?.path ?? null);
-		if (tab?.type === 'markdown' && tab.path) await watchFile(tab.path);
+		await focusActiveTab(activeTabOf(_panes[newActive]));
 	},
 
 	async restoreWatchingForPane(paneIndex: number) {
@@ -328,20 +229,14 @@ export const panes = {
 		}
 
 		const currentActiveIndex = pane.activeTabIndex;
-		const currentPath =
-			currentActiveIndex >= 0 && currentActiveIndex < pane.tabs.length
-				? pane.tabs[currentActiveIndex].path
-				: undefined;
+		const currentPath = activeTabOf(pane)?.path;
 
 		if (currentPath) {
-			const index = pane.tabs.findIndex((tab) => tab.path === currentPath);
-			if (index >= 0) {
-				if (paneIndex === _activePaneIndex) {
-					files.setActiveFile(currentPath);
-					await watchFile(currentPath);
-				}
-				return;
+			if (paneIndex === _activePaneIndex) {
+				files.setActiveFile(currentPath);
+				await watchFile(currentPath);
 			}
+			return;
 		}
 
 		const fallbackIndex = Math.min(Math.max(currentActiveIndex, 0), pane.tabs.length - 1);
@@ -353,11 +248,9 @@ export const panes = {
 		if (!vault.vaultPath) return false;
 		const gen = ++_fileSelectGeneration;
 		const paneIndex = _activePaneIndex;
-		const pane = _panes[paneIndex];
-
 		const tabType = getTabType(path);
 
-		const existingIndex = pane.tabs.findIndex((t) => t.path === path);
+		const existingIndex = _panes[paneIndex].tabs.findIndex((t) => t.path === path);
 		if (existingIndex >= 0) {
 			await this.switchTab(paneIndex, existingIndex);
 			return true;
@@ -368,114 +261,42 @@ export const panes = {
 		await unwatchFile();
 		if (gen !== _fileSelectGeneration) return false;
 
-		let content = '';
-		let blobUrl: string | undefined;
-		let pdfData: Uint8Array | undefined;
-		let size: number | undefined;
-		let modified: number | undefined;
+		let loaded;
 		try {
-			if (tabType === 'unknown') {
-				// Nothing can be drawn from these bytes, so they are never read: a
-				// file large enough to matter stays on disk and only its metadata is.
-				const stats = await fileMetadata(path);
-				if (gen !== _fileSelectGeneration) return false;
-				size = stats.size ?? undefined;
-				modified = stats.modified;
-			} else {
-				const bytes = await readFileBytes(path);
-				if (gen !== _fileSelectGeneration) return false;
-				size = bytes.length;
-				if (tabType === 'markdown' || tabType === 'canvas') {
-					content = new TextDecoder().decode(bytes);
-				} else if (tabType === 'pdf') {
-					pdfData = new Uint8Array(bytes);
-				} else {
-					const blob = new Blob([bytes.buffer as ArrayBuffer], {
-						type: mimeForPath(path)
-					});
-					blobUrl = URL.createObjectURL(blob);
-				}
-			}
+			loaded = await loadTabContent(path, tabType);
 		} catch (err) {
 			console.warn('Failed to read file:', path, err);
 			toast.error(m.toast_file_read_failed({ error: String(err) }));
 			return false;
 		}
+		if (gen !== _fileSelectGeneration) return false;
 
-		const newTab: Tab = {
-			id: nextTabId(),
-			path,
-			content,
-			type: tabType,
-			viewMode: 'rich',
-			blobUrl,
-			pdfData,
-			size,
-			modified,
-			pinned: false
-		};
+		const newTab = tabFromContent(nextTabId(), path, tabType, loaded);
 		_panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
 		_panes[paneIndex].activeTabIndex = _panes[paneIndex].tabs.length - 1;
 
-		files.setActiveFile(path);
-		editor.setDirty(false);
-
-		if (tabType === 'markdown') await watchFile(path);
+		await focusActiveTab(newTab);
 		return true;
 	},
 
 	async openFileInNewPane(path: string, refPaneIndex: number, side: 'left' | 'right') {
-		const insertAt = side === 'left' ? refPaneIndex : refPaneIndex + 1;
-		const half = _paneFlexes[refPaneIndex] / 2;
-		const newFlexes = [..._paneFlexes];
-		newFlexes[refPaneIndex] = half;
-		newFlexes.splice(insertAt, 0, half);
-		const newPane: Pane = createEmptyPane();
-		_panes = [..._panes.slice(0, insertAt), newPane, ..._panes.slice(insertAt)];
-		_paneFlexes = newFlexes;
+		const { flexes, insertAt } = splitAtPane(_paneFlexes, refPaneIndex, side);
+		_panes = [..._panes.slice(0, insertAt), createEmptyPane(), ..._panes.slice(insertAt)];
+		_paneFlexes = flexes;
 		_activePaneIndex = insertAt;
 		await this.openFile(path);
 	},
 
 	async moveTabToPane(srcPaneIndex: number, srcTabIndex: number, destPaneIndex: number) {
 		if (srcPaneIndex === destPaneIndex) return;
-		const workPanes: Pane[] = _panes.map((p) => ({ ...p, tabs: [...p.tabs] }));
-		const workFlexes: number[] = [..._paneFlexes];
-		const tab = workPanes[srcPaneIndex].tabs[srcTabIndex];
-
-		const srcActive = workPanes[srcPaneIndex].activeTabIndex;
-		workPanes[srcPaneIndex].tabs = workPanes[srcPaneIndex].tabs.filter((_, i) => i !== srcTabIndex);
-		if (workPanes[srcPaneIndex].tabs.length === 0) workPanes[srcPaneIndex].activeTabIndex = -1;
-		else if (srcTabIndex === srcActive)
-			workPanes[srcPaneIndex].activeTabIndex = Math.min(
-				srcTabIndex,
-				workPanes[srcPaneIndex].tabs.length - 1
-			);
-		else if (srcTabIndex < srcActive) workPanes[srcPaneIndex].activeTabIndex--;
-
-		workPanes[destPaneIndex].tabs = [...workPanes[destPaneIndex].tabs, tab];
-		workPanes[destPaneIndex].activeTabIndex = workPanes[destPaneIndex].tabs.length - 1;
-
-		let actualDest = destPaneIndex;
-		if (workPanes[srcPaneIndex].tabs.length === 0) {
-			if (srcPaneIndex < destPaneIndex) actualDest--;
-			const removed = workFlexes[srcPaneIndex];
-			workFlexes.splice(srcPaneIndex, 1);
-			workPanes.splice(srcPaneIndex, 1);
-			const ni = Math.min(srcPaneIndex > 0 ? srcPaneIndex - 1 : 0, workFlexes.length - 1);
-			if (workFlexes.length > 0) workFlexes[ni] += removed;
-		}
-
+		const moved = moveTabIntoPane(_panes, _paneFlexes, srcPaneIndex, srcTabIndex, destPaneIndex);
+		if (!moved) return;
 		await unwatchFile();
-		_panes = workPanes;
-		_paneFlexes = workFlexes;
-		_activePaneIndex = Math.min(actualDest, _panes.length - 1);
-		const destTab = _panes[_activePaneIndex].tabs[_panes[_activePaneIndex].activeTabIndex];
-		if (destTab) {
-			files.setActiveFile(destTab.path);
-			editor.setDirty(false);
-			if (destTab.type === 'markdown') await watchFile(destTab.path);
-		}
+		_panes = moved.panes;
+		_paneFlexes = moved.flexes;
+		_activePaneIndex = moved.activePaneIndex;
+		const destTab = activeTabOf(_panes[_activePaneIndex]);
+		if (destTab) await focusActiveTab(destTab);
 	},
 
 	async moveTabToNewPane(
@@ -484,136 +305,44 @@ export const panes = {
 		refPaneIndex: number,
 		side: 'left' | 'right'
 	) {
-		const workPanes: Pane[] = _panes.map((p) => ({ ...p, tabs: [...p.tabs] }));
-		const workFlexes: number[] = [..._paneFlexes];
-		const tab = workPanes[srcPaneIndex].tabs[srcTabIndex];
-
-		const srcActive = workPanes[srcPaneIndex].activeTabIndex;
-		workPanes[srcPaneIndex].tabs = workPanes[srcPaneIndex].tabs.filter((_, i) => i !== srcTabIndex);
-		if (workPanes[srcPaneIndex].tabs.length === 0) workPanes[srcPaneIndex].activeTabIndex = -1;
-		else if (srcTabIndex === srcActive)
-			workPanes[srcPaneIndex].activeTabIndex = Math.min(
-				srcTabIndex,
-				workPanes[srcPaneIndex].tabs.length - 1
-			);
-		else if (srcTabIndex < srcActive) workPanes[srcPaneIndex].activeTabIndex--;
-
-		let adjustedRef = refPaneIndex;
-		if (workPanes[srcPaneIndex].tabs.length === 0) {
-			if (srcPaneIndex < refPaneIndex) adjustedRef--;
-			const srcFlex = workFlexes[srcPaneIndex];
-			workFlexes.splice(srcPaneIndex, 1);
-			workPanes.splice(srcPaneIndex, 1);
-			const safeRef = Math.min(adjustedRef, workFlexes.length - 1);
-			if (workFlexes.length > 0) workFlexes[safeRef] += srcFlex;
-		}
-
-		const insertAt = side === 'left' ? adjustedRef : adjustedRef + 1;
-		const half = workFlexes[adjustedRef] / 2;
-		workFlexes[adjustedRef] = half;
-		workFlexes.splice(insertAt, 0, half);
-		const newPane: Pane = {
-			id: nextPaneId(),
-			tabs: [tab],
-			activeTabIndex: 0,
-			externalContentVersion: 0
-		};
-		workPanes.splice(insertAt, 0, newPane);
-
+		const moved = splitTabToNewPane(
+			_panes,
+			_paneFlexes,
+			srcPaneIndex,
+			srcTabIndex,
+			refPaneIndex,
+			side
+		);
+		if (!moved) return;
 		await unwatchFile();
-		_panes = workPanes;
-		_paneFlexes = workFlexes;
-		_activePaneIndex = insertAt;
-		files.setActiveFile(tab.path);
-		editor.setDirty(false);
-		if (tab.type === 'markdown') await watchFile(tab.path);
+		_panes = moved.panes;
+		_paneFlexes = moved.flexes;
+		_activePaneIndex = moved.activePaneIndex;
+		await focusActiveTab(moved.tab);
 	},
 
 	remapPaths(from: string, to: string, isDir: boolean) {
-		for (let pi = 0; pi < _panes.length; pi++) {
-			_panes[pi].tabs = _panes[pi].tabs.map((tab) => ({
-				...tab,
-				path: remapPath(tab.path, from, to, isDir)
-			}));
-		}
+		remapPanePaths(_panes, from, to, isDir);
 	},
 
 	removePaths(path: string, isDir: boolean) {
-		for (let pi = 0; pi < _panes.length; pi++) {
-			const pane = _panes[pi];
-			const removed = pane.tabs.filter((tab) => pathMatches(tab.path, path, isDir));
-			if (removed.length === 0) continue;
-			revokeBlobUrls(removed);
-
-			// The active index has to be recomputed here: a stale index survives
-			// the filter, and every reader of this pane's active tab (focusPane,
-			// PaneView, the watcher) then sees an empty pane that isn't empty.
-			const active = pane.tabs[pane.activeTabIndex];
-			const tabs = pane.tabs.filter((tab) => !pathMatches(tab.path, path, isDir));
-			_panes[pi].tabs = tabs;
-			if (tabs.length === 0) {
-				_panes[pi].activeTabIndex = -1;
-			} else if (active && !pathMatches(active.path, path, isDir)) {
-				_panes[pi].activeTabIndex = tabs.indexOf(active);
-			} else {
-				_panes[pi].activeTabIndex = Math.min(Math.max(pane.activeTabIndex, 0), tabs.length - 1);
-			}
-		}
+		removePathsFromPanes(
+			_panes,
+			(tabPath) => tabPath === path || (isDir && tabPath.startsWith(`${path}/`))
+		);
 	},
 
-	/**
-	 * Replace the content of the active tab when an external change is detected
-	 * for `path`. Returns true if a matching tab was updated. Keeps the mutation
-	 * (including the `externalContentVersion` bump that forces the editor to
-	 * reload) inside the store instead of reaching into nested `$state`.
-	 */
 	applyExternalContent(path: string, content: string): boolean {
-		const pi = _activePaneIndex;
-		const pane = _panes[pi];
-		if (!pane) return false;
-		const ti = pane.activeTabIndex;
-		if (ti < 0 || ti >= pane.tabs.length) return false;
-		if (pane.tabs[ti].path !== path) return false;
-		if (pane.tabs[ti].content === content) return false;
-		_panes[pi].tabs[ti] = { ..._panes[pi].tabs[ti], content };
-		_panes[pi].externalContentVersion++;
-		return true;
+		return applyContentToActiveTab(_panes, _activePaneIndex, path, content);
 	},
 
-	/**
-	 * Apply restored content to *every* pane showing `path`, not just the active
-	 * one: a history restore rewrites the file, so a second pane holding the same
-	 * note would otherwise keep the old text and clobber the restore on its next
-	 * autosave. Returns how many panes were updated.
-	 */
 	applyRestoredContent(path: string, content: string): number {
-		let updated = 0;
-		for (let pi = 0; pi < _panes.length; pi++) {
-			const pane = _panes[pi];
-			if (!pane.tabs.some((t) => t.path === path && t.content !== content)) continue;
-			_panes[pi] = {
-				...pane,
-				tabs: pane.tabs.map((t) => (t.path === path ? { ...t, content } : t)),
-				externalContentVersion: pane.externalContentVersion + 1
-			};
-			updated++;
-		}
-		return updated;
+		return updatePanesShowing(_panes, path, content, { onlyWhenChanged: true });
 	},
 
 	broadcastContent(sourcePaneIndex: number, filePath: string, content: string) {
-		// Only relevant when the same file is open in another pane.
 		if (_panes.length < 2) return;
-		for (let pi = 0; pi < _panes.length; pi++) {
-			if (pi === sourcePaneIndex) continue;
-			const pane = _panes[pi];
-			if (!pane.tabs.some((t) => t.path === filePath)) continue;
-			_panes[pi] = {
-				...pane,
-				tabs: pane.tabs.map((t) => (t.path === filePath ? { ...t, content } : t)),
-				externalContentVersion: pane.externalContentVersion + 1
-			};
-		}
+		updatePanesShowing(_panes, filePath, content, { skipPaneIndex: sourcePaneIndex });
 	},
 
 	reset() {
@@ -621,7 +350,7 @@ export const panes = {
 		_panes = [createEmptyPane()];
 		_paneFlexes = [1];
 		_activePaneIndex = 0;
-		_closedTabs = [];
+		closedTabs.clear();
 	},
 
 	async restoreFromWorkspace(
@@ -629,80 +358,13 @@ export const panes = {
 		wsFlexes: number[],
 		wsActivePaneIndex: number
 	) {
-		// Build each tab independently; the file reads are mutually independent, so
-		// run them concurrently (per pane) instead of blocking on a serial chain at
-		// startup. A failed read or unsupported type yields null and is dropped.
-		const buildTab = async (wsTab: WorkspacePane['tabs'][number]): Promise<Tab | null> => {
-			const path = wsTab.path;
-			const type = getTabType(path);
+		const restored = await restoreLayout(wsPanes, wsFlexes, wsActivePaneIndex);
+		if (!restored) return;
+		_panes = restored.panes;
+		_paneFlexes = restored.flexes;
+		_activePaneIndex = restored.activePaneIndex;
 
-			let content = '';
-			let blobUrl: string | undefined;
-			let pdfData: Uint8Array | undefined;
-			let size: number | undefined;
-			let modified: number | undefined;
-			try {
-				if (type === 'unknown') {
-					const stats = await fileMetadata(path);
-					size = stats.size ?? undefined;
-					modified = stats.modified;
-				} else {
-					const bytes = await readFileBytes(path);
-					size = bytes.length;
-					if (type === 'markdown' || type === 'canvas') {
-						content = new TextDecoder().decode(bytes);
-					} else if (type === 'pdf') {
-						pdfData = new Uint8Array(bytes);
-					} else {
-						const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
-						blobUrl = URL.createObjectURL(blob);
-					}
-				}
-			} catch {
-				return null;
-			}
-			return {
-				id: nextTabId(),
-				path,
-				content,
-				type,
-				viewMode: wsTab.view_mode === 'source' ? 'source' : 'rich',
-				blobUrl,
-				pdfData,
-				size,
-				modified,
-				pinned: wsTab.pinned ?? false,
-				cursorPos: wsTab.cursor_pos ?? undefined
-			};
-		};
-
-		const restoredPanes: Pane[] = [];
-		for (const wsPane of wsPanes) {
-			const built = await Promise.all(wsPane.tabs.map((t) => buildTab(t)));
-			const tabs = built.filter((t): t is Tab => t !== null);
-
-			if (tabs.length > 0) {
-				const activeIdx = Math.min(Math.max(wsPane.active_tab_index, 0), tabs.length - 1);
-				restoredPanes.push({
-					id: nextPaneId(),
-					tabs,
-					activeTabIndex: activeIdx,
-					externalContentVersion: 0
-				});
-			}
-		}
-
-		if (restoredPanes.length === 0) return;
-
-		_panes = restoredPanes;
-		_paneFlexes = wsFlexes.length === restoredPanes.length ? wsFlexes : restoredPanes.map(() => 1);
-		_activePaneIndex = Math.min(wsActivePaneIndex, restoredPanes.length - 1);
-
-		const ap = _panes[_activePaneIndex];
-		const at =
-			ap.activeTabIndex >= 0 && ap.activeTabIndex < ap.tabs.length
-				? ap.tabs[ap.activeTabIndex]
-				: null;
+		const at = activeTabOf(_panes[_activePaneIndex]);
 		if (at) {
 			files.setActiveFile(at.path);
 			if (at.type === 'markdown') await watchFile(at.path);

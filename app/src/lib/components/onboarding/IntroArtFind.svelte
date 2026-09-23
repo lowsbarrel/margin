@@ -2,8 +2,6 @@
 	import { motion } from '$lib/stores/motion.svelte';
 </script>
 
-<!-- Spotlight: the query types itself, then the matches land — a `#tag` row and
-     an `?ask` row, the two things the palette does beyond plain search. -->
 <div class="art" class:reduced={motion.reduced}>
 	<svg viewBox="0 0 200 130" aria-hidden="true">
 		<rect class="palette" x="14" y="18" width="172" height="94" rx="8" />

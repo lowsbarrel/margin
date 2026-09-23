@@ -1,33 +1,5 @@
-/* ═══════════════════════════════════════════════════════════════════════
-   Margin design tokens — three-layer architecture
-   ───────────────────────────────────────────────────────────────────────
-   PRIMITIVE          SEMANTIC (per theme)         RESOLVED (used in CSS)
-   --neutral-100  →   --sem-text-primary       →   --color-text-primary
-   0 0% 8%            (light) neutral-100           hsl(0 0% 8%)
-                      (dark)  neutral-0
-
-   Primitives are bare HSL triples (`H S% L%`) and are never used directly.
-   Semantic aliases give them meaning and are the ONLY thing that differs
-   between light and dark. Resolved `--color-*` values wrap the semantic
-   triple in hsl(); because the wrap references the semantic var *by name*,
-   flipping `data-theme` on <html> re-resolves every colour with no extra CSS.
-
-   The semantic layer is namespaced `--sem-*` so it can never collide with
-   the resolved colour names or with the legacy aliases in app.css.
-
-   Storing colours as triples rather than hex is what makes the opacity ramps
-   work: `hsl(var(--opacity-black-8))` → `hsl(0 0% 25% / 8%)`. That one trick
-   powers every hairline border in the app.
-
-   House style: flat, not floating. Depth comes from hairline low-opacity
-   borders over solid surfaces, not drop shadows. Neutral-first, with colour
-   reserved for state. Orange is the brand accent.
-   ═══════════════════════════════════════════════════════════════════════ */
-
 :root {
-	/* ═══════════════════ Layer 1 — primitives ═══════════════════ */
-
-	/* Neutral — the backbone */
+	/* Primitives are bare HSL triples, never hex: that is what lets `hsl(var(--sem-bg-brand) / 12%)` build every opacity ramp. */
 	--neutral-0: 0 0% 100%;
 	--neutral-5: 0 0% 96%;
 	--neutral-10: 0 0% 93%;
@@ -42,7 +14,6 @@
 	--neutral-95: 0 0% 12%;
 	--neutral-100: 0 0% 8%;
 
-	/* Orange — the brand ramp. -50 is #ff6633, margin's long-standing accent. */
 	--orange-5: 24 100% 97%;
 	--orange-10: 22 100% 94%;
 	--orange-20: 20 100% 87%;
@@ -55,7 +26,6 @@
 	--orange-90: 14 88% 26%;
 	--orange-95: 14 84% 18%;
 
-	/* Green — positive */
 	--green-5: 120 60% 96%;
 	--green-10: 120 55% 91%;
 	--green-20: 118 50% 80%;
@@ -68,7 +38,6 @@
 	--green-90: 105 85% 15%;
 	--green-95: 104 80% 11%;
 
-	/* Yellow — warning */
 	--yellow-5: 48 100% 96%;
 	--yellow-10: 46 100% 90%;
 	--yellow-20: 44 100% 78%;
@@ -81,7 +50,6 @@
 	--yellow-90: 32 96% 16%;
 	--yellow-95: 31 92% 11%;
 
-	/* Red — negative */
 	--red-5: 8 100% 97%;
 	--red-10: 8 100% 93%;
 	--red-20: 8 100% 85%;
@@ -94,7 +62,6 @@
 	--red-90: 12 92% 24%;
 	--red-95: 12 88% 16%;
 
-	/* Purple — accent */
 	--purple-5: 280 100% 98%;
 	--purple-10: 279 100% 95%;
 	--purple-20: 278 96% 88%;
@@ -107,7 +74,6 @@
 	--purple-90: 275 72% 29%;
 	--purple-95: 275 74% 20%;
 
-	/* Blue — informational */
 	--blue-5: 216 100% 97%;
 	--blue-10: 216 100% 93%;
 	--blue-20: 216 100% 85%;
@@ -120,8 +86,6 @@
 	--blue-90: 216 100% 29%;
 	--blue-95: 216 100% 20%;
 
-	/* Opacity ramps — translucent neutrals that adapt to whatever sits behind
-	   them. These are the hairline borders and subtle fills. */
 	--opacity-black-64: 0 0% 25% / 64%;
 	--opacity-black-48: 0 0% 25% / 48%;
 	--opacity-black-32: 0 0% 25% / 32%;
@@ -144,8 +108,6 @@
 	--opacity-white-6: 0 0% 100% / 6%;
 	--opacity-white-4: 0 0% 100% / 4%;
 
-	/* ═══════════════ Layer 2 — semantic (light, default) ═══════════════ */
-
 	--sem-text-primary: var(--neutral-100);
 	--sem-text-secondary: var(--neutral-60);
 	--sem-text-tertiary: var(--neutral-40);
@@ -157,8 +119,6 @@
 	--sem-text-code: var(--red-70);
 	--sem-text-disabled: var(--neutral-30);
 
-	/* Opaque surface steps. Menus, modals and popovers sit on these, so they
-	   must be solid — a translucent fill would let page content bleed through. */
 	--sem-surface-0: var(--neutral-0);
 	--sem-surface-1: 0 0% 97.5%;
 	--sem-surface-2: 0 0% 94.5%;
@@ -177,9 +137,6 @@
 	--sem-border-divider: var(--neutral-10);
 	--sem-border-strong: var(--opacity-black-16);
 
-	/* Syntax highlighting. These were hardcoded One Dark values, which are tuned
-	   for a dark editor and washed out badly on a light page. Light mode gets a
-	   darker, higher-contrast set; dark mode keeps the familiar One Dark hues. */
 	--sem-syntax-keyword: var(--purple-70);
 	--sem-syntax-string: var(--green-70);
 	--sem-syntax-number: 22 90% 38%;
@@ -191,8 +148,6 @@
 }
 
 [data-theme='dark'] {
-	/* ═══════════════════ Layer 2 — semantic (dark) ═══════════════════ */
-
 	--sem-text-primary: var(--neutral-0);
 	--sem-text-secondary: var(--neutral-40);
 	--sem-text-tertiary: var(--neutral-60);
@@ -222,8 +177,6 @@
 	--sem-border-divider: var(--neutral-80);
 	--sem-border-strong: var(--opacity-white-16);
 
-	/* One Dark hues, which is what these were before — but now only in the
-	   theme they were designed for. */
 	--sem-syntax-keyword: 286 60% 67%;
 	--sem-syntax-string: 95 38% 62%;
 	--sem-syntax-number: 39 67% 69%;
@@ -235,8 +188,6 @@
 }
 
 :root {
-	/* ═══════════ Layer 3 — resolved colours (what CSS uses) ═══════════ */
-
 	--color-text-primary: hsl(var(--sem-text-primary));
 	--color-text-secondary: hsl(var(--sem-text-secondary));
 	--color-text-tertiary: hsl(var(--sem-text-tertiary));
@@ -261,8 +212,6 @@
 	--color-bg-negative-hover: hsl(var(--sem-bg-negative-hover));
 	--color-bg-overlay: hsl(var(--sem-bg-overlay));
 
-	/* Highlighter-pen palette for `<mark>`. Alpha-blended over the page so the
-	   text underneath stays readable in both themes. */
 	--color-highlight-yellow: hsl(var(--yellow-40) / 45%);
 	--color-highlight-blue: hsl(var(--blue-50) / 40%);
 	--color-highlight-green: hsl(var(--green-40) / 40%);
@@ -282,15 +231,12 @@
 	--color-border-strong: hsl(var(--sem-border-strong));
 	--color-border-focus: hsl(var(--sem-bg-brand));
 
-	/* Brand tints for selection fills, highlights and focus rings. Derived
-	   from the same triple, so they track the brand colour automatically. */
 	--color-brand-8: hsl(var(--sem-bg-brand) / 8%);
 	--color-brand-12: hsl(var(--sem-bg-brand) / 12%);
 	--color-brand-16: hsl(var(--sem-bg-brand) / 16%);
 	--color-brand-24: hsl(var(--sem-bg-brand) / 24%);
 	--color-brand-32: hsl(var(--sem-bg-brand) / 32%);
 
-	/* ═══════════════════════════ Radius ═══════════════════════════ */
 	--radius-xs: 4px;
 	--radius-sm: 8px;
 	--radius-md: 12px;
@@ -299,7 +245,6 @@
 	--radius-2xl: 24px;
 	--radius-full: 9999px;
 
-	/* ═══════════════════════════ Spacing ══════════════════════════ */
 	--space-2xs: 2px;
 	--space-xs: 4px;
 	--space-sm: 8px;
@@ -308,7 +253,6 @@
 	--space-xl: 24px;
 	--space-2xl: 32px;
 
-	/* ══════════════════════════ Typography ════════════════════════ */
 	--text-size-xs: 12px;
 	--text-size-sm: 14px;
 	--text-size-md: 16px;
@@ -333,14 +277,10 @@
 	--font-weight-medium: 500;
 	--font-weight-semibold: 600;
 
-	/* ══════════════ Elevation — deliberately restrained ═══════════
-	   Reserved for genuinely floating surfaces: menus, modals, the active
-	   segment of a segmented control. Everything else uses a hairline border. */
 	--shadow-sm: 0 1px 2px hsl(0 0% 0% / 6%);
 	--shadow-md: 0 4px 12px hsl(0 0% 0% / 8%), 0 1px 2px hsl(0 0% 0% / 4%);
 	--shadow-lg: 0 12px 32px hsl(0 0% 0% / 12%), 0 2px 6px hsl(0 0% 0% / 6%);
 
-	/* ═══════════════════════════ Motion ═══════════════════════════ */
 	--ease-out: cubic-bezier(0, 0, 0.2, 1);
 	--duration-fast: 120ms;
 	--duration-base: 150ms;
@@ -349,7 +289,6 @@
 }
 
 [data-theme='dark'] {
-	/* Shadows need more weight on dark surfaces to stay perceptible. */
 	--shadow-sm: 0 1px 2px hsl(0 0% 0% / 32%);
 	--shadow-md: 0 4px 12px hsl(0 0% 0% / 40%), 0 1px 2px hsl(0 0% 0% / 24%);
 	--shadow-lg: 0 12px 32px hsl(0 0% 0% / 52%), 0 2px 6px hsl(0 0% 0% / 32%);

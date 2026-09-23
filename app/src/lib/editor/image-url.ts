@@ -1,20 +1,15 @@
 import { IS_ANDROID, IS_WINDOWS } from '$lib/utils/platform';
 
-// In Tauri 2, custom URI schemes on Windows/Android are served under
-// `http://<scheme>.localhost/…`. On other platforms the raw scheme form
-// is used. Keep these two prefixes in sync with the `localfile` protocol in
-// lib.rs and the CSP in tauri.conf.json.
+// Tauri 2 serves custom schemes as `http://<scheme>.localhost` on Windows/Android; mirrors the `localfile` protocol in lib.rs and the CSP in tauri.conf.json.
 export const LOCALFILE_URL_PREFIX =
 	IS_WINDOWS || IS_ANDROID ? 'http://localfile.localhost' : 'localfile://localhost';
 
 const LEGACY_PREFIXES = ['http://localfile.localhost', 'localfile://localhost'];
 
-/** True if `url` points to a vault file via either prefix form. */
 export function isLocalfileUrl(url: string): boolean {
 	return LEGACY_PREFIXES.some((p) => url.startsWith(p));
 }
 
-/** Strip either localfile prefix and return the remaining path (may start with `/`). */
 export function stripLocalfilePrefix(url: string): string | null {
 	for (const p of LEGACY_PREFIXES) {
 		if (url.startsWith(p)) return url.slice(p.length);
@@ -22,37 +17,20 @@ export function stripLocalfilePrefix(url: string): string | null {
 	return null;
 }
 
-/**
- * Normalize a vault-derived path into a real OS path for the opener plugin
- * (openPath / revealItemInDir). A path stripped from a localfile URL on Windows
- * looks like `/C:/Users/…` (a leading slash before the drive letter, with `/`
- * separators), which the shell rejects with os error 123. Drop the leading
- * slash and switch to backslashes so it becomes `C:\Users\…`. POSIX paths
- * (no drive letter) are returned unchanged.
- */
+// A URL stripped on Windows yields `/C:/Users/…`, which the shell rejects with os error 123.
 export function toOsPath(path: string): string {
 	const m = path.match(/^\/?([A-Za-z]:[\\/].*)$/);
 	if (m) return m[1].replace(/\//g, '\\');
 	return path;
 }
 
-/** %20-encode the spaces in a path/URL so tiptap-markdown and the WebView can parse it. */
 export function encodeLocalfileSpaces(path: string): string {
 	return path.replace(/ /g, '%20');
 }
 
-/**
- * Matches a markdown image whose URL is a localfile reference (either scheme
- * form). Used to %20-encode spaces inside already-localfile URLs. Capture
- * groups: 1 = alt text, 2 = the full URL.
- */
 export const LOCALFILE_IMAGE_RE =
 	/!\[([^\]]*)\]\(((?:localfile:\/\/|http:\/\/localfile\.localhost)[^)]+)\)/g;
 
-/**
- * %20-encode spaces inside any existing localfile image URLs in `md` (both
- * scheme forms). Leaves non-localfile content untouched.
- */
 export function encodeLocalfileImageSpaces(md: string): string {
 	return md.replace(
 		LOCALFILE_IMAGE_RE,
@@ -60,7 +38,6 @@ export function encodeLocalfileImageSpaces(md: string): string {
 	);
 }
 
-/** Build an image src for a vault-absolute path. Spaces are %20-encoded. */
 export function buildLocalfileUrl(absPath: string): string {
 	const prefix = absPath.startsWith('/') ? '' : '/';
 	return `${LOCALFILE_URL_PREFIX}${prefix}${encodeLocalfileSpaces(absPath)}`;

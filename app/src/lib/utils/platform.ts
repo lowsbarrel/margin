@@ -1,5 +1,4 @@
-// `navigator.userAgentData` is Chromium-only (WebView2); the user-agent string is
-// the fallback for the WebKit webviews, and `navigator.platform` is deprecated.
+// `userAgentData` is Chromium-only, so the WebKit webviews fall back to the user-agent string.
 const nav =
 	typeof navigator === 'undefined'
 		? null

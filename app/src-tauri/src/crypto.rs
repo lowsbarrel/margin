@@ -15,11 +15,10 @@ pub struct VaultKeys {
     pub encryption_key: Vec<u8>,
 }
 
-/// Generate a new BIP-39 12-word mnemonic (128-bit entropy).
 #[tauri::command]
 #[specta::specta]
 pub fn generate_mnemonic() -> Result<String, String> {
-    let mut entropy = [0u8; 16]; // 128 bits = 12 words
+    let mut entropy = [0u8; 16];
     SysRng
         .try_fill_bytes(&mut entropy)
         .map_err(|e| format!("OS random source failed: {e}"))?;
@@ -27,8 +26,6 @@ pub fn generate_mnemonic() -> Result<String, String> {
     Ok(mnemonic.to_string())
 }
 
-/// Derive vault_id and encryption_key from a BIP-39 mnemonic.
-/// The derived key is intentionally held in JS (plaintext never is).
 #[tauri::command]
 #[specta::specta]
 pub fn derive_vault_keys(mnemonic: &str) -> Result<VaultKeys, String> {
@@ -48,7 +45,6 @@ pub fn derive_vault_keys(mnemonic: &str) -> Result<VaultKeys, String> {
     })
 }
 
-/// Encrypt plaintext bytes with AES-256-GCM-SIV. Returns nonce || ciphertext.
 pub fn encrypt_blob(plaintext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String> {
     if key.len() != 32 {
         return Err("Key must be 32 bytes".into());
@@ -70,7 +66,6 @@ pub fn encrypt_blob(plaintext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String>
     Ok(result)
 }
 
-/// Decrypt nonce || ciphertext with AES-256-GCM-SIV.
 pub fn decrypt_blob(ciphertext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String> {
     if key.len() != 32 {
         return Err("Key must be 32 bytes".into());
@@ -88,10 +83,6 @@ pub fn decrypt_blob(ciphertext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String
     Ok(plaintext)
 }
 
-/// Tauri command wrapper — receives plaintext as raw body, key as x-key header.
-// NOTE: raw-byte command (takes `Request`, returns `Response`) — these tauri IPC
-// types are not representable in specta, so this command is intentionally NOT
-// annotated with `#[specta::specta]` and is excluded from the specta builder.
 #[tauri::command]
 pub fn encrypt_blob_cmd(request: Request) -> Result<Response, String> {
     let key = parse_key_header(&request)?;
@@ -100,9 +91,6 @@ pub fn encrypt_blob_cmd(request: Request) -> Result<Response, String> {
     Ok(Response::new(result))
 }
 
-/// Tauri command wrapper — receives ciphertext as raw body, key as x-key header.
-// NOTE: raw-byte command (takes `Request`, returns `Response`) — excluded from
-// specta for the same reason as `encrypt_blob_cmd` above.
 #[tauri::command]
 pub fn decrypt_blob_cmd(request: Request) -> Result<Response, String> {
     let key = parse_key_header(&request)?;
@@ -132,11 +120,11 @@ fn parse_body(request: &Request) -> Result<Vec<u8>, String> {
         }
     }
 }
+
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A fixed seed or a zero-filled buffer would hand back the same phrase twice.
     #[test]
     fn mnemonics_do_not_reuse_entropy() {
         let first = generate_mnemonic().unwrap();
@@ -145,7 +133,7 @@ mod tests {
         assert_ne!(first, second);
     }
 
-    /// A reused nonce is the one failure GCM-SIV cannot detect on its own.
+    // A reused nonce is the one failure GCM-SIV cannot detect on its own.
     #[test]
     fn blobs_do_not_reuse_a_nonce() {
         let key = vec![7u8; 32];

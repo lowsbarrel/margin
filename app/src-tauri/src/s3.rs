@@ -16,9 +16,7 @@ pub struct S3Config {
     pub secret_key: String,
 }
 
-/// Hand-written Debug that redacts credential material so that any
-/// `{:?}`/log of an S3Config (or anything embedding it, e.g. AppSettings)
-/// never prints the access/secret keys in plaintext.
+// Hand-written so a `{:?}` on this — or on anything embedding it, like AppSettings — cannot print the keys.
 impl fmt::Debug for S3Config {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("S3Config")
@@ -33,7 +31,6 @@ impl fmt::Debug for S3Config {
 
 pub struct S3State(pub Mutex<Option<CachedS3>>);
 
-/// Cached S3 config + pre-built bucket to avoid recreating it on every command
 #[derive(Clone)]
 pub struct CachedS3 {
     pub config: S3Config,
@@ -46,9 +43,6 @@ fn make_bucket(config: &S3Config) -> Result<Box<Bucket>, String> {
         endpoint: config.endpoint.clone(),
     };
 
-    // Do not interpolate the underlying error: it is constructed from the
-    // access/secret key inputs and could echo credential material into a
-    // user-visible / logged error string.
     let credentials = Credentials::new(
         Some(&config.access_key),
         Some(&config.secret_key),
@@ -60,7 +54,7 @@ fn make_bucket(config: &S3Config) -> Result<Box<Bucket>, String> {
 
     let mut bucket = Bucket::new(&config.bucket, region, credentials)
         .map_err(|e| format!("Bucket error: {e}"))?;
-    bucket.set_path_style(); // Needed for MinIO, R2, etc.
+    bucket.set_path_style();
 
     Ok(bucket)
 }
@@ -99,20 +93,12 @@ pub async fn s3_test_connection(state: State<'_, S3State>) -> Result<String, Str
     Ok(format!("Connected. {} prefixes found.", results.len()))
 }
 
-/// 5 MB — minimum part size for S3 multipart uploads
 const MULTIPART_THRESHOLD: usize = 5 * 1024 * 1024;
 const PART_SIZE: usize = 5 * 1024 * 1024;
-/// Maximum retries per multipart chunk upload
 const MULTIPART_MAX_RETRIES: u32 = 3;
-/// Chunks uploaded concurrently — bounds both in-flight requests and how many
-/// 5 MB chunk copies are alive at once on a large file.
 const MULTIPART_CONCURRENCY: usize = 4;
-/// One multipart chunk task: `(part number, uploaded part)`.
 type ChunkTasks = tokio::task::JoinSet<Result<(u32, Part), String>>;
 
-// NOTE: raw-byte command — takes a tauri `Request` (not representable in specta),
-// so it is intentionally NOT annotated with `#[specta::specta]` and is excluded
-// from the specta builder.
 #[tauri::command]
 pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Result<(), String> {
     let key: String = request
@@ -129,7 +115,6 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
     let bucket = get_bucket(&state)?;
 
     if data.len() >= MULTIPART_THRESHOLD {
-        // ── Multipart upload for large files ─────────────────────────
         let init = bucket
             .initiate_multipart_upload(&key, "application/octet-stream")
             .await
@@ -199,7 +184,6 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
             }
         }
 
-        // Sort by part number for correct multipart completion
         indexed_parts.sort_by_key(|(num, _)| *num);
         let parts: Vec<_> = indexed_parts.into_iter().map(|(_, part)| part).collect();
 
@@ -208,7 +192,6 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
             .await
             .map_err(|e| format!("Multipart complete failed: {e}"))?;
     } else {
-        // ── Simple upload for small files ────────────────────────────
         let _ = bucket
             .put_object(key.as_str(), &data)
             .await
@@ -218,9 +201,6 @@ pub async fn s3_upload(request: Request<'_>, state: State<'_, S3State>) -> Resul
     Ok(())
 }
 
-// NOTE: raw-byte command — returns a tauri `Response` (not representable in
-// specta), so it is intentionally NOT annotated with `#[specta::specta]` and is
-// excluded from the specta builder.
 #[tauri::command]
 pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Response, String> {
     let bucket = get_bucket(&state)?;
@@ -229,12 +209,7 @@ pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Respo
         .await
         .map_err(|e| format!("Download failed: {e}"))?;
 
-    // rust-s3 returns Ok even for HTTP error statuses (e.g. 404), handing back
-    // the provider's XML error page as the body. Without this guard that error
-    // page gets passed to decrypt_blob and surfaces as a baffling
-    // "Decryption failed: aead::Error" instead of an honest "missing object".
-    // The numeric status is kept in the message so isMissingRemoteManifestError
-    // (which matches "404"/"Not Found") still recognises a missing manifest.
+    // rust-s3 returns Ok for HTTP error statuses too, handing back the provider's XML error page as the body — which would reach decrypt_blob and surface as "Decryption failed".
     let status = response.status_code();
     if !(200..300).contains(&status) {
         return Err(format!("Download failed: HTTP {status} for {key}"));

@@ -2,12 +2,6 @@ import { Node, mergeAttributes } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
 import { IMAGE_EXTS_ARRAY } from '$lib/utils/mime';
 
-/**
- * Minimal structural types for the tiptap-markdown serializer state and the
- * markdown-it inline plugin surface we touch. markdown-it@14 ships no bundled
- * .d.ts and @types/markdown-it is not a dependency, so we declare just the
- * members used here instead of falling back to `any`.
- */
 interface MarkdownSerializerState {
 	write(content: string): void;
 	closeBlock(node: PMNode): void;
@@ -135,9 +129,9 @@ function wikiFileEmbedPlugin(md: MarkdownIt, attachmentFolder: string) {
 		const pos = state.pos;
 
 		if (pos + 4 >= max) return false;
-		if (src.charCodeAt(pos) !== 0x21) return false; // !
-		if (src.charCodeAt(pos + 1) !== 0x5b) return false; // [
-		if (src.charCodeAt(pos + 2) !== 0x5b) return false; // [
+		if (src.charCodeAt(pos) !== 0x21) return false;
+		if (src.charCodeAt(pos + 1) !== 0x5b) return false;
+		if (src.charCodeAt(pos + 2) !== 0x5b) return false;
 
 		const closePos = src.indexOf(']]', pos + 3);
 		if (closePos === -1 || closePos > max) return false;
@@ -146,7 +140,6 @@ function wikiFileEmbedPlugin(md: MarkdownIt, attachmentFolder: string) {
 		if (!filename || !filename.includes('.')) return false;
 
 		const ext = filename.split('.').pop()?.toLowerCase() || '';
-		// Images are handled by resolveWikiEmbeds preprocessing — skip them here
 		if (IMAGE_EXTS_ARRAY.includes(ext)) return false;
 
 		if (silent) return true;

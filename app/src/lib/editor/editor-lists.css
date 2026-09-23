@@ -1,0 +1,120 @@
+.editor-wrap ul,
+.editor-wrap ol {
+	padding: 0 0 0 1.5em;
+	margin-top: 0.15em;
+	margin-bottom: 0.15em;
+}
+
+.editor-wrap ul p,
+.editor-wrap ol p {
+	margin-top: 0;
+	margin-bottom: 0;
+}
+
+.editor-wrap li {
+	margin: 0;
+}
+
+.editor-wrap ol {
+	list-style-position: outside;
+}
+
+.editor-wrap ol ol,
+.editor-wrap ol ul,
+.editor-wrap ul ol {
+	margin-top: 0.1rem;
+	margin-bottom: 0.1rem;
+}
+
+.editor-wrap ol {
+	list-style-type: decimal;
+}
+.editor-wrap ol ol {
+	list-style-type: lower-alpha;
+}
+.editor-wrap ol ol ol {
+	list-style-type: lower-roman;
+}
+.editor-wrap ol ol ol ol {
+	list-style-type: decimal;
+}
+
+.editor-wrap ul[data-type='taskList'] {
+	list-style: none;
+	padding: 0;
+	margin: 0.15em 0;
+}
+
+.editor-wrap ul[data-type='taskList'] p {
+	margin: 0;
+}
+
+.editor-wrap ul[data-type='taskList'] li {
+	display: flex;
+	align-items: flex-start;
+	gap: 6px;
+	padding: 1px 0;
+}
+
+.editor-wrap ul[data-type='taskList'] li > label {
+	flex: 0 0 auto;
+	padding-top: 4px;
+	user-select: none;
+}
+
+.editor-wrap ul[data-type='taskList'] li > div {
+	flex: 1 1 auto;
+}
+
+.editor-wrap ul[data-type='taskList'] li > label input[type='checkbox'] {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 15px;
+	height: 15px;
+	border: 1.5px solid var(--color-text-tertiary);
+	border-radius: 3px;
+	cursor: pointer;
+	margin: 0;
+	background: transparent;
+	transition:
+		background var(--transition-fast),
+		border-color var(--transition-fast),
+		color var(--transition-fast);
+	position: relative;
+}
+
+.editor-wrap ul[data-type='taskList'] li > label input[type='checkbox']:hover {
+	border-color: var(--color-text-secondary);
+}
+
+.editor-wrap ul[data-type='taskList'] li > label input[type='checkbox']:checked {
+	background: var(--color-bg-brand);
+	border-color: var(--color-bg-brand);
+}
+
+.editor-wrap ul[data-type='taskList'] li > label input[type='checkbox']:checked::after {
+	content: '';
+	position: absolute;
+	left: 3px;
+	top: 0px;
+	width: 4px;
+	height: 8px;
+	border: solid hsl(0 0% 100%);
+	border-width: 0 1.5px 1.5px 0;
+	transform: rotate(45deg);
+}
+
+.editor-wrap ul[data-type='taskList'] li[data-checked='true'] > div p {
+	text-decoration: line-through;
+	opacity: 0.65;
+	color: var(--color-text-secondary);
+}
+
+.editor-wrap ul[data-type='taskList'] li ul li,
+.editor-wrap ul[data-type='taskList'] li ol li {
+	display: list-item;
+}
+
+.editor-wrap ul[data-type='taskList'] ul[data-type='taskList'] > li {
+	display: flex;
+}

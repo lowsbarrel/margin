@@ -17,8 +17,6 @@
 	let backlinks = $state<Backlink[]>([]);
 	let loading = $state(true);
 
-	// Generation token to discard stale async results when filePath changes
-	// rapidly (e.g. fast tab switching with the panel open).
 	let loadGeneration = 0;
 
 	$effect(() => {
@@ -48,7 +46,6 @@
 		return name.endsWith('.md') ? name.slice(0, -3) : name;
 	}
 
-	/** The folder a note sits in, so same-named notes stay distinguishable. */
 	function folderOf(path: string): string {
 		const root = vault.vaultPath;
 		const rel = root && path.startsWith(root) ? path.slice(root.length + 1) : path;

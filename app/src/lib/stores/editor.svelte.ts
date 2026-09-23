@@ -10,15 +10,6 @@ export interface SyncProgress {
 interface EditorState {
 	syncStatus: SyncStatus;
 	syncProgress: SyncProgress | null;
-	/**
-	 * Why the last sync failed, for display on hover.
-	 *
-	 * The status enum alone could only ever say *that* sync broke, never why —
-	 * the cause went to `console.error` and was then swallowed by the background
-	 * runner, so from the UI a failed sync and a misconfigured one looked
-	 * identical. Kept as a plain string so the status bar can surface it in a
-	 * `title` without plumbing the error object through the view layer.
-	 */
 	syncError: string | null;
 	cursorLine: number;
 	cursorCol: number;
@@ -38,7 +29,6 @@ const state = $state<EditorState>({
 
 let tiptapInstance = $state<Editor | null>(null);
 
-// Shared transition: a local edit clears 'synced' and flags a sync that is mid-flight.
 function noteLocalEdit() {
 	if (state.syncStatus === 'synced') {
 		state.syncStatus = 'idle';
@@ -71,10 +61,6 @@ export const editor = {
 		return tiptapInstance;
 	},
 
-	/**
-	 * `reason` is only meaningful for `'error'`; any other status clears it, so a
-	 * stale message can never outlive the failure it describes.
-	 */
 	setSyncStatus(status: SyncStatus, reason?: string) {
 		if (status === 'synced' && state.localChangeDuringSync) {
 			state.localChangeDuringSync = false;
@@ -107,10 +93,7 @@ export const editor = {
 	setTiptap(instance: Editor | null) {
 		tiptapInstance = instance;
 	},
-	/**
-	 * Drop the shared instance only if it is still `instance`: a hidden editor
-	 * deactivating must never unregister the one that just took its place.
-	 */
+	// A hidden editor deactivating must not unregister the one that replaced it.
 	releaseTiptap(instance: Editor | null) {
 		if (instance && tiptapInstance === instance) tiptapInstance = null;
 	}

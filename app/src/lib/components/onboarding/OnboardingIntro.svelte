@@ -56,8 +56,6 @@
 	let isLast = $derived(step === steps.length - 1);
 	let Art = $derived(steps[step].art);
 
-	// Reduced motion keeps the swap legible but drops the travel: `fly` with no
-	// offset is a plain fade.
 	let enter: FlyParams = $derived(
 		motion.reduced ? { duration: 150 } : { y: 16, duration: 260, easing: cubicOut }
 	);
@@ -67,6 +65,10 @@
 
 	function go(to: number) {
 		if (to >= 0 && to < steps.length) step = to;
+	}
+
+	function activatesOnEnter(target: EventTarget | null) {
+		return target instanceof HTMLElement && (target.tagName === 'BUTTON' || target.tagName === 'A');
 	}
 
 	function next() {
@@ -79,12 +81,7 @@
 	}
 
 	function handleKey(e: KeyboardEvent) {
-		// A focused button already turns Enter into a click; acting on it here too
-		// would advance two steps.
-		const onControl =
-			e.target instanceof HTMLElement &&
-			(e.target.tagName === 'BUTTON' || e.target.tagName === 'A');
-		if (e.key === 'Enter' && onControl) return;
+		if (e.key === 'Enter' && activatesOnEnter(e.target)) return;
 
 		if (e.key === 'Enter' || e.key === 'ArrowRight') {
 			e.preventDefault();
@@ -107,8 +104,6 @@
 		<h1 class="font-sans text-xl font-bold tracking-[0.08em] text-foreground">{m.app_name()}</h1>
 	</div>
 
-	<!-- One grid cell holds both the outgoing and incoming step, so the card
-	     keeps its height while the transition plays. -->
 	<div class="grid w-full">
 		{#key step}
 			<div in:fly={enter} out:fly={leave} class="flex flex-col items-center gap-4 [grid-area:1/1]">
