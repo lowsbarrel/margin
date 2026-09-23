@@ -29,12 +29,12 @@
 	<Dialog.Content
 		showCloseButton={false}
 		style="width: {width}"
-		class="flex max-h-[calc(100vh-80px)] max-w-[calc(100vw-32px)] animate-in flex-col gap-0 overflow-y-auto rounded-lg border border-border bg-background p-0 shadow-[var(--shadow-lg)] ring-0 fade-in-0 slide-in-from-bottom-2 sm:max-w-[calc(100vw-32px)]"
+		class="flex max-h-[calc(100vh-80px)] max-w-[calc(100vw-32px)] animate-in flex-col gap-0 overflow-y-auto rounded-lg border border-border bg-background p-0 shadow-(--shadow-lg) ring-0 fade-in-0 slide-in-from-bottom-2 sm:max-w-[calc(100vw-32px)]"
 	>
 		<Dialog.Header
 			class="sticky top-0 z-2 flex shrink-0 flex-row items-center justify-between gap-0 rounded-t-lg border-b border-border bg-background px-6 py-4"
 		>
-			<Dialog.Title class="text-base leading-[22px] font-semibold tracking-tight text-foreground">
+			<Dialog.Title class="text-base leading-5.5 font-semibold tracking-tight text-foreground">
 				{title}
 			</Dialog.Title>
 			<Dialog.Close

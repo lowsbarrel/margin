@@ -336,12 +336,12 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
-	class="fixed inset-0 z-[200] flex justify-center bg-[var(--color-bg-overlay)] pt-[min(18vh,120px)]"
+	class="fixed inset-0 z-200 flex justify-center bg-(--color-bg-overlay) pt-[min(18vh,120px)]"
 	onclick={onclose}
 	onkeydown={handleKeydown}
 >
 	<div
-		class="flex max-h-[520px] w-[min(640px,calc(100vw_-_32px))] animate-in flex-col self-start overflow-hidden rounded-xl border border-border bg-background shadow-[var(--shadow-lg)] duration-120 ease-out fade-in-0 slide-in-from-top-[6px]"
+		class="flex max-h-130 w-[min(640px,calc(100vw-32px))] animate-in flex-col self-start overflow-hidden rounded-xl border border-border bg-background shadow-(--shadow-lg) duration-120 ease-out fade-in-0 slide-in-from-top-[6px]"
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"
@@ -363,7 +363,7 @@
 				type="text"
 				spellcheck="false"
 				autocomplete="off"
-				class="min-w-0 flex-1 border-none bg-transparent p-0 text-base text-foreground caret-[var(--color-bg-brand)] shadow-none outline-none placeholder:text-subtle-foreground"
+				class="min-w-0 flex-1 border-none bg-transparent p-0 text-base text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
 			/>
 			{#if !isTagMode}
 				<button
@@ -394,7 +394,7 @@
 					type="text"
 					spellcheck="false"
 					autocomplete="off"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-sm text-foreground caret-[var(--color-bg-brand)] shadow-none outline-none placeholder:text-subtle-foreground"
+					class="min-w-0 flex-1 border-none bg-transparent p-0 text-sm text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
 				/>
 				<button
 					type="button"
@@ -504,7 +504,7 @@
 								{#if item.kind === 'content' && item.hit.snippet}
 									<span class="min-w-0 truncate text-xs text-muted-foreground">
 										{#each splitHighlight(item.hit.snippet, trimmedQuery) as seg, si (si)}{#if seg.match}<mark
-													class="rounded-xs bg-[var(--color-brand-32)] px-0.5 font-medium text-foreground"
+													class="rounded-xs bg-(--color-brand-32) px-0.5 font-medium text-foreground"
 													>{seg.text}</mark
 												>{:else}{seg.text}{/if}{/each}
 									</span>

@@ -43,7 +43,7 @@
 	// `box-sizing: content-box` did. The transition names `scale` rather than
 	// `transform` because Tailwind's `scale-*` sets the `scale` property.
 	const SWATCH =
-		'size-[18px] min-h-[18px] min-w-[18px] shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
+		'size-4.5 min-h-4.5 min-w-4.5 shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
 
 	const swatchCls = (active: boolean) =>
 		`${SWATCH} ${active ? 'border-foreground scale-115' : 'border-transparent hover:scale-120'}`;
@@ -70,9 +70,9 @@
 {/snippet}
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
-<div class="fixed inset-0 z-[99]" onmousedown={onClose}></div>
+<div class="fixed inset-0 z-99" onmousedown={onClose}></div>
 <div
-	class="fixed z-[100] min-w-[180px] rounded-sm border border-border bg-background p-1.5 shadow-[var(--shadow-lg)]"
+	class="fixed z-100 min-w-45 rounded-sm border border-border bg-background p-1.5 shadow-(--shadow-lg)"
 	style:left={`${x}px`}
 	style:top={`${y}px`}
 	role="menu"
@@ -111,7 +111,7 @@
 	{@render sep()}
 
 	{@render sectionLabel(m.canvas_color())}
-	<div class="flex max-w-[160px] flex-wrap gap-1 px-2 py-1">
+	<div class="flex max-w-40 flex-wrap gap-1 px-2 py-1">
 		{#each colorPresets as c (c)}
 			<!-- `style:background` is canvas data (the pen colour), not theming. -->
 			<button
@@ -128,7 +128,7 @@
 	{@render sep()}
 
 	{@render sectionLabel(m.canvas_size())}
-	<div class="flex flex-wrap gap-[3px] px-2 py-1">
+	<div class="flex flex-wrap gap-0.75 px-2 py-1">
 		{#each sizePresets as s (s)}
 			<button
 				class={sizeBtnCls(currentSize === s)}

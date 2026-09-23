@@ -598,7 +598,7 @@
 	<!-- `title-input` is kept as a selector hook for pdf-export, which reads the
 	     note title out of the DOM. The placeholder is the `:empty::before` pair. -->
 	<div
-		class="title-input mx-auto max-w-[750px] cursor-text px-10 pt-12 font-sans text-3xl leading-[1.2] font-bold tracking-tight wrap-break-word text-foreground outline-none empty:before:pointer-events-none empty:before:text-subtle-foreground empty:before:content-[attr(data-placeholder)]"
+		class="title-input mx-auto max-w-187.5 cursor-text px-10 pt-12 font-sans text-3xl leading-[1.2] font-bold tracking-tight wrap-break-word text-foreground outline-none empty:before:pointer-events-none empty:before:text-subtle-foreground empty:before:content-[attr(data-placeholder)]"
 		contenteditable="true"
 		bind:textContent={titleText}
 		oninput={(e) => handleTitleInput(e.currentTarget.textContent?.trim() ?? '')}

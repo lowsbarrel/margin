@@ -48,11 +48,11 @@
 	   `md:text-*!` is not redundant: shadcn's input carries `md:text-sm`, which
 	   would otherwise win back the font size above the `md` breakpoint. */
 	const BASE =
-		'w-full bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-[var(--color-text-disabled)] disabled:cursor-not-allowed';
+		'w-full bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-(--color-text-disabled) disabled:cursor-not-allowed';
 
 	const SIZES: Record<Size, string> = {
 		sm: 'h-7 pl-2.5 pr-2.5 py-0 text-xs md:text-xs rounded-sm',
-		md: 'h-[34px] pl-3 pr-3 py-0 text-sm md:text-sm rounded-sm',
+		md: 'h-8.5 pl-3 pr-3 py-0 text-sm md:text-sm rounded-sm',
 		lg: 'h-10 pl-3.5 pr-3.5 py-0 text-sm md:text-sm rounded-md'
 	};
 </script>
@@ -71,6 +71,6 @@
 		{readonly}
 		bind:value
 		oninput={handleInput}
-		class={cn(BASE, SIZES[size], mono && 'font-mono', Icon && 'pl-[34px]')}
+		class={cn(BASE, SIZES[size], mono && 'font-mono', Icon && 'pl-8.5')}
 	/>
 </div>
