@@ -193,6 +193,7 @@
 	"toast_replace_failed": "Replace failed: {error}",
 	"toast_replace_failed_count": "Replace failed in {count} files",
 	"toast_path_exists": "Path already exists: {name}",
+	"toast_create_folder_failed": "Failed to create folder: {error}",
 	"toast_rename_failed": "Rename failed: {error}",
 	"toast_delete_failed": "Delete failed: {error}",
 	"toast_open_finder_failed": "Open in file manager failed: {error}",

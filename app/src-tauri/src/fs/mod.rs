@@ -656,6 +656,52 @@ pub async fn copy_directory(
     Ok(())
 }
 
+/// Copy a directory from an arbitrary source **outside** the vault into a
+/// vault-contained destination. The directory counterpart of
+/// [`import_external_file`], for a folder dropped onto the tree from a file
+/// manager: only the destination is containment-checked, because the source is
+/// user-chosen and may live anywhere.
+#[tauri::command]
+#[specta::specta]
+pub async fn import_external_directory(
+    from: String,
+    to: String,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<(), String> {
+    let dst = ensure_in_vault(&to, &vault_path_state)?;
+    let src = PathBuf::from(&from);
+    // Blocking recursive I/O; the destination is resolved first since State
+    // cannot cross threads. `import_dir_at` owns the source-side rules so they
+    // are reachable from tests without a `tauri::State`.
+    tokio::task::spawn_blocking(move || import_dir_at(&src, &dst))
+        .await
+        .map_err(|e| e.to_string())??;
+    // A directory import adds an unknown number of notes; the watcher-driven
+    // rebuild picks them up, and it skips every file it has already indexed.
+    crate::index::tree::invalidate();
+    Ok(())
+}
+
+/// Import one external directory at `dst`.
+///
+/// The source must be a directory: `copy_dir_recursive` would otherwise create
+/// the destination and copy nothing, reporting success for a drop that imported
+/// no file. A destination inside the source is refused for the same reason a
+/// folder cannot be moved into itself — the walk would descend into the copy it
+/// is writing.
+fn import_dir_at(src: &Path, dst: &Path) -> Result<(), String> {
+    if !src.is_dir() {
+        return Err(format!(
+            "Not a directory: {}",
+            path_to_string(src.to_path_buf())
+        ));
+    }
+    if dst.starts_with(src) {
+        return Err("Destination is inside the source directory".into());
+    }
+    copy_dir_recursive(src, dst)
+}
+
 /// Copy a directory tree. Walks with [`walk_dir_capped`] so symlinks are never
 /// followed and the depth cap applies — a symlinked subdirectory can neither
 /// escape the vault nor recurse without bound.
@@ -949,5 +995,97 @@ mod tests {
         );
 
         fs::remove_dir_all(&dir).ok();
+    }
+
+    #[test]
+    fn importing_an_external_directory_copies_its_contents() {
+        let external = temp_dir("import-dir-source");
+        fs::create_dir_all(external.join("nested")).unwrap();
+        fs::write(external.join("note.md"), "one").unwrap();
+        fs::write(external.join("nested").join("deep.md"), "two").unwrap();
+
+        let vault = temp_dir("import-dir-vault");
+        let dst = vault.join("imported");
+
+        import_dir_at(&external, &dst).unwrap();
+
+        assert_eq!(fs::read_to_string(dst.join("note.md")).unwrap(), "one");
+        assert_eq!(
+            fs::read_to_string(dst.join("nested").join("deep.md")).unwrap(),
+            "two"
+        );
+        // The source survives: an import is a copy, never a move.
+        assert_eq!(fs::read_to_string(external.join("note.md")).unwrap(), "one");
+
+        fs::remove_dir_all(&external).ok();
+        fs::remove_dir_all(&vault).ok();
+    }
+
+    #[test]
+    fn importing_a_directory_onto_an_existing_one_is_refused() {
+        let external = temp_dir("import-dir-conflict-source");
+        fs::write(external.join("a.md"), "a").unwrap();
+        let vault = temp_dir("import-dir-conflict-vault");
+        let dst = vault.join("occupied");
+        fs::create_dir_all(&dst).unwrap();
+        fs::write(dst.join("keep.md"), "keep").unwrap();
+
+        assert!(import_dir_at(&external, &dst).is_err());
+        assert_eq!(fs::read_to_string(dst.join("keep.md")).unwrap(), "keep");
+        assert!(!dst.join("a.md").exists());
+
+        fs::remove_dir_all(&external).ok();
+        fs::remove_dir_all(&vault).ok();
+    }
+
+    #[test]
+    fn importing_a_file_as_a_directory_is_refused() {
+        let external = temp_dir("import-dir-file-source");
+        let file = external.join("note.md");
+        fs::write(&file, "body").unwrap();
+        let vault = temp_dir("import-dir-file-vault");
+        let dst = vault.join("note.md");
+
+        assert!(import_dir_at(&file, &dst).is_err());
+        // Refusing must not leave the empty directory a copy would have created.
+        assert!(!dst.exists());
+
+        fs::remove_dir_all(&external).ok();
+        fs::remove_dir_all(&vault).ok();
+    }
+
+    #[test]
+    fn importing_a_directory_into_itself_is_refused() {
+        let external = temp_dir("import-dir-self");
+        fs::create_dir_all(external.join("sub")).unwrap();
+
+        assert!(import_dir_at(&external, &external.join("sub")).is_err());
+        assert!(!external.join("sub").join("sub").exists());
+
+        fs::remove_dir_all(&external).ok();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn importing_a_directory_does_not_follow_symlinks() {
+        let outside = temp_dir("import-dir-outside");
+        fs::write(outside.join("secret.md"), "secret").unwrap();
+        let external = temp_dir("import-dir-link-source");
+        fs::write(external.join("real.md"), "real").unwrap();
+        std::os::unix::fs::symlink(&outside, external.join("link")).unwrap();
+
+        let vault = temp_dir("import-dir-link-vault");
+        let dst = vault.join("imported");
+        import_dir_at(&external, &dst).unwrap();
+
+        assert_eq!(fs::read_to_string(dst.join("real.md")).unwrap(), "real");
+        assert!(
+            !dst.join("link").exists(),
+            "a symlinked directory must not be copied into the vault"
+        );
+
+        fs::remove_dir_all(&outside).ok();
+        fs::remove_dir_all(&external).ok();
+        fs::remove_dir_all(&vault).ok();
     }
 }

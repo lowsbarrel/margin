@@ -1,4 +1,5 @@
-import { panes, remapPath } from '$lib/stores/panes.svelte';
+import { panes } from '$lib/stores/panes.svelte';
+import { remapPath } from '$lib/utils/path-remap';
 import { terminals } from '$lib/stores/terminals.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { editor } from '$lib/stores/editor.svelte';
@@ -54,6 +55,7 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
 		// caller even though the rename itself succeeded).
 		try {
 			panes.remapPaths(oldPath, newPath, isDir);
+			files.remapPaths(oldPath, newPath, isDir);
 
 			if (files.activeFile) {
 				files.setActiveFile(remapPath(files.activeFile, oldPath, newPath, isDir));
@@ -112,7 +114,7 @@ export function newEntryFolder(): string | null {
 	return vault.vaultPath;
 }
 
-async function ensureFolderExpanded(path: string) {
+export async function ensureFolderExpanded(path: string) {
 	const vaultPath = vault.vaultPath;
 	if (!vaultPath || path === vaultPath || files.expandedFolders.has(path)) return;
 	await files.expandFolder(path);

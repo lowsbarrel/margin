@@ -1,5 +1,6 @@
 import { IMAGE_EXTS, mimeForPath } from '$lib/utils/mime';
 import { readFileBytes, watchFile, unwatchFile } from '$lib/fs/bridge';
+import { remapPath } from '$lib/utils/path-remap';
 import { files } from '$lib/stores/files.svelte';
 import { editor } from '$lib/stores/editor.svelte';
 import { vault } from '$lib/stores/vault.svelte';
@@ -75,14 +76,6 @@ export function toBreadcrumbs(path: string, vaultPath: string | null): string[] 
 	const rel = path.slice(vaultPath.length + 1);
 	const parts = rel.split('/');
 	return parts.map((p, i) => (i === parts.length - 1 ? fileTitle(path) : p));
-}
-
-export function remapPath(path: string, from: string, to: string, isDir: boolean): string {
-	if (path === from) return to;
-	if (isDir && path.startsWith(`${from}/`)) {
-		return `${to}${path.slice(from.length)}`;
-	}
-	return path;
 }
 
 export function pathMatches(path: string, target: string, isDir: boolean): boolean {

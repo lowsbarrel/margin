@@ -193,6 +193,7 @@
 	"toast_replace_failed": "Sostituzione fallita: {error}",
 	"toast_replace_failed_count": "Sostituzione non riuscita in {count} file",
 	"toast_path_exists": "Il percorso esiste già: {name}",
+	"toast_create_folder_failed": "Creazione cartella non riuscita: {error}",
 	"toast_rename_failed": "Rinomina fallita: {error}",
 	"toast_delete_failed": "Eliminazione fallita: {error}",
 	"toast_open_finder_failed": "Apertura nel gestore file fallita: {error}",

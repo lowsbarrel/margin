@@ -13,8 +13,8 @@
 	import { fileTitle } from '$lib/stores/panes.svelte';
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { saveSnapshot } from '$lib/history/bridge';
-	import { getCurrentWebview } from '@tauri-apps/api/webview';
 	import { drag } from '$lib/stores/drag.svelte';
+	import { clearExternalEditorHandlers, setExternalEditorHandlers } from '$lib/utils/external-drop';
 	import ContextMenu from './ContextMenu.svelte';
 	import type { ContextMenuItem } from './ContextMenu.svelte';
 	import BubbleToolbar from './BubbleToolbar.svelte';
@@ -129,7 +129,6 @@
 	let syncedFilePath = untrack(() => filePath);
 	/** True while a title rename started here is awaiting its callback. */
 	let titleRenamePending = false;
-	let unlistenDragDrop: (() => void) | null = null;
 	let handleFindHotkeyRef: EventListener | null = null;
 	let lightboxSrc = $state<string | null>(null);
 	let lightboxAlt = $state('');
@@ -511,23 +510,26 @@
 		});
 	}
 
-	function handleTauriDragOver(pos: { x: number; y: number }) {
-		if (tiptap) setCursorAtCoords(tiptap, pos.x, pos.y);
-	}
-
-	async function handleTauriDrop(paths: string[], position?: { x: number; y: number }) {
-		// If this drop originated from our own native drag, skip it
-		if (drag.nativeDragActive) return;
-		if (!vault.vaultPath || !tiptap) return;
-		await handleTauriFileDrop(
-			paths,
-			position,
-			tiptap,
-			container,
-			vault.vaultPath,
-			attachmentFolder
-		);
-	}
+	/**
+	 * Hand the OS-drop router this editor's insertion path. Registered only while
+	 * this pane's tab is active — the router would otherwise have one sink per
+	 * open tab — and the router only calls it for drops that landed on the
+	 * editor, so hovering a file across the sidebar no longer moves the caret.
+	 */
+	$effect(() => {
+		if (!active) return;
+		const handlers = {
+			over: (pos: { x: number; y: number }) => {
+				if (tiptap) setCursorAtCoords(tiptap, pos.x, pos.y);
+			},
+			drop: (paths: string[], pos: { x: number; y: number }) => {
+				if (!vault.vaultPath || !tiptap) return;
+				void handleTauriFileDrop(paths, pos, tiptap, vault.vaultPath, attachmentFolder);
+			}
+		};
+		setExternalEditorHandlers(handlers);
+		return () => clearExternalEditorHandlers(handlers);
+	});
 
 	function handlePaste(event: ClipboardEvent) {
 		if (!attachmentFolder || !vault.vaultPath || !tiptap) return;
@@ -780,37 +782,15 @@
 		window.addEventListener('margin:flush', snapshotCursor);
 	});
 
-	// Global document click + webview drag-drop are gated on `active` so hidden
-	// (cached) editors don't register O(tabs) redundant global handlers.
+	// Global document click handlers are gated on `active` so hidden (cached)
+	// editors don't register O(tabs) redundant listeners.
 	$effect(() => {
 		if (!active) return;
 
 		document.addEventListener('click', handleLinkClick as EventListener, true);
 
-		let unlisten: (() => void) | null = null;
-		let disposed = false;
-		getCurrentWebview()
-			.onDragDropEvent((event) => {
-				if (event.payload.type === 'drop') {
-					handleTauriDrop(event.payload.paths, event.payload.position);
-				} else if (event.payload.type === 'over') {
-					handleTauriDragOver(event.payload.position);
-				}
-			})
-			.then((fn) => {
-				if (disposed) {
-					fn();
-				} else {
-					unlisten = fn;
-					unlistenDragDrop = fn;
-				}
-			});
-
 		return () => {
-			disposed = true;
 			document.removeEventListener('click', handleLinkClick as EventListener, true);
-			unlisten?.();
-			if (unlistenDragDrop === unlisten) unlistenDragDrop = null;
 		};
 	});
 
@@ -829,7 +809,6 @@
 		if (handleFindHotkeyRef) {
 			container?.removeEventListener('keydown', handleFindHotkeyRef);
 		}
-		unlistenDragDrop?.();
 		if (showFindReplace && tiptap) {
 			tiptap.commands.clearSearch();
 		}
@@ -857,6 +836,7 @@
 	class:flex-col={viewMode === 'source'}
 	class:overflow-y-auto={viewMode === 'rich'}
 	class:overflow-hidden={viewMode === 'source'}
+	data-drop-kind="editor"
 >
 	{#if showFindReplace && viewMode === 'rich'}
 		<FindReplace
