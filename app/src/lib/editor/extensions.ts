@@ -34,6 +34,7 @@ import { Extension, type Extensions } from '@tiptap/core';
 import type { Fragment } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { createLowlight } from 'lowlight';
+import * as m from '$lib/paraglide/messages.js';
 
 /** The instance returned by lowlight's `createLowlight` — forwarded, never inspected. */
 export type Lowlight = ReturnType<typeof createLowlight>;
@@ -95,6 +96,10 @@ export function createEditorExtensions({
 			codeBlock: false,
 			link: false,
 			underline: false,
+			// StarterKit bundles its own trailing node, which appends a paragraph
+			// after a heading too. The one below is the app's (headings are a valid
+			// end for a short note); registering both is a duplicate extension.
+			trailingNode: false,
 			dropcursor: {
 				width: 3,
 				color: '#70CFF8'
@@ -178,9 +183,9 @@ export function createEditorExtensions({
 					Placeholder.configure({
 						placeholder: ({ node }) => {
 							if (node.type.name === 'heading') {
-								return `Heading ${node.attrs.level}`;
+								return m.editor_placeholder_heading({ level: node.attrs.level });
 							}
-							return 'Write anything, "/" for commands, "@" to link a note...';
+							return m.editor_placeholder_body();
 						},
 						includeChildren: true,
 						showOnlyWhenEditable: true
