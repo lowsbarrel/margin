@@ -2,7 +2,6 @@
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { files } from '$lib/stores/files.svelte';
-	import { favourites } from '$lib/stores/favourites.svelte';
 	import { editor } from '$lib/stores/editor.svelte';
 	import Login from '$lib/components/Login.svelte';
 	import Sidebar from '$lib/components/Sidebar.svelte';
@@ -44,14 +43,15 @@
 		loadWorkspaceState,
 		type WorkspaceState
 	} from '$lib/settings/workspace';
-	import { toSidebarView, type SidebarView } from '$lib/components/Sidebar.svelte';
 	import { panes } from '$lib/stores/panes.svelte';
 	import {
 		handleRename,
 		handleDelete,
+		handleNewNote,
 		handleWikiLink,
 		handleLogout
 	} from '$lib/utils/page-actions';
+	import { isModalOpen } from '$lib/utils/modal';
 	import { executeDrop, startDividerDrag } from '$lib/utils/tab-drag';
 
 	// Local UI state
@@ -61,7 +61,6 @@
 	let showHistory = $state(false);
 	let showBacklinks = $state(false);
 	let sidebarOpen = $state(true);
-	let sidebarActiveView = $state<SidebarView>('files');
 	let sidebarWidth = $state(280);
 	let attachmentFolder = $state<string | null>(null);
 	let pendingScrollText = $state<string | null>(null);
@@ -218,7 +217,6 @@
 			expanded_folders: [...files.expandedFolders],
 			sidebar_open: sidebarOpen,
 			sidebar_width: sidebarWidth,
-			sidebar_view: sidebarActiveView,
 			sort_order: files.sortOrder
 		};
 		saveWorkspaceState(vault.vaultPath, vault.encryptionKey, wsState).catch((err) =>
@@ -237,7 +235,6 @@
 
 			sidebarOpen = ws.sidebar_open;
 			sidebarWidth = ws.sidebar_width ?? sidebarWidth;
-			sidebarActiveView = toSidebarView(ws.sidebar_view);
 
 			if (
 				(ws.sort_order === 'name' || ws.sort_order === 'date') &&
@@ -397,7 +394,6 @@
 				files
 					.refresh(currentVaultPath)
 					.catch((err) => console.warn('Failed to load file tree:', err));
-				favourites.load();
 				restoreWorkspaceState();
 				watchVault(currentVaultPath).catch((err) =>
 					console.warn('Failed to start vault watcher:', err)
@@ -468,7 +464,6 @@
 		const _activePane = panes.activePaneIndex;
 		const _sidebarOpen = sidebarOpen;
 		const _sidebarWidth = sidebarWidth;
-		const _sidebarView = sidebarActiveView;
 		const _expanded = files.expandedFolders;
 		const _sort = files.sortOrder;
 
@@ -483,10 +478,8 @@
 				onfileselect={handleFileSelect}
 				onrenameentry={(from, to, isDir) => handleRename(from, to, isDir)}
 				ondeleteentry={(path, isDir) => handleDelete(path, isDir)}
-				onopengraph={() => panes.openGraph()}
 				panelOpen={sidebarOpen}
 				ontoggle={() => (sidebarOpen = !sidebarOpen)}
-				bind:activeView={sidebarActiveView}
 				bind:panelWidth={sidebarWidth}
 			/>
 
@@ -520,7 +513,6 @@
 						<PaneView
 							{pane}
 							{paneIndex}
-							onfileselect={handleFileSelect}
 							onrename={handleRename}
 							onwikilink={handleWikiLink}
 							ontabcontextmenu={handleTabContextMenu}
@@ -562,6 +554,8 @@
 			onsettings={() => (showSettings = true)}
 			onsync={runManualSync}
 			onswitchvault={onLogout}
+			onsidebartoggle={() => (sidebarOpen = !sidebarOpen)}
+			{sidebarOpen}
 			onhistory={() => (showHistory = !showHistory)}
 			historyActive={showHistory}
 			onbacklinks={() => (showBacklinks = !showBacklinks)}
@@ -618,6 +612,18 @@
 		if (e.shiftKey && key === 't') {
 			e.preventDefault();
 			panes.reopenClosedTab();
+			return;
+		}
+		// Neither of these may fire behind a modal — a note created under a
+		// Settings dialog would be invisible until the dialog closed.
+		if (!e.shiftKey && key === '\\') {
+			e.preventDefault();
+			if (!isModalOpen()) sidebarOpen = !sidebarOpen;
+			return;
+		}
+		if (!e.shiftKey && key === 'n') {
+			e.preventDefault();
+			if (!isModalOpen()) handleNewNote();
 		}
 		// Toggle the active tab's editor surface.
 		if (e.shiftKey && key === 'e') {

@@ -7,7 +7,7 @@ import { toast } from '$lib/stores/toast.svelte';
 import type { WorkspacePane } from '$lib/settings/workspace';
 import * as m from '$lib/paraglide/messages.js';
 
-export type TabType = 'markdown' | 'image' | 'pdf' | 'canvas' | 'graph' | 'unknown';
+export type TabType = 'markdown' | 'image' | 'pdf' | 'canvas' | 'unknown';
 
 /** Which surface a Markdown tab is editing on: the rich editor or the raw text. */
 export type ViewMode = 'rich' | 'source';
@@ -38,12 +38,7 @@ export interface Pane {
 	externalContentVersion: number;
 }
 
-/** A recently-closed tab, reopenable via {@link panes.reopenClosedTab}. */
-interface ClosedTab {
-	path: string;
-	type: TabType;
-}
-
+/** Closed tabs, most recent first, reopenable via {@link panes.reopenClosedTab}. */
 const MAX_CLOSED_HISTORY = 10;
 
 let _nextTabId = 0;
@@ -69,7 +64,6 @@ export function getTabType(path: string): TabType {
 }
 
 export function fileTitle(path: string): string {
-	if (path === '__graph__') return 'Graph';
 	const name = path.split('/').pop() ?? '';
 	if (name.endsWith('.md')) return name.slice(0, -3);
 	if (name.endsWith('.canvas')) return name.slice(0, -7);
@@ -77,7 +71,6 @@ export function fileTitle(path: string): string {
 }
 
 export function toBreadcrumbs(path: string, vaultPath: string | null): string[] {
-	if (path === '__graph__') return ['Graph'];
 	if (!vaultPath) return [];
 	const rel = path.slice(vaultPath.length + 1);
 	const parts = rel.split('/');
@@ -123,15 +116,15 @@ let _panes = $state<Pane[]>([createEmptyPane()]);
 let _paneFlexes = $state<number[]>([1]);
 let _activePaneIndex = $state(0);
 let _fileSelectGeneration = 0;
-let _closedTabs = $state<ClosedTab[]>([]);
+let _closedTabs = $state<string[]>([]);
 
 function pushClosedTab(tab: Tab): void {
 	// Skip transient/unsupported tabs that can't be meaningfully reopened.
 	if (tab.type === 'unknown') return;
-	_closedTabs = [
-		{ path: tab.path, type: tab.type },
-		..._closedTabs.filter((t) => t.path !== tab.path).slice(0, MAX_CLOSED_HISTORY - 1)
-	];
+	_closedTabs = [tab.path, ..._closedTabs.filter((p) => p !== tab.path)].slice(
+		0,
+		MAX_CLOSED_HISTORY
+	);
 }
 
 /** Re-sort a pane's tabs so pinned ones lead, preserving the active tab by id. */
@@ -283,14 +276,10 @@ export const panes = {
 	},
 
 	async reopenClosedTab(): Promise<boolean> {
-		const entry = _closedTabs[0];
-		if (!entry) return false;
+		const path = _closedTabs[0];
+		if (!path) return false;
 		_closedTabs = _closedTabs.slice(1);
-		if (entry.type === 'graph') {
-			this.openGraph();
-			return true;
-		}
-		return this.openFile(entry.path);
+		return this.openFile(path);
 	},
 
 	async focusPane(paneIndex: number) {
@@ -416,28 +405,6 @@ export const panes = {
 
 		if (tabType === 'markdown') await watchFile(path);
 		return true;
-	},
-
-	openGraph() {
-		const paneIndex = _activePaneIndex;
-		const pane = _panes[paneIndex];
-
-		const existingIndex = pane.tabs.findIndex((t) => t.path === '__graph__');
-		if (existingIndex >= 0) {
-			this.switchTab(paneIndex, existingIndex);
-			return;
-		}
-
-		const newTab: Tab = {
-			id: nextTabId(),
-			path: '__graph__',
-			content: '',
-			type: 'graph',
-			viewMode: 'rich',
-			pinned: false
-		};
-		_panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
-		_panes[paneIndex].activeTabIndex = _panes[paneIndex].tabs.length - 1;
 	},
 
 	async openFileInNewPane(path: string, refPaneIndex: number, side: 'left' | 'right') {
@@ -612,24 +579,21 @@ export const panes = {
 		// startup. A failed read or unsupported type yields null and is dropped.
 		const buildTab = async (wsTab: WorkspacePane['tabs'][number]): Promise<Tab | null> => {
 			const path = wsTab.path;
-			const tabType = getTabType(path);
-			if (tabType === 'unknown' && path !== '__graph__') return null;
-			const type = path === '__graph__' ? ('graph' as TabType) : tabType;
+			const type = getTabType(path);
+			if (type === 'unknown') return null;
 
 			let content = '';
 			let blobUrl: string | undefined;
 			let pdfData: Uint8Array | undefined;
 			try {
-				if (path !== '__graph__') {
-					const bytes = await readFileBytes(path);
-					if (type === 'markdown' || type === 'canvas') {
-						content = new TextDecoder().decode(bytes);
-					} else if (type === 'pdf') {
-						pdfData = new Uint8Array(bytes);
-					} else {
-						const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
-						blobUrl = URL.createObjectURL(blob);
-					}
+				const bytes = await readFileBytes(path);
+				if (type === 'markdown' || type === 'canvas') {
+					content = new TextDecoder().decode(bytes);
+				} else if (type === 'pdf') {
+					pdfData = new Uint8Array(bytes);
+				} else {
+					const blob = new Blob([bytes.buffer as ArrayBuffer], { type: mimeForPath(path) });
+					blobUrl = URL.createObjectURL(blob);
 				}
 			} catch {
 				return null;

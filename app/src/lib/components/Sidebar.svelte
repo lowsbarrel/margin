@@ -1,28 +1,8 @@
-<script module lang="ts">
-	export type SidebarView = 'files' | 'favourites';
-
-	const SIDEBAR_VIEWS = ['files', 'favourites'] as const;
-
-	/** Narrow an arbitrary (persisted/IPC) string to a known SidebarView,
-	 * falling back to "files" when the value is not a member of the union.
-	 *
-	 * "search" was a view here until Spotlight took over searching; a workspace
-	 * saved before that still carries `sidebar_view: "search"` and lands on
-	 * "files" through this same fallback. */
-	export function toSidebarView(value: unknown): SidebarView {
-		return (SIDEBAR_VIEWS as readonly string[]).includes(value as string)
-			? (value as SidebarView)
-			: 'files';
-	}
-</script>
-
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
 	import ContextMenu, { type ContextMenuItem } from './ContextMenu.svelte';
 	import FileTree from './FileTree.svelte';
-	import SidebarFavourites from './SidebarFavourites.svelte';
 	import {
-		writeFileBytes,
 		fileExists,
 		revealInFileManager,
 		copyFile,
@@ -38,35 +18,22 @@
 	import { drag } from '$lib/stores/drag.svelte';
 	import { getCurrentWebview } from '@tauri-apps/api/webview';
 	import { IconButton } from '$lib/ui';
+	import { handleNewFolder, handleNewNote } from '$lib/utils/page-actions';
 	// Static / non-interactive glyphs stay on lucide; the registry has no
-	// animated equivalent for Files, Network or PanelLeftClose.
-	import {
-		Files,
-		PanelLeftClose,
-		ArrowDownAZ,
-		ArrowDownWideNarrow,
-		ChevronsDownUp,
-		Network
-	} from '@lucide/svelte';
+	// animated equivalent for PanelLeftClose.
+	import { PanelLeftClose, ArrowDownAZ, ArrowDownWideNarrow, ChevronsDownUp } from '@lucide/svelte';
 	// Hover-animated counterparts for the controls the user actually points at.
-	import { FilePlus, FolderPlus, PanelLeft, Star, PenLine } from '$lib/components/movingicons';
+	import { FilePlus, FolderPlus, PenLine } from '$lib/components/movingicons';
 	import * as m from '$lib/paraglide/messages.js';
-	import {
-		normalizeFileName,
-		normalizeDirName,
-		createUniqueFilePath,
-		createUniquePath
-	} from '$lib/utils/sidebar-ops';
+	import { normalizeFileName, normalizeDirName, createUniquePath } from '$lib/utils/sidebar-ops';
 	import { buildMenuItems, type MenuTarget } from '$lib/utils/sidebar-menu';
 
 	interface Props {
 		onfileselect: (path: string, searchText?: string) => void;
 		onrenameentry: (from: string, to: string, isDir: boolean) => Promise<void>;
 		ondeleteentry: (path: string, isDir: boolean) => Promise<void>;
-		onopengraph: () => void;
 		panelOpen: boolean;
 		ontoggle: () => void;
-		activeView?: SidebarView;
 		panelWidth?: number;
 	}
 
@@ -74,10 +41,8 @@
 		onfileselect,
 		onrenameentry,
 		ondeleteentry,
-		onopengraph,
 		panelOpen,
 		ontoggle,
-		activeView = $bindable<SidebarView>('files'),
 		panelWidth = $bindable(280)
 	}: Props = $props();
 	let menuTarget = $state<MenuTarget | null>(null);
@@ -90,25 +55,6 @@
 	const PANEL_MIN = 180;
 	const PANEL_MAX = 480;
 	let resizing = $state(false);
-
-	// ── Icon rail chrome ─────────────────────────────────────────────────────
-	// Background and text colour live in the per-state strings rather than the
-	// shared base: two utilities setting the same property are ordered by
-	// Tailwind's own sort, not by the order they appear in `class`, so the
-	// active fill could lose to `bg-transparent`. The hover pair is idle-only on
-	// purpose — the old `.rail-btn.active` rule came after `.rail-btn:hover` in
-	// the stylesheet, so hovering the active item never changed its colours.
-	const RAIL_BTN =
-		'relative flex size-8.5 items-center justify-center rounded-sm p-0 transition-colors';
-	const RAIL_IDLE =
-		'bg-transparent text-subtle-foreground hover:bg-surface-3 hover:text-foreground';
-	// Orange rail marker on the active view, flush to the window edge.
-	const RAIL_ACTIVE =
-		"bg-accent text-accent-foreground before:absolute before:top-1.75 before:bottom-1.75 before:-left-1.75 before:w-0.5 before:rounded-full before:bg-brand before:content-['']";
-
-	function railClass(active: boolean) {
-		return `${RAIL_BTN} ${active ? RAIL_ACTIVE : RAIL_IDLE}`;
-	}
 
 	function onResizeStart(e: MouseEvent) {
 		e.preventDefault();
@@ -129,15 +75,6 @@
 
 		window.addEventListener('mousemove', onMove);
 		window.addEventListener('mouseup', onUp);
-	}
-
-	function getBasePath(): string {
-		return files.selectedFolder ?? vault.vaultPath ?? '';
-	}
-
-	async function ensureFolderExpanded(path: string) {
-		if (!vault.vaultPath || path === vault.vaultPath || files.expandedFolders.has(path)) return;
-		await files.expandFolder(path);
 	}
 
 	// Context menu
@@ -161,37 +98,6 @@
 		menuX = event.clientX;
 		menuY = event.clientY;
 		menuTarget = { kind: 'entry', entry };
-	}
-
-	function openFavContextMenu(target: MenuTarget, x: number, y: number) {
-		menuX = x;
-		menuY = y;
-		menuTarget = target;
-	}
-
-	// ─── File / folder creation ────────────────────────────────────────
-	async function handleNewDocument(base = getBasePath(), desiredName?: string) {
-		if (!vault.vaultPath) return;
-		const path = await createUniqueFilePath(base, desiredName);
-		if (!path) return;
-
-		const encoder = new TextEncoder();
-		await writeFileBytes(path, encoder.encode(''));
-
-		await ensureFolderExpanded(base);
-		await files.refresh(vault.vaultPath);
-		editor.markLocalChange();
-		files.requestTreeReveal(path);
-		onfileselect(path);
-		activeView = 'files';
-	}
-
-	async function handleStartNewFolder(base = getBasePath()) {
-		if (!vault.vaultPath) return;
-		await ensureFolderExpanded(base);
-		files.startNewFolder(base);
-		files.requestPendingNewFolderReveal(base);
-		activeView = 'files';
 	}
 
 	// Rename/delete/duplicate
@@ -354,7 +260,7 @@
 	}
 
 	function handleSidebarKeydown(e: KeyboardEvent) {
-		if (activeView !== 'files' || !panelOpen) return;
+		if (!panelOpen) return;
 		const el = document.activeElement;
 		if (el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement) return;
 		if (el instanceof HTMLElement && el.isContentEditable) return;
@@ -442,9 +348,9 @@
 	let menuItems = $derived.by((): ContextMenuItem[] => {
 		if (!menuTarget) return [];
 		return buildMenuItems(menuTarget, {
-			onNewFile: (base) => handleNewDocument(base),
-			onNewCanvas: (base) => handleNewDocument(base, 'Untitled.canvas'),
-			onNewFolder: (base) => handleStartNewFolder(base),
+			onNewFile: (base) => handleNewNote(base),
+			onNewCanvas: (base) => handleNewNote(base, 'Untitled.canvas'),
+			onNewFolder: (base) => handleNewFolder(base),
 			onPaste: (dir) => handlePaste(dir),
 			onOpenInFinder: (path) => handleOpenInFinder(path),
 			onCopy: (entry) => handleCopy(entry),
@@ -455,134 +361,81 @@
 	});
 </script>
 
-<div class="flex h-full">
-	<!-- Icon Rail -->
-	<div
-		class="flex w-12 min-w-12 flex-col items-center gap-1 border-r border-border bg-surface-1 py-3"
+{#if panelOpen}
+	<aside
+		class="relative flex flex-col overflow-hidden border-r border-border bg-background {resizing
+			? 'select-none'
+			: ''}"
+		style="width:{panelWidth}px;min-width:{panelWidth}px"
+		bind:this={sidebarPanelEl}
 	>
-		<button
-			class={railClass(activeView === 'files' && panelOpen)}
-			onclick={() => {
-				if (panelOpen && activeView === 'files') ontoggle();
-				else {
-					activeView = 'files';
-					if (!panelOpen) ontoggle();
-				}
-			}}
-			title={m.sidebar_explorer()}
-		>
-			<Files size={20} />
-		</button>
-		<button
-			class={railClass(activeView === 'favourites' && panelOpen)}
-			onclick={() => {
-				if (panelOpen && activeView === 'favourites') ontoggle();
-				else {
-					activeView = 'favourites';
-					if (!panelOpen) ontoggle();
-				}
-			}}
-			title={m.sidebar_favourites()}
-		>
-			<Star size={20} />
-		</button>
-		<button class={railClass(false)} onclick={onopengraph} title={m.sidebar_graph()}>
-			<Network size={20} />
-		</button>
-
-		<div class="flex-1"></div>
-
-		{#if panelOpen}
-			<button class={railClass(false)} onclick={ontoggle} title={m.sidebar_close_panel()}>
-				<PanelLeftClose size={20} />
-			</button>
-		{:else}
-			<button class={railClass(false)} onclick={ontoggle} title={m.sidebar_open_panel()}>
-				<PanelLeft size={20} />
-			</button>
-		{/if}
-	</div>
-
-	<!-- Panel -->
-	{#if panelOpen}
-		<aside
-			class="relative flex flex-col overflow-hidden border-r border-border bg-background {resizing
-				? 'select-none'
-				: ''}"
-			style="width:{panelWidth}px;min-width:{panelWidth}px"
-			bind:this={sidebarPanelEl}
-		>
-			{#if activeView === 'files'}
-				<div class="panel-header">
-					<span class="panel-title">{m.sidebar_explorer()}</span>
-					<div class="panel-actions">
-						<IconButton
-							icon={files.sortOrder === 'name' ? ArrowDownAZ : ArrowDownWideNarrow}
-							size="sm"
-							onclick={() => files.toggleSortOrder()}
-							title={files.sortOrder === 'name'
-								? m.sidebar_sort_by_date()
-								: m.sidebar_sort_by_name()}
-						/>
-						<IconButton
-							icon={ChevronsDownUp}
-							size="sm"
-							onclick={collapseAll}
-							title={m.sidebar_collapse_all()}
-						/>
-						<IconButton
-							icon={FilePlus}
-							size="sm"
-							onclick={() => handleNewDocument()}
-							title={m.sidebar_new_file()}
-						/>
-						<IconButton
-							icon={PenLine}
-							size="sm"
-							onclick={() => handleNewDocument(getBasePath(), 'Untitled.canvas')}
-							title={m.sidebar_new_canvas()}
-						/>
-						<IconButton
-							icon={FolderPlus}
-							size="sm"
-							onclick={() => handleStartNewFolder()}
-							title={m.sidebar_new_folder()}
-						/>
-					</div>
-				</div>
-
-				<!-- svelte-ignore a11y_no_static_element_interactions -->
-				<div class="panel-content" oncontextmenu={openRootContextMenu}>
-					<FileTree
-						activeFile={files.activeFile}
-						{onfileselect}
-						oncontextmenuentry={openEntryContextMenu}
-						onrename={handleInlineRename}
-						onmoveentry={handleMoveEntry}
-					/>
-				</div>
-			{:else if activeView === 'favourites'}
-				<SidebarFavourites
-					onfileselect={(path) => onfileselect(path)}
-					oncontextmenu={openFavContextMenu}
+		<div class="panel-header">
+			<span class="panel-title">{m.sidebar_explorer()}</span>
+			<div class="panel-actions">
+				<IconButton
+					icon={files.sortOrder === 'name' ? ArrowDownAZ : ArrowDownWideNarrow}
+					size="sm"
+					onclick={() => files.toggleSortOrder()}
+					title={files.sortOrder === 'name' ? m.sidebar_sort_by_date() : m.sidebar_sort_by_name()}
 				/>
-			{/if}
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div
-				class="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors {resizing
-					? 'bg-brand'
-					: 'hover:bg-brand'}"
-				onmousedown={onResizeStart}
-			></div>
-		</aside>
-	{/if}
-</div>
+				<IconButton
+					icon={ChevronsDownUp}
+					size="sm"
+					onclick={collapseAll}
+					title={m.sidebar_collapse_all()}
+				/>
+				<IconButton
+					icon={FilePlus}
+					size="sm"
+					onclick={() => handleNewNote()}
+					title={m.sidebar_new_file()}
+				/>
+				<IconButton
+					icon={PenLine}
+					size="sm"
+					onclick={() => handleNewNote(undefined, 'Untitled.canvas')}
+					title={m.sidebar_new_canvas()}
+				/>
+				<IconButton
+					icon={FolderPlus}
+					size="sm"
+					onclick={() => handleNewFolder()}
+					title={m.sidebar_new_folder()}
+				/>
+				<IconButton
+					icon={PanelLeftClose}
+					size="sm"
+					onclick={ontoggle}
+					title={m.sidebar_close_panel()}
+				/>
+			</div>
+		</div>
+
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div class="panel-content" oncontextmenu={openRootContextMenu}>
+			<FileTree
+				activeFile={files.activeFile}
+				{onfileselect}
+				oncontextmenuentry={openEntryContextMenu}
+				onrename={handleInlineRename}
+				onmoveentry={handleMoveEntry}
+			/>
+		</div>
+
+		<!-- svelte-ignore a11y_no_static_element_interactions -->
+		<div
+			class="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors {resizing
+				? 'bg-brand'
+				: 'hover:bg-brand'}"
+			onmousedown={onResizeStart}
+		></div>
+	</aside>
+{/if}
 
 {#if menuTarget && menuItems.length > 0}
 	<ContextMenu x={menuX} y={menuY} items={menuItems} onclose={closeContextMenu} />
 {/if}
 
-<!-- No scoped CSS left in this component — the rail, panel and resize handle are
-     all utilities. `.panel-header` / `.panel-title` / `.panel-actions` /
-     `.panel-content` above are the global classes shared with the Favourites
-     panel, from `$lib/styles/components.css`. -->
+<!-- No scoped CSS left in this component — the panel and resize handle are all
+     utilities; `.panel-header` / `.panel-title` / `.panel-actions` /
+     `.panel-content` are the global classes from `$lib/styles/components.css`. -->

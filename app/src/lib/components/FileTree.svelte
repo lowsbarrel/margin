@@ -5,7 +5,6 @@
 	import { editor } from '$lib/stores/editor.svelte';
 	import { files, type TreeRevealTarget } from '$lib/stores/files.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
-	import { favourites } from '$lib/stores/favourites.svelte';
 	import { drag } from '$lib/stores/drag.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -18,7 +17,7 @@
 		tryNativeDrag,
 		startDragEntry
 	} from '$lib/utils/file-tree-drag';
-	import { ChevronRight, Folder, FolderOpen, FileText, Star } from '@lucide/svelte';
+	import { ChevronRight, Folder, FolderOpen, FileText } from '@lucide/svelte';
 
 	interface Props {
 		activeFile: string | null;
@@ -432,9 +431,6 @@
 						>
 							<FileText size={16} />
 							<span class="min-w-0 flex-1 truncate">{row.name.replace(/\.(md|canvas)$/, '')}</span>
-							{#if favourites.isFavourite(row.path)}
-								<Star size={12} class="ml-auto shrink-0 fill-current text-accent-foreground" />
-							{/if}
 						</button>
 					{/if}
 				{/if}
