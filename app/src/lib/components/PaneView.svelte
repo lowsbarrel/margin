@@ -5,6 +5,7 @@
 	import { drag } from '$lib/stores/drag.svelte';
 	import Editor from '$lib/components/Editor.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
+	import UnknownFileView from '$lib/components/UnknownFileView.svelte';
 	import CanvasEditor from '$lib/components/CanvasEditor.svelte';
 	import { X, ChevronRight, Pin } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
@@ -181,15 +182,32 @@
 		{/each}
 		{#if paneActiveTab.type === 'image' && paneActiveTab.blobUrl}
 			{#key paneActiveTab.id}
-				<ImageViewer src={paneActiveTab.blobUrl} alt={fileTitle(paneActiveTab.path)} />
+				<ImageViewer
+					src={paneActiveTab.blobUrl}
+					name={fileTitle(paneActiveTab.path)}
+					size={paneActiveTab.size}
+				/>
 			{/key}
 		{:else if paneActiveTab.type === 'pdf' && paneActiveTab.pdfData}
 			{#key paneActiveTab.id}
 				<!-- pdfjs-dist is the heaviest viewer dependency and most sessions never
 				     open a PDF, so its chunk is fetched on demand. -->
 				{#await import('$lib/components/PdfViewer.svelte') then { default: PdfViewer }}
-					<PdfViewer data={paneActiveTab.pdfData} />
+					<PdfViewer
+						data={paneActiveTab.pdfData}
+						path={paneActiveTab.path}
+						name={fileTitle(paneActiveTab.path)}
+					/>
 				{/await}
+			{/key}
+		{:else if paneActiveTab.type === 'unknown'}
+			{#key paneActiveTab.id}
+				<UnknownFileView
+					path={paneActiveTab.path}
+					name={fileTitle(paneActiveTab.path)}
+					size={paneActiveTab.size}
+					modified={paneActiveTab.modified}
+				/>
 			{/key}
 		{:else if paneActiveTab.type === 'canvas'}
 			{#key paneActiveTab.id}

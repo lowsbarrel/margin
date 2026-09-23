@@ -16,6 +16,7 @@ export { flushWriteQueue };
  */
 export type {
 	Backlink,
+	FileMetadata,
 	FsEntry,
 	TreeEntry,
 	SearchHit,
@@ -26,6 +27,7 @@ export type {
 } from '$lib/bindings';
 import type {
 	Backlink,
+	FileMetadata,
 	FsEntry,
 	TreeEntry,
 	SearchHit,
@@ -175,6 +177,13 @@ export async function createDirectory(path: string): Promise<void> {
 
 export async function fileExists(path: string): Promise<boolean> {
 	return commands.fileExists(path);
+}
+
+/** Size and mtime of one vault file, without reading its bytes. */
+export async function fileMetadata(path: string): Promise<FileMetadata> {
+	const r = await commands.fileMetadata(path);
+	if (r.status === 'error') throw r.error;
+	return r.data;
 }
 
 export async function copyFile(from: string, to: string): Promise<void> {
