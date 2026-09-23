@@ -611,6 +611,40 @@ pub fn file_exists(path: &str, vault_path_state: tauri::State<'_, VaultPathState
         .unwrap_or(false)
 }
 
+/// Seconds since the UNIX epoch, or 0 when the platform withholds the mtime.
+fn modified_secs(meta: &fs::Metadata) -> u64 {
+    meta.modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
+        .map(|d| d.as_secs())
+        .unwrap_or(0)
+}
+
+/// Size and mtime of one vault file. Viewers that only describe a file (no
+/// canvas, no text) use this instead of reading bytes they will never draw.
+#[derive(Serialize, Clone, specta::Type)]
+pub struct FileMetadata {
+    /// Bytes. f64 because specta refuses a u64 across the IPC boundary.
+    #[specta(type = f64)]
+    pub size: u64,
+    #[specta(type = u32)]
+    pub modified: u64,
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn file_metadata(
+    path: &str,
+    vault_path_state: tauri::State<'_, VaultPathState>,
+) -> Result<FileMetadata, String> {
+    let p = ensure_in_vault(path, &vault_path_state)?;
+    let meta = fs::metadata(&p).map_err(|e| format!("Failed to read file metadata: {e}"))?;
+    Ok(FileMetadata {
+        size: meta.len(),
+        modified: modified_secs(&meta),
+    })
+}
+
 /// Copy one file to `to`, refusing to replace anything already there. Copies
 /// never get the case-only-rename allowance: a copy onto another spelling of its
 /// own source would truncate the source it is reading from.

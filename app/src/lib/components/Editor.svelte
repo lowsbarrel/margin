@@ -23,7 +23,7 @@
 	import type { ContextMenuItem } from './ContextMenu.svelte';
 	import BubbleToolbar from './BubbleToolbar.svelte';
 	import FindReplace from './FindReplace.svelte';
-	import ImageLightbox from './ImageLightbox.svelte';
+	import ImageLightbox, { type LightboxImage } from './ImageLightbox.svelte';
 	import { validateName } from '$lib/utils/filename';
 	import * as m from '$lib/paraglide/messages.js';
 	import '$lib/editor/editor-styles.css';
@@ -154,8 +154,8 @@
 	/** True while a title rename started here is awaiting its callback. */
 	let titleRenamePending = false;
 	let handleFindHotkeyRef: EventListener | null = null;
-	let lightboxSrc = $state<string | null>(null);
-	let lightboxAlt = $state('');
+	/** Open lightbox: every image of the note plus which one was clicked. */
+	let lightbox = $state<{ images: LightboxImage[]; index: number } | null>(null);
 	let ctxMenu = $state<{
 		x: number;
 		y: number;
@@ -513,14 +513,31 @@
 		}
 	});
 
+	/**
+	 * Opens the lightbox on the image that was clicked, with the note's other
+	 * images as the gallery. `img.src` is the resolved URL the click handler
+	 * reports, so the list can be read straight off the rendered document.
+	 */
+	function openLightbox(src: string, alt: string) {
+		const images: LightboxImage[] = container
+			? Array.from(container.querySelectorAll('img')).map((img) => ({
+					src: img.src,
+					alt: img.alt
+				}))
+			: [];
+		const clicked = images.findIndex((image) => image.src === src);
+		lightbox = clicked >= 0 ? { images, index: clicked } : { images: [{ src, alt }], index: 0 };
+	}
+
+	function navigateLightbox(index: number) {
+		if (lightbox) lightbox = { ...lightbox, index };
+	}
+
 	function handleLinkClick(event: MouseEvent) {
 		if (!container) return;
 		handleEditorClick(event, container, {
 			vaultPath: vault.vaultPath,
-			onLightbox: (src, alt) => {
-				lightboxSrc = src;
-				lightboxAlt = alt;
-			},
+			onLightbox: openLightbox,
 			onWikiLink: onwikilink
 		});
 	}
@@ -555,10 +572,7 @@
 		if (!container) return;
 		const result = buildEditorContextMenu(event, container, tiptap, {
 			vaultPath: vault.vaultPath,
-			onLightbox: (src, alt) => {
-				lightboxSrc = src;
-				lightboxAlt = alt;
-			}
+			onLightbox: openLightbox
 		});
 		if (result) ctxMenu = result;
 	}
@@ -875,8 +889,13 @@
 	</div>
 </div>
 
-{#if lightboxSrc}
-	<ImageLightbox src={lightboxSrc} alt={lightboxAlt} onclose={() => (lightboxSrc = null)} />
+{#if lightbox}
+	<ImageLightbox
+		images={lightbox.images}
+		index={lightbox.index}
+		onclose={() => (lightbox = null)}
+		onnavigate={navigateLightbox}
+	/>
 {/if}
 
 {#if ctxMenu}
