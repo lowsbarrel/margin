@@ -29,6 +29,7 @@ import { ContentDrag } from '$lib/editor/content-drag';
 import { PasteCleanup } from '$lib/editor/paste-cleanup';
 import { TrailingNode } from '$lib/editor/trailing-node';
 import { SelectionPreserve } from '$lib/editor/selection-preserve';
+import { TableDndExtension } from '$lib/editor/table-dnd';
 import { Extension, type Extensions } from '@tiptap/core';
 import type { Fragment } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
@@ -279,6 +280,7 @@ export function createEditorExtensions({
 			PasteCleanup,
 			SearchReplace,
 			ContentDrag,
+			TableDndExtension,
 			TrailingNode,
 			SelectionPreserve
 		);
