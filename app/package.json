@@ -15,7 +15,6 @@
 		"check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
 		"check:invariants": "bun scripts/check-invariants.mjs",
 		"check:secrets": "bun scripts/check-secrets.mjs",
-		"check:deprecated": "eslint --config eslint.config.deprecated.js src",
 		"i18n:compile": "paraglide-js compile --project ./project.inlang --outdir ./src/lib/paraglide",
 		"lint": "prettier --check . && eslint .",
 		"format": "prettier --write .",
