@@ -14,6 +14,7 @@
 	import { deleteVaultProfile, type VaultProfile } from '$lib/session/bridge';
 	import { open } from '@tauri-apps/plugin-dialog';
 	import { Button, IconButton } from '$lib/ui';
+	import LogoMark from '$lib/components/LogoMark.svelte';
 	import OnboardingIntro from '$lib/components/onboarding/OnboardingIntro.svelte';
 	import OnboardingWizard from '$lib/components/onboarding/OnboardingWizard.svelte';
 	import { Sun, Moon, FolderOpen, KeyRound, Plus, Copy, Check, Trash2, Play } from '@lucide/svelte';
@@ -230,7 +231,7 @@
 		{#if autoLogging}
 			<div class="flex flex-col items-center gap-6">
 				<div class={BRAND}>
-					<img src="/logo.svg" alt="Margin logo" class="mx-auto mb-3 size-20" />
+					<LogoMark size={80} class="mx-auto mb-3" />
 					<h1 class={BRAND_TITLE}>{m.app_name()}</h1>
 				</div>
 				<span class="text-sm text-subtle-foreground italic">{m.login_auto_opening()}</span>
@@ -248,7 +249,7 @@
 				<OnboardingIntro onDone={finishIntro} />
 			{:else}
 				<div class={BRAND}>
-					<img src="/logo.svg" alt="Margin logo" class="mx-auto mb-3 size-20" />
+					<LogoMark size={80} class="mx-auto mb-3" />
 					<h1 class={BRAND_TITLE}>{m.app_name()}</h1>
 					<p class="mt-1.5 font-sans text-sm text-subtle-foreground italic">{m.app_tagline()}</p>
 				</div>
