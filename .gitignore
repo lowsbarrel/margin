@@ -30,6 +30,3 @@ vite.config.js.timestamp-*
 vite.config.ts.timestamp-*
 
 /app/.tw-probe/
-
-# Local checkout of another project kept here for comparison; not part of this repo.
-/Glyph/
