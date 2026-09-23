@@ -15,8 +15,7 @@
 	import { toast } from '$lib/stores/toast.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { clipboard } from '$lib/stores/clipboard.svelte';
-	import { drag } from '$lib/stores/drag.svelte';
-	import { getCurrentWebview } from '@tauri-apps/api/webview';
+	import { installExternalDropRouter } from '$lib/utils/external-drop';
 	import { IconButton } from '$lib/ui';
 	import { handleNewFolder, handleNewNote } from '$lib/utils/page-actions';
 	// Static / non-interactive glyphs stay on lucide; the registry has no
@@ -48,8 +47,7 @@
 	let menuTarget = $state<MenuTarget | null>(null);
 	let menuX = $state(0);
 	let menuY = $state(0);
-	let sidebarPanelEl = $state<HTMLElement | null>(null);
-	let unlistenDragDrop: (() => void) | null = null;
+	let unlistenExternalDrop: (() => void) | null = null;
 	let dragDropDisposed = false;
 
 	const PANEL_MIN = 180;
@@ -86,8 +84,14 @@
 		if (!vault.vaultPath) return;
 		if ((event.target as HTMLElement).closest('.tree-row')) return;
 		event.preventDefault();
-		files.clearSelection();
-		files.setSelectedFolder(vault.vaultPath);
+		// Stop it here: the freshly mounted menu listens on `document` for
+		// contextmenu, and an event still travelling up the tree would close the
+		// menu the same tick it opened. The row handler does the same.
+		event.stopPropagation();
+		// The target travels in the menu item's own closure, so opening the menu
+		// must not touch the selection: an accidental right-click dismissed with
+		// Escape used to destroy a deliberate multi-selection and retarget the
+		// toolbar at the vault root.
 		menuX = event.clientX;
 		menuY = event.clientY;
 		menuTarget = { kind: 'root', path: vault.vaultPath };
@@ -101,21 +105,35 @@
 	}
 
 	// Rename/delete/duplicate
-	async function handleInlineRename(entry: TreeEntry, newName: string) {
+	/**
+	 * Rename a tree entry. Returns whether the row may leave edit mode: a refused
+	 * rename keeps the inline input open so the name the user typed is not thrown
+	 * away by the toast reporting the collision.
+	 *
+	 * A case-only rename (`note.md` → `Note.md`) targets the same directory entry,
+	 * so `fileExists` reports it as present; only a destination that differs
+	 * beyond case can be a collision, and Rust resolves the case-folded decision
+	 * inside the command.
+	 */
+	async function handleInlineRename(entry: TreeEntry, newName: string): Promise<boolean> {
 		const sanitized = entry.is_dir ? normalizeDirName(newName) : normalizeFileName(newName);
-		if (!sanitized || sanitized === entry.name) return;
+		if (sanitized === null) return false;
+		if (sanitized === entry.name) return true;
 
 		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
 		const newPath = `${parent}/${sanitized}`;
-		if (await fileExists(newPath)) {
+		const differsBeyondCase = newPath.toLowerCase() !== entry.path.toLowerCase();
+		if (differsBeyondCase && (await fileExists(newPath))) {
 			toast.error(m.toast_path_exists({ name: sanitized }));
-			return;
+			return false;
 		}
 
 		try {
 			await onrenameentry(entry.path, newPath, entry.is_dir);
+			return true;
 		} catch (err) {
 			toast.error(m.toast_rename_failed({ error: String(err) }));
+			return false;
 		}
 	}
 
@@ -169,7 +187,12 @@
 		try {
 			if (entry.is_dir) await copyDirectory(entry.path, candidate);
 			else await copyFile(entry.path, candidate);
+			await ensureFolderExpanded(parent);
 			await files.refresh(vault.vaultPath);
+			// Without this the copy is created somewhere the user may not be looking
+			// and nothing tells them which of two identical rows is the new one.
+			files.setSelectedEntry(candidate, entry.is_dir);
+			files.requestTreeReveal(candidate);
 		} catch (err) {
 			toast.error(m.toast_duplicate_failed({ error: String(err) }));
 		}
@@ -288,61 +311,22 @@
 		}
 	}
 
-	// External file drop (OS file manager)
-	async function handleExternalDrop(paths: string[], position: { x: number; y: number }) {
-		if (!vault.vaultPath || !sidebarPanelEl) return;
-		// If this drop originated from our own native drag, skip import
-		if (drag.nativeDragActive) return;
-		const rect = sidebarPanelEl.getBoundingClientRect();
-		if (
-			position.x < rect.left ||
-			position.x > rect.right ||
-			position.y < rect.top ||
-			position.y > rect.bottom
-		)
-			return;
-
-		const targetDir = getPasteTarget() || vault.vaultPath;
-
-		for (const srcPath of paths) {
-			const name = srcPath.replace(/\\/g, '/').split('/').pop() ?? '';
-			const dest = await createUniquePath(targetDir, name);
-
-			try {
-				await copyFile(srcPath, dest).catch(async () => {
-					await copyDirectory(srcPath, dest);
-				});
-			} catch (err) {
-				toast.error(m.toast_import_file_failed({ name, error: String(err) }));
-			}
-		}
-
-		if (targetDir !== vault.vaultPath) await files.expandFolder(targetDir);
-		await files.refresh(vault.vaultPath);
-		editor.markLocalChange();
-		toast.success(m.toast_imported_items({ count: String(paths.length) }));
-	}
-
 	onMount(() => {
 		window.addEventListener('keydown', handleSidebarKeydown);
-		getCurrentWebview()
-			.onDragDropEvent((event) => {
-				if (event.payload.type === 'drop') {
-					handleExternalDrop(event.payload.paths, event.payload.position);
-				}
-			})
-			.then((unlisten) => {
-				// The component may have been destroyed before this resolved; if so,
-				// unlisten immediately to avoid leaking the listener.
-				if (dragDropDisposed) unlisten();
-				else unlistenDragDrop = unlisten;
-			});
+		// One router owns the webview's drag-drop events; it hit-tests the pointer
+		// and dispatches to the tree, the editor, or nothing.
+		installExternalDropRouter().then((unlisten) => {
+			// The component may have been destroyed before this resolved; if so,
+			// unlisten immediately to avoid leaking the listener.
+			if (dragDropDisposed) unlisten();
+			else unlistenExternalDrop = unlisten;
+		});
 	});
 
 	onDestroy(() => {
 		window.removeEventListener('keydown', handleSidebarKeydown);
 		dragDropDisposed = true;
-		unlistenDragDrop?.();
+		unlistenExternalDrop?.();
 	});
 
 	let menuItems = $derived.by((): ContextMenuItem[] => {
@@ -367,7 +351,6 @@
 			? 'select-none'
 			: ''}"
 		style="width:{panelWidth}px;min-width:{panelWidth}px"
-		bind:this={sidebarPanelEl}
 	>
 		<div class="panel-header">
 			<span class="panel-title">{m.sidebar_explorer()}</span>
@@ -412,13 +395,14 @@
 		</div>
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div class="panel-content" oncontextmenu={openRootContextMenu}>
+		<div class="panel-content" data-drop-kind="tree-root" oncontextmenu={openRootContextMenu}>
 			<FileTree
 				activeFile={files.activeFile}
 				{onfileselect}
 				oncontextmenuentry={openEntryContextMenu}
 				onrename={handleInlineRename}
 				onmoveentry={handleMoveEntry}
+				ondeleterow={handleDeleteRequest}
 			/>
 		</div>
 
