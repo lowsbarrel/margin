@@ -1,3 +1,4 @@
+mod ai;
 mod crypto;
 mod fs;
 mod history;
@@ -9,6 +10,7 @@ mod sync;
 mod text;
 mod text_transform;
 
+use ai::{LlmCancelState, LlmState};
 use fs::{VaultPathState, VaultWatcherState, WatcherState};
 use s3::S3State;
 use std::sync::Mutex;
@@ -44,6 +46,8 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .manage(LlmState::default())
+        .manage(LlmCancelState::default())
         .manage(S3State(Mutex::new(None)))
         .manage(WatcherState(Mutex::new(None)))
         .manage(VaultWatcherState(Mutex::new(None)))
@@ -185,6 +189,10 @@ pub fn run() {
             index::index_rebuild,
             index::index_tags,
             index::index_backlinks,
+            ai::llm_configure,
+            ai::llm_list_models,
+            ai::llm_ask,
+            ai::llm_cancel,
             s3::s3_configure,
             s3::s3_get_config,
             s3::s3_test_connection,
@@ -265,6 +273,10 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         index::index_rebuild,
         index::index_tags,
         index::index_backlinks,
+        ai::llm_configure,
+        ai::llm_list_models,
+        ai::llm_ask,
+        ai::llm_cancel,
         s3::s3_configure,
         s3::s3_get_config,
         s3::s3_test_connection,

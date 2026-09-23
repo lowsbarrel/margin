@@ -8,9 +8,12 @@
 	 *
 	 *   • plain text  → note names (trie) + note contents (FTS5), two groups
 	 *   • `#…`        → tag browser: tag cloud, then the files carrying that tag
+	 *   • `?…`        → ask the vault: a streamed answer with the tools it used
 	 *   • replace row → replace-across-files over the current content hits
 	 */
 	import { onMount, onDestroy, tick, untrack } from 'svelte';
+	import { ask } from '$lib/stores/ask.svelte';
+	import AskAnswer from '$lib/components/AskAnswer.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import {
 		searchFiles,
@@ -30,7 +33,9 @@
 		Replace,
 		ReplaceAll,
 		ChevronLeft,
-		Loader
+		Loader,
+		Sparkles,
+		Wrench
 	} from '@lucide/svelte';
 	import { IMAGE_EXTS } from '$lib/utils/mime';
 	import { displayName } from '$lib/utils/filename';
@@ -41,9 +46,11 @@
 		/** Open a note. `searchText` scrolls the editor to the matched excerpt. */
 		onselect: (path: string, searchText?: string) => void;
 		onclose: () => void;
+		/** Open Settings — offered when `?` mode has no endpoint to ask. */
+		onsettings: () => void;
 	}
 
-	let { onselect, onclose }: Props = $props();
+	let { onselect, onclose, onsettings }: Props = $props();
 
 	/** How many filename hits to surface before the content group starts. */
 	const MAX_NAME_RESULTS = 8;
@@ -82,6 +89,12 @@
 	let isTagMode = $derived(query.trimStart().startsWith('#'));
 	let tagFilter = $derived(isTagMode ? query.trimStart().slice(1).trim().toLowerCase() : '');
 
+	// ── Ask mode ──
+	let isAskMode = $derived(query.trimStart().startsWith('?'));
+	let askQuery = $derived(isAskMode ? query.trimStart().slice(1).trim() : '');
+	/** The question the answer on screen belongs to; empty before the first ask. */
+	let askedQuestion = $state('');
+
 	// ── Flattened item list ───────────────────────────────────────────────
 	// Keyboard nav runs over one flat array regardless of mode; the template
 	// draws a group header wherever the kind changes.
@@ -93,6 +106,9 @@
 		| { kind: 'tagfile'; path: string; tag: string };
 
 	let items = $derived.by((): Item[] => {
+		// Ask mode has no result list: the palette shows one answer instead.
+		if (isAskMode) return [];
+
 		if (isTagMode) {
 			if (selectedTag) {
 				const tag = selectedTag;
@@ -121,7 +137,9 @@
 
 	let nameCount = $derived(items.filter((i) => i.kind === 'name').length);
 	let contentCount = $derived(items.filter((i) => i.kind === 'content').length);
-	let canReplace = $derived(!isTagMode && trimmedQuery.length > 0 && contentResults.length > 0);
+	let canReplace = $derived(
+		!isTagMode && !isAskMode && trimmedQuery.length > 0 && contentResults.length > 0
+	);
 
 	// Keep the cursor inside the list when results shrink under it.
 	$effect(() => {
@@ -139,6 +157,37 @@
 		}
 	});
 
+	// Same laziness for the endpoint: typing `?` is what pushes the saved config
+	// into Rust state, and the store caches it per vault.
+	$effect(() => {
+		if (isAskMode && vault.vaultPath) {
+			untrack(() => void ask.ensureConfigured());
+		}
+	});
+
+	// ── Ask mode ──────────────────────────────────────────────────────────
+
+	function submitAsk() {
+		if (!askQuery || ask.running) return;
+		askedQuestion = askQuery;
+		void ask.ask(askQuery);
+	}
+
+	/** A `[[cite]]` in an answer opens the note it names, like any wiki-link. */
+	async function openCitation(title: string) {
+		if (!vault.vaultPath) return;
+		const results = await searchFiles(vault.vaultPath, title);
+		const match = results.find(
+			(entry) => !entry.is_dir && (entry.name === `${title}.md` || entry.name === `${title}.canvas`)
+		);
+		if (!match) {
+			toast.info(m.toast_note_not_found({ title }));
+			return;
+		}
+		onselect(match.path);
+		onclose();
+	}
+
 	function getIcon(path: string) {
 		const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
 		if (ext === '.md') return FileText;
@@ -153,7 +202,7 @@
 		const gen = ++searchGeneration;
 		const trimmed = q.trim();
 
-		if (!vault.vaultPath || !trimmed || trimmed.startsWith('#')) {
+		if (!vault.vaultPath || !trimmed || trimmed.startsWith('#') || trimmed.startsWith('?')) {
 			nameResults = [];
 			contentResults = [];
 			searching = false;
@@ -189,10 +238,11 @@
 		selectedIndex = 0;
 		if (debounceTimer) clearTimeout(debounceTimer);
 
-		// Tag mode reads a list we already hold in memory — no round trip, so no
-		// debounce. Bump the generation anyway to void any content search still
-		// in flight from before the `#`.
-		if (query.trimStart().startsWith('#') || !query.trim()) {
+		// Tag mode reads a list we already hold in memory, and ask mode answers
+		// only when Enter is pressed — neither does a round trip per keystroke.
+		// Bump the generation anyway to void any content search still in flight
+		// from before the `#`/`?`.
+		if (query.trimStart().startsWith('#') || query.trimStart().startsWith('?') || !query.trim()) {
 			searchGeneration++;
 			nameResults = [];
 			contentResults = [];
@@ -237,13 +287,22 @@
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			e.stopPropagation();
+			// Escape stops a running question before it closes anything: the
+			// partial answer is worth more than the palette is.
+			if (ask.running) ask.cancel();
 			// Escape steps out of a tag before it closes the palette.
-			if (selectedTag) backToTagCloud();
+			else if (selectedTag) backToTagCloud();
 			else onclose();
 			return;
 		}
 
-		if ((e.metaKey || e.ctrlKey) && (e.key === 'h' || e.key === 'H') && !isTagMode) {
+		if (isAskMode && e.key === 'Enter') {
+			e.preventDefault();
+			submitAsk();
+			return;
+		}
+
+		if ((e.metaKey || e.ctrlKey) && (e.key === 'h' || e.key === 'H') && !isTagMode && !isAskMode) {
 			e.preventDefault();
 			showReplace = !showReplace;
 			return;
@@ -350,8 +409,10 @@
 	>
 		<!-- Query row -->
 		<div class="flex items-center gap-2.5 border-b border-border px-4 py-3">
-			{#if searching}
+			{#if searching || ask.running}
 				<Loader size={16} class="shrink-0 animate-spin text-subtle-foreground" />
+			{:else if isAskMode}
+				<Sparkles size={16} class="shrink-0 text-subtle-foreground" />
 			{:else}
 				<Search size={16} class="shrink-0 text-subtle-foreground" />
 			{/if}
@@ -359,13 +420,13 @@
 				bind:this={inputEl}
 				bind:value={query}
 				oninput={handleInput}
-				placeholder={m.spotlight_placeholder()}
+				placeholder={isAskMode ? m.spotlight_ask_placeholder() : m.spotlight_placeholder()}
 				type="text"
 				spellcheck="false"
 				autocomplete="off"
 				class="min-w-0 flex-1 border-none bg-transparent p-0 text-base text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
 			/>
-			{#if !isTagMode}
+			{#if !isTagMode && !isAskMode}
 				<button
 					type="button"
 					onclick={() => (showReplace = !showReplace)}
@@ -385,7 +446,7 @@
 		</div>
 
 		<!-- Replace row -->
-		{#if showReplace && !isTagMode}
+		{#if showReplace && !isTagMode && !isAskMode}
 			<div class="flex items-center gap-2.5 border-b border-border px-4 py-2.5">
 				<Replace size={14} class="shrink-0 text-subtle-foreground" />
 				<input
@@ -427,8 +488,68 @@
 			</div>
 		{/if}
 
-		<!-- Results -->
-		{#if items.length > 0}
+		<!-- Ask answer -->
+		{#if isAskMode}
+			<div class="flex min-h-0 flex-1 flex-col">
+				{#if ask.configured === false}
+					<div class="flex flex-col items-start gap-3 px-4 py-8">
+						<p class="m-0 text-sm text-muted-foreground">{m.spotlight_ask_not_configured()}</p>
+						<button
+							type="button"
+							onclick={onsettings}
+							class="flex items-center gap-1.5 rounded-xs border border-border px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-surface-3"
+						>
+							<Sparkles size={13} />
+							{m.spotlight_ask_open_settings()}
+						</button>
+					</div>
+				{:else if !askedQuestion}
+					<div class="px-4 py-8 text-center text-sm text-subtle-foreground">
+						{m.spotlight_ask_hint()}
+					</div>
+				{:else}
+					<!-- Tool trace: what the answer looked at, in the order it looked. -->
+					{#if ask.steps.length > 0}
+						<div class="flex flex-col gap-1 border-b border-border px-4 py-2.5">
+							{#each ask.steps as step, i (i)}
+								<div class="flex items-center gap-2 text-xs text-subtle-foreground">
+									<Wrench size={12} class="shrink-0" />
+									<span class="min-w-0 truncate">{step.summary}</span>
+								</div>
+							{/each}
+						</div>
+					{/if}
+
+					<div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
+						{#if ask.answer}
+							<AskAnswer markdown={ask.answer} oncite={openCitation} />
+						{:else if ask.running}
+							<p class="m-0 text-sm text-subtle-foreground">{m.spotlight_ask_thinking()}</p>
+						{:else if !ask.error}
+							<p class="m-0 text-sm text-subtle-foreground">{m.spotlight_ask_empty()}</p>
+						{/if}
+						{#if ask.error}
+							<p class="m-0 mt-2 font-sans text-xs text-destructive">
+								{m.spotlight_ask_error({ error: ask.error })}
+							</p>
+						{/if}
+					</div>
+
+					{#if ask.running}
+						<div class="flex items-center justify-between border-t border-border px-4 py-2">
+							<span class="text-xs text-subtle-foreground">{askedQuestion}</span>
+							<button
+								type="button"
+								onclick={() => ask.cancel()}
+								class="shrink-0 rounded-xs border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
+							>
+								{m.spotlight_ask_cancel()}
+							</button>
+						</div>
+					{/if}
+				{/if}
+			</div>
+		{:else if items.length > 0}
 			<div class="min-h-0 flex-1 overflow-y-auto p-1.5" role="listbox" bind:this={listEl}>
 				{#each items as item, i (item.kind + ':' + (item.kind === 'tag' ? item.tag : item.path))}
 					{@const prev = items[i - 1]}

@@ -366,12 +366,10 @@ pub fn rebuild(root: &str) -> Result<u32, String> {
     Ok(present.len() as u32)
 }
 
-/// Turn raw user input into a safe FTS5 MATCH expression: each whitespace token
-/// becomes a quoted prefix term (`"foo"*`), ANDed together. Quoting makes tokens
-/// that collide with FTS keywords (AND/OR/NOT/NEAR) literal, and filtering to
-/// alphanumerics keeps the parser away from FTS operator characters. Returns an
-/// empty string when the query has no usable tokens.
-fn build_match_query(input: &str) -> String {
+/// Turn raw user input into safe FTS5 prefix terms: quoting makes tokens that
+/// collide with FTS keywords (AND/OR/NOT/NEAR) literal, and filtering to
+/// alphanumerics keeps the parser away from FTS operator characters.
+fn terms(input: &str) -> Vec<String> {
     let mut parts: Vec<String> = Vec::new();
     for raw in input.split_whitespace() {
         let token: String = raw
@@ -383,15 +381,39 @@ fn build_match_query(input: &str) -> String {
         }
         parts.push(format!("\"{token}\"*"));
     }
-    parts.join(" ")
+    parts
 }
 
-/// Ranked full-text search over indexed note bodies and names. Returns up to
-/// `limit` hits ordered by FTS5 relevance (bm25).
-#[tauri::command]
-#[specta::specta]
-pub fn index_search(root: &str, query: &str, limit: u32) -> Result<Vec<SearchHit>, String> {
-    let match_query = build_match_query(query);
+/// Turn raw user input into an FTS5 MATCH expression requiring every word.
+fn build_match_query(input: &str) -> String {
+    terms(input).join(" ")
+}
+
+/// As [`build_match_query`], but for the modes the AI `search` tool offers:
+/// `all` (every word — the default, and what a plain search uses), `any` (at
+/// least one word) and `phrase` (the exact wording, not a prefix match). An
+/// unrecognised mode behaves as `all` rather than erroring, because the mode
+/// comes from the model.
+pub fn build_match_for(input: &str, mode: &str) -> String {
+    match mode {
+        "phrase" => {
+            // Quoting the whole input is what makes FTS5 treat it as one phrase;
+            // an embedded quote would end it early, so quotes are dropped.
+            let phrase = input.replace('"', " ").trim().to_string();
+            if phrase.is_empty() {
+                String::new()
+            } else {
+                format!("\"{phrase}\"")
+            }
+        }
+        "any" => terms(input).join(" OR "),
+        _ => build_match_query(input),
+    }
+}
+
+/// Ranked search over an already-built MATCH expression — the entry point for
+/// callers that build their own query (the AI `search` tool's three modes).
+pub fn search_match(root: &str, match_query: &str, limit: u32) -> Result<Vec<SearchHit>, String> {
     if match_query.is_empty() {
         return Ok(vec![]);
     }
@@ -427,6 +449,14 @@ pub fn index_search(root: &str, query: &str, limit: u32) -> Result<Vec<SearchHit
         out.push(row.map_err(|e| e.to_string())?);
     }
     Ok(out)
+}
+
+/// Ranked full-text search over indexed note bodies and names. Returns up to
+/// `limit` hits ordered by FTS5 relevance (bm25).
+#[tauri::command]
+#[specta::specta]
+pub fn index_search(root: &str, query: &str, limit: u32) -> Result<Vec<SearchHit>, String> {
+    search_match(root, &build_match_query(query), limit)
 }
 
 /// Rebuild the index (skipping unchanged files) and return the indexed count.

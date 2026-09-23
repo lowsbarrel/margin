@@ -167,7 +167,12 @@ fn ensure_in_vault(path: &str, vault: &VaultPathState) -> Result<PathBuf, String
         .map_err(|e| e.to_string())?
         .trim()
         .to_string();
+    ensure_within(&vault_root, path)
+}
 
+/// The root-taking half of [`ensure_in_vault`], shared with the read-only AI
+/// tools, which hold the vault root as a plain string rather than as app state.
+pub(crate) fn ensure_within(root: &str, path: &str) -> Result<PathBuf, String> {
     // Before a vault is opened (e.g. the login flow writes `.margin/vault.id`
     // and creates `.margin/` *before* calling set_vault_directory), no
     // containment boundary exists yet. Preserve the prior behavior — and avoid
@@ -185,11 +190,11 @@ fn ensure_in_vault(path: &str, vault: &VaultPathState) -> Result<PathBuf, String
     if had_parent_dir {
         return Err("Path escapes the vault".into());
     }
-    if vault_root.is_empty() {
+    if root.trim().is_empty() {
         return Ok(target.to_path_buf());
     }
 
-    let canonical_vault = Path::new(&vault_root)
+    let canonical_vault = Path::new(root.trim())
         .canonicalize()
         .map_err(|e| format!("Failed to resolve vault root: {e}"))?;
 
