@@ -21,7 +21,7 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = [] }
+tauri = { version = "2", features = ["specta"] }
 tauri-plugin-opener = "2"
 tauri-plugin-dialog = "2"
 tauri-plugin-updater = "2"
@@ -59,6 +59,7 @@ tauri-plugin-drag = "2.1.0"
 specta = { version = "2.0.0-rc.25", features = ["derive"] }
 specta-typescript = "0.0.12"
 tauri-specta = { version = "2.0.0-rc.25", features = ["derive", "typescript"] }
+portable-pty = "0.9"
 
 # Plaintext and keys live only in Rust (AGENTS.md invariants); `forbid` makes
 # turning that off a visible manifest edit, not a local `#[allow]`.
