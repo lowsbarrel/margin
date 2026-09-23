@@ -22,13 +22,17 @@ export const commands = {
 	/**
 	 *  Build a flat, sorted, depth-annotated list of every currently-visible
 	 *  tree row in a single native call.
+	 * 
+	 *  `hidden` holds absolute paths the tree must not render. Hiding lives here —
+	 *  in the rows the sidebar draws — and nowhere else: the walker, the watcher,
+	 *  sync, export and the filename index all still see the folder.
 	 */
-	buildVisibleTree: (root: string, expanded: string[], sortBy: string) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_visible_tree", { root, expanded, sortBy })),
+	buildVisibleTree: (root: string, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_visible_tree", { root, expanded, sortBy, hidden })),
 	/**
 	 *  Build the subtree for a single folder at a given depth offset.
 	 *  Used for incremental expand — avoids rebuilding the entire tree.
 	 */
-	buildSubtree: (folder: string, depthOffset: number, expanded: string[], sortBy: string) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_subtree", { folder, depthOffset, expanded, sortBy })),
+	buildSubtree: (folder: string, depthOffset: number, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_subtree", { folder, depthOffset, expanded, sortBy, hidden })),
 	deleteEntry: (path: string) => typedError<null, string>(__TAURI_INVOKE("delete_entry", { path })),
 	/**  Every item currently in the trash, newest deletion first. */
 	trashList: (vaultPath: string) => typedError<TrashItem[], string>(__TAURI_INVOKE("trash_list", { vaultPath })),
@@ -59,6 +63,14 @@ export const commands = {
 	 *  user-chosen and may live anywhere.
 	 */
 	importExternalDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_directory", { from, to })),
+	/**
+	 *  Import a file from outside the vault as an attachment, named after its
+	 *  contents. The source is user-chosen and may live anywhere; only the
+	 *  destination is containment-checked, as in [`import_external_file`].
+	 */
+	importAttachment: (from: string, folder: string) => typedError<string, string>(__TAURI_INVOKE("import_attachment", { from, folder })),
+	/**  Attachments in `folder` that no note refers to, vault-relative and sorted. */
+	unusedAttachments: (folder: string) => typedError<string[], string>(__TAURI_INVOKE("unused_attachments", { folder })),
 	copyDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_directory", { from, to })),
 	revealInFileManager: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_in_file_manager", { path })),
 	/**
@@ -233,7 +245,6 @@ export const commands = {
 	 */
 	extractWikiLinks: (nodes: TextNode[]) => __TAURI_INVOKE<WikiLinkMatch[]>("extract_wiki_links", { nodes }),
 	fuzzyFilterFiles: (files: FuzzyEntry[], query: string, limit: number) => __TAURI_INVOKE<FuzzyEntry[]>("fuzzy_filter_files", { files, query, limit }),
-	transformImagePaths: (markdown: string, vaultPath: string | null, attachmentFolder: string | null, mode: string) => __TAURI_INVOKE<string>("transform_image_paths", { markdown, vaultPath, attachmentFolder, mode }),
 	/**  Compute SHA-256 hashes for a batch of files in parallel. */
 	hashFilesBatch: (vaultPath: string, paths: string[]) => typedError<string[], string>(__TAURI_INVOKE("hash_files_batch", { vaultPath, paths })),
 	/**  Load and decrypt the local base manifest, returning a default if missing. */

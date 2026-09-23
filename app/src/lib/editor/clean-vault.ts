@@ -13,8 +13,7 @@
 import { Editor } from '@tiptap/core';
 import { common, createLowlight } from 'lowlight';
 import { createEditorExtensions } from '$lib/editor/extensions';
-import { transformImagePaths } from '$lib/editor/text-transform-bridge';
-import { unresolveImagePaths } from '$lib/editor/image-paths';
+import { resolveImagePaths, resolveWikiEmbeds, unresolveImagePaths } from '$lib/editor/image-paths';
 import { walkDirectory, readFileBytes, writeFileBytes } from '$lib/fs/bridge';
 import { saveSnapshot } from '$lib/history/bridge';
 import { loadSettings } from '$lib/settings/bridge';
@@ -89,7 +88,7 @@ export async function cleanVault(
 				const bytes = await readFileBytes(file.path);
 				const raw = decoder.decode(bytes);
 				if (LEGACY_APPEARANCE_REGEX.test(raw)) {
-					const resolved = await transformImagePaths(raw, vaultPath, attachmentFolder, 'resolve');
+					const resolved = resolveImagePaths(resolveWikiEmbeds(raw, attachmentFolder), vaultPath);
 					editor.commands.setContent(resolved, { emitUpdate: false });
 					const out = unresolveImagePaths(getEditorMarkdown(editor), vaultPath);
 					if (out !== raw) {

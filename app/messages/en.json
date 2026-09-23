@@ -127,9 +127,9 @@
 	"toast_configure_s3": "Configure S3 first",
 	"toast_copied": "Copied to clipboard",
 	"settings_attachments_title": "Attachments",
-	"settings_attachments_hint": "Choose a folder in your vault for pasted images and files. Paste or drag files into the editor and they will be saved here.",
+	"settings_attachments_hint": "Pasted and dropped images and files are saved here. The folder is hidden in the file tree; sync, export and search still see it.",
 	"settings_attachments_label": "Attachment folder",
-	"settings_attachments_none": "— None —",
+	"settings_attachments_none": "Default (attachments)",
 	"toast_file_read_failed": "Failed to read file: {error}",
 	"pdf_load_failed": "Failed to load PDF: {error}",
 	"statusbar_history": "File history",
@@ -366,5 +366,14 @@
 	"history_diff_current": "Diff against the current note",
 	"history_diff_added": "{count} added",
 	"history_diff_removed": "{count} removed",
-	"history_diff_too_large": "Too large to compare line by line"
+	"history_diff_too_large": "Too large to compare line by line",
+	"settings_attachments_clean_scan": "Find unused attachments",
+	"settings_attachments_clean_scanning": "Scanning…",
+	"settings_attachments_clean_found": "{count} file(s) no note refers to:",
+	"settings_attachments_clean_none": "No unused attachments found",
+	"settings_attachments_clean_delete": "Move {count} to trash",
+	"settings_attachments_clean_cancel": "Cancel",
+	"settings_attachments_clean_done": "Moved {count} file(s) to trash",
+	"settings_attachments_clean_failed": "Could not scan for unused attachments: {error}",
+	"toast_attachment_paste_failed": "Could not save {name}: {error}"
 }

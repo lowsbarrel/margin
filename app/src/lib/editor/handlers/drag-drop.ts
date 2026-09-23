@@ -1,6 +1,10 @@
 import type { Editor } from '@tiptap/core';
 import { TextSelection } from '@tiptap/pm/state';
-import { insertDroppedFile } from '$lib/editor/attachments';
+import {
+	captureInsertionPoint,
+	insertDroppedPath,
+	type AttachmentTarget
+} from '$lib/editor/attachments';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 
@@ -17,39 +21,16 @@ export function setCursorAtCoords(editor: Editor, x: number, y: number): void {
 	}
 }
 
-/** Insert a file (from sidebar drag) at the current cursor position */
-export async function insertFileAtCursor(
-	path: string,
-	editor: Editor,
-	vaultPath: string,
-	attachmentFolder: string | null
-): Promise<void> {
-	const name = path.split('/').pop() ?? path;
-	const ext = name.split('.').pop()?.toLowerCase() ?? '';
-
-	if (ext === 'md') {
-		const title = name.slice(0, -3);
-		editor.chain().insertWikiLink(title).run();
-		return;
-	}
-
-	if (ext === 'canvas') {
-		const title = name.slice(0, -7);
-		editor.chain().insertWikiLink(title).run();
-		return;
-	}
-
-	if (!attachmentFolder) {
-		toast.error(m.toast_set_attachment_folder());
-		return;
-	}
-
+/**
+ * Insert a file dragged out of the tree into the active note.
+ *
+ * The caret was already moved to where the row was dropped, so the insertion
+ * point is read from there — a file that lives in the vault is linked where it
+ * is, and never copied alongside itself.
+ */
+export async function insertFileAtCursor(path: string, target: AttachmentTarget): Promise<void> {
 	try {
-		await insertDroppedFile(path, {
-			editor,
-			vaultPath,
-			attachmentFolder
-		});
+		await insertDroppedPath(path, target, captureInsertionPoint(target.editor));
 	} catch (err) {
 		toast.error(m.toast_insert_file_failed({ error: String(err) }));
 	}
@@ -60,39 +41,20 @@ export async function insertFileAtCursor(
  *
  * The OS-drop router has already hit-tested the drop onto this editor and
  * converted the physical position Tauri reports into CSS pixels, so the only
- * job left here is to place the caret and insert.
+ * jobs left here are to place the caret and to insert — at the position read
+ * once, before the first import round-trip.
  */
 export async function handleTauriFileDrop(
 	paths: string[],
 	position: { x: number; y: number } | undefined,
-	editor: Editor,
-	vaultPath: string,
-	attachmentFolder: string | null
+	target: AttachmentTarget
 ): Promise<void> {
-	// Place cursor at drop position before inserting
-	if (position) setCursorAtCoords(editor, position.x, position.y);
+	if (position) setCursorAtCoords(target.editor, position.x, position.y);
 
-	if (!attachmentFolder) {
-		toast.error(m.toast_set_attachment_folder());
-		return;
-	}
-
-	for (const srcPath of paths) {
-		const name = srcPath.replace(/\\/g, '/').split('/').pop() ?? srcPath;
-		const ext = name.split('.').pop()?.toLowerCase() ?? '';
-
-		if (ext === 'md') {
-			const title = name.slice(0, -3);
-			editor.chain().insertWikiLink(title).run();
-			continue;
-		}
-
+	let cursor = captureInsertionPoint(target.editor);
+	for (const path of paths) {
 		try {
-			await insertDroppedFile(srcPath, {
-				editor,
-				vaultPath,
-				attachmentFolder
-			});
+			cursor = await insertDroppedPath(path, target, cursor);
 		} catch (err) {
 			toast.error(m.toast_insert_file_failed({ error: String(err) }));
 		}
