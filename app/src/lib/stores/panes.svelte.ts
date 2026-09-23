@@ -109,6 +109,12 @@ function createEmptyPane(): Pane {
 	};
 }
 
+/** The pane's active tab, or null when the index is stale or the pane is empty. */
+function activeTabOf(pane: Pane): Tab | null {
+	const i = pane.activeTabIndex;
+	return i >= 0 && i < pane.tabs.length ? pane.tabs[i] : null;
+}
+
 let _panes = $state<Pane[]>([createEmptyPane()]);
 let _paneFlexes = $state<number[]>([1]);
 let _activePaneIndex = $state(0);
@@ -279,10 +285,16 @@ export const panes = {
 
 	async focusPane(paneIndex: number) {
 		if (paneIndex === _activePaneIndex) return;
+		const target = _panes[paneIndex];
+		if (!target) return;
+		// Clamp before reading: a tab removed while this pane was unfocused leaves
+		// its index out of range, and focusing would then show an empty pane.
+		if (target.activeTabIndex >= target.tabs.length) {
+			_panes[paneIndex].activeTabIndex = target.tabs.length - 1;
+		}
 		await unwatchFile();
 		_activePaneIndex = paneIndex;
-		const pane = _panes[paneIndex];
-		const tab = pane.activeTabIndex >= 0 ? pane.tabs[pane.activeTabIndex] : null;
+		const tab = activeTabOf(_panes[paneIndex]);
 		files.setActiveFile(tab?.path ?? null);
 		editor.setDirty(false);
 		if (tab?.type === 'markdown' && tab.path) await watchFile(tab.path);
@@ -528,7 +540,24 @@ export const panes = {
 
 	removePaths(path: string, isDir: boolean) {
 		for (let pi = 0; pi < _panes.length; pi++) {
-			_panes[pi].tabs = _panes[pi].tabs.filter((tab) => !pathMatches(tab.path, path, isDir));
+			const pane = _panes[pi];
+			const removed = pane.tabs.filter((tab) => pathMatches(tab.path, path, isDir));
+			if (removed.length === 0) continue;
+			revokeBlobUrls(removed);
+
+			// The active index has to be recomputed here: a stale index survives
+			// the filter, and every reader of this pane's active tab (focusPane,
+			// PaneView, the watcher) then sees an empty pane that isn't empty.
+			const active = pane.tabs[pane.activeTabIndex];
+			const tabs = pane.tabs.filter((tab) => !pathMatches(tab.path, path, isDir));
+			_panes[pi].tabs = tabs;
+			if (tabs.length === 0) {
+				_panes[pi].activeTabIndex = -1;
+			} else if (active && !pathMatches(active.path, path, isDir)) {
+				_panes[pi].activeTabIndex = tabs.indexOf(active);
+			} else {
+				_panes[pi].activeTabIndex = Math.min(Math.max(pane.activeTabIndex, 0), tabs.length - 1);
+			}
 		}
 	},
 
