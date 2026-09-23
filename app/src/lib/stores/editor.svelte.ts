@@ -106,5 +106,12 @@ export const editor = {
 	},
 	setTiptap(instance: Editor | null) {
 		tiptapInstance = instance;
+	},
+	/**
+	 * Drop the shared instance only if it is still `instance`: a hidden editor
+	 * deactivating must never unregister the one that just took its place.
+	 */
+	releaseTiptap(instance: Editor | null) {
+		if (instance && tiptapInstance === instance) tiptapInstance = null;
 	}
 };

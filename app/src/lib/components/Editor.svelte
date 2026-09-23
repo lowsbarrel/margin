@@ -134,10 +134,12 @@
 	let titleText = $state(untrack(() => initialTitle));
 	let tiptap = $state<Editor | null>(null);
 
+	// The store follows the active tab, not whoever mounted last: every markdown
+	// tab of every pane stays mounted, so an unconditional registration leaves it
+	// pointing at a hidden document.
 	$effect(() => {
-		if (active && tiptap) {
-			editorStore.setTiptap(tiptap);
-		}
+		if (active && tiptap) editorStore.setTiptap(tiptap);
+		else editorStore.releaseTiptap(tiptap);
 	});
 	let bubbleVisible = $state(false);
 	let bubblePositionToken = 0;
@@ -632,12 +634,11 @@
 			},
 			onFocus: () => {
 				updateBubbleMenu();
-				editorStore.setTiptap(inst);
+				if (active) editorStore.setTiptap(inst);
 			}
 		});
 
 		tiptap = inst;
-		editorStore.setTiptap(inst);
 	}
 
 	/**
@@ -829,9 +830,7 @@
 		sourceToken++;
 		source?.destroy();
 		source = null;
-		if (editorStore.tiptap === tiptap) {
-			editorStore.setTiptap(null);
-		}
+		editorStore.releaseTiptap(tiptap);
 		tiptap?.destroy();
 		tiptap = null;
 	});

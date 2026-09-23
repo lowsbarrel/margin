@@ -117,11 +117,15 @@
 			/>
 			<span class="text-hairline">·</span>
 		{/if}
-		<span class="tabular-nums">Ln {editor.cursorLine}, Col {editor.cursorCol}</span>
-		<span class="text-hairline">·</span>
+		{#if editor.tiptap}
+			<span class="tabular-nums"
+				>{m.statusbar_line_col({ line: editor.cursorLine, col: editor.cursorCol })}</span
+			>
+			<span class="text-hairline">·</span>
+		{/if}
 		<span class="tabular-nums">{m.statusbar_markdown()}</span>
 		<span class="text-hairline">·</span>
-		<span class="tabular-nums">UTF-8</span>
+		<span class="tabular-nums">{m.statusbar_encoding()}</span>
 	</div>
 
 	<div class="flex items-center gap-1.5">
@@ -233,7 +237,7 @@
 				title={m.statusbar_switch_vault()}
 			>
 				<ArrowLeftRight size={12} />
-				<span class="min-w-0 truncate">{vault.profileName || 'Vault'}</span>
+				<span class="min-w-0 truncate">{vault.profileName || m.statusbar_vault_fallback()}</span>
 			</button>
 		{/if}
 
