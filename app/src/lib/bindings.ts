@@ -4,154 +4,45 @@ import { invoke as __TAURI_INVOKE, Channel } from "@tauri-apps/api/core";
 
 /** Commands */
 export const commands = {
-	/**  Generate a new BIP-39 12-word mnemonic (128-bit entropy). */
 	generateMnemonic: () => typedError<string, string>(__TAURI_INVOKE("generate_mnemonic")),
-	/**
-	 *  Derive vault_id and encryption_key from a BIP-39 mnemonic.
-	 *  The derived key is intentionally held in JS (plaintext never is).
-	 */
 	deriveVaultKeys: (mnemonic: string) => typedError<VaultKeys, string>(__TAURI_INVOKE("derive_vault_keys", { mnemonic })),
 	setVaultDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("set_vault_directory", { path })),
 	listDirectory: (path: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("list_directory", { path })),
-	/**
-	 *  Recursively walk an entire directory tree in a single call, returning all
-	 *  entries (files and directories). Hidden entries (starting with `.`) are
-	 *  skipped unless `include_hidden` is true.
-	 */
 	walkDirectory: (root: string, includeHidden: boolean) => typedError<FsEntry[], string>(__TAURI_INVOKE("walk_directory", { root, includeHidden })),
-	/**
-	 *  Build a flat, sorted, depth-annotated list of every currently-visible
-	 *  tree row in a single native call.
-	 * 
-	 *  `hidden` holds absolute paths the tree must not render. Hiding lives here —
-	 *  in the rows the sidebar draws — and nowhere else: the walker, the watcher,
-	 *  sync, export and the filename index all still see the folder.
-	 */
 	buildVisibleTree: (root: string, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_visible_tree", { root, expanded, sortBy, hidden })),
-	/**
-	 *  Build the subtree for a single folder at a given depth offset.
-	 *  Used for incremental expand — avoids rebuilding the entire tree.
-	 */
 	buildSubtree: (folder: string, depthOffset: number, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_subtree", { folder, depthOffset, expanded, sortBy, hidden })),
 	deleteEntry: (path: string) => typedError<null, string>(__TAURI_INVOKE("delete_entry", { path })),
-	/**  Every item currently in the trash, newest deletion first. */
 	trashList: (vaultPath: string) => typedError<TrashItem[], string>(__TAURI_INVOKE("trash_list", { vaultPath })),
-	/**  Put a trashed entry back, returning the vault-relative path it landed on. */
 	trashRestore: (vaultPath: string, id: string) => typedError<string, string>(__TAURI_INVOKE("trash_restore", { vaultPath, id })),
-	/**  Remove one trashed item for good. */
 	trashDelete: (vaultPath: string, id: string) => typedError<null, string>(__TAURI_INVOKE("trash_delete", { vaultPath, id })),
-	/**  Remove every trashed item, returning how many went. */
 	trashEmpty: (vaultPath: string) => typedError<number, string>(__TAURI_INVOKE("trash_empty", { vaultPath })),
 	renameEntry: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("rename_entry", { from, to })),
 	createDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_directory", { path })),
 	fileExists: (path: string) => __TAURI_INVOKE<boolean>("file_exists", { path }),
 	fileMetadata: (path: string) => typedError<FileMetadata, string>(__TAURI_INVOKE("file_metadata", { path })),
 	copyFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_file", { from, to })),
-	/**
-	 *  Copy a file from an arbitrary source **outside** the vault into a
-	 *  vault-contained destination. Used by drag-drop / paste import flows where
-	 *  the user explicitly brings an external file (e.g. an image on the Desktop)
-	 *  into a note as an attachment. Only the *destination* is containment-checked;
-	 *  the source is user-chosen and may live anywhere — mirroring `save_file_bytes`,
-	 *  which writes to a user-picked path outside the vault.
-	 */
 	importExternalFile: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_file", { from, to })),
-	/**
-	 *  Copy a directory from an arbitrary source **outside** the vault into a
-	 *  vault-contained destination. The directory counterpart of
-	 *  [`import_external_file`], for a folder dropped onto the tree from a file
-	 *  manager: only the destination is containment-checked, because the source is
-	 *  user-chosen and may live anywhere.
-	 */
 	importExternalDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("import_external_directory", { from, to })),
-	/**
-	 *  Import a file from outside the vault as an attachment, named after its
-	 *  contents. The source is user-chosen and may live anywhere; only the
-	 *  destination is containment-checked, as in [`import_external_file`].
-	 */
 	importAttachment: (from: string, folder: string) => typedError<string, string>(__TAURI_INVOKE("import_attachment", { from, folder })),
-	/**
-	 *  Trash the attachments in `folder` that the app stored, no note refers to and
-	 *  nothing touched for a week. Runs by itself when a vault opens.
-	 */
 	sweepUnusedAttachments: (folder: string) => typedError<number, string>(__TAURI_INVOKE("sweep_unused_attachments", { folder })),
 	copyDirectory: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("copy_directory", { from, to })),
 	revealInFileManager: (path: string) => typedError<null, string>(__TAURI_INVOKE("reveal_in_file_manager", { path })),
-	/**
-	 *  Set the modification time of a file to a specific unix timestamp (seconds).
-	 * 
-	 *  `mtime` is a u32 (unix seconds) because specta forbids exporting u64 across
-	 *  the IPC boundary. Unix-second timestamps fit in u32 until 2106; the value is
-	 *  widened to i64 for `filetime` below.
-	 */
 	setMtime: (path: string, mtime: number) => typedError<null, string>(__TAURI_INVOKE("set_mtime", { path, mtime })),
 	watchFile: (path: string) => typedError<null, string>(__TAURI_INVOKE("watch_file", { path })),
 	unwatchFile: () => typedError<null, string>(__TAURI_INVOKE("unwatch_file")),
-	/**
-	 *  Watch the entire vault directory recursively. Emits `"vault-fs-changed"`
-	 *  immediately whenever a non-hidden file is created, modified or deleted.
-	 */
 	watchVault: (path: string) => typedError<null, string>(__TAURI_INVOKE("watch_vault", { path })),
 	unwatchVault: () => typedError<null, string>(__TAURI_INVOKE("unwatch_vault")),
-	/**
-	 *  Ranked filename search.
-	 * 
-	 *  This used to re-walk the whole vault from disk on every keystroke. It is now
-	 *  served from the in-memory vault tree in [`crate::index::tree`], which walks
-	 *  once and answers subsequent queries out of a prefix trie. Results come back
-	 *  ranked (name prefix → token prefix → substring → path → fuzzy) rather than
-	 *  merely alphabetical, so the caller can render them directly.
-	 */
 	searchFiles: (root: string, query: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("search_files", { root, query })),
 	replaceInFile: (path: string, search: string, replace: string, caseSensitive: boolean) => typedError<number, string>(__TAURI_INVOKE("replace_in_file", { path, search, replace, caseSensitive })),
 	exportVaultZip: (vaultPath: string, destPath: string) => typedError<null, string>(__TAURI_INVOKE("export_vault_zip", { vaultPath, destPath })),
-	/**
-	 *  Check whether the vault has local changes compared to the last-synced
-	 *  base manifest.
-	 * 
-	 *  Caches the result for up to 2 seconds to avoid repeated full vault walks
-	 *  when called in quick succession (e.g. on every vault-fs-changed event).
-	 */
 	hasUnsyncedChanges: (vaultPath: string, encryptionKey: number[]) => typedError<boolean, string>(__TAURI_INVOKE("has_unsynced_changes", { vaultPath, encryptionKey })),
-	/**
-	 *  Ranked full-text search over indexed note bodies and names. Returns up to
-	 *  `limit` hits ordered by FTS5 relevance (bm25).
-	 */
 	indexSearch: (root: string, query: string, limit: number) => typedError<SearchHit[], string>(__TAURI_INVOKE("index_search", { root, query, limit })),
-	/**
-	 *  Rebuild the index (skipping unchanged files) and return the indexed count.
-	 *  Called by the frontend on vault open and on `vault-fs-changed`.
-	 */
 	indexRebuild: (root: string) => typedError<number, string>(__TAURI_INVOKE("index_rebuild", { root })),
-	/**
-	 *  Every `#tag` in the vault, most-used first. Served from the index rather
-	 *  than a second walk of every `.md`.
-	 */
 	indexTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("index_tags", { root })),
-	/**
-	 *  The notes that link to `path`, by its filename stem — the same thing a
-	 *  `[[wiki-link]]` names. Matched case-insensitively, as link resolution is.
-	 */
 	indexBacklinks: (root: string, path: string) => typedError<Backlink[], string>(__TAURI_INVOKE("index_backlinks", { root, path })),
-	/**
-	 *  Store the endpoint config in Rust state. Called once when settings load and
-	 *  again on save, so the loop never needs the key from the frontend.
-	 */
 	llmConfigure: (config: LlmConfig) => typedError<null, string>(__TAURI_INVOKE("llm_configure", { config })),
-	/**
-	 *  The model ids the endpoint advertises. Takes a config rather than reading
-	 *  state because the settings form calls it before saving.
-	 */
 	llmListModels: (config: LlmConfig) => typedError<string[], string>(__TAURI_INVOKE("llm_list_models", { config })),
-	/**
-	 *  Answer `question` from the vault, streaming [`AskEvent`]s back over `on_event`.
-	 * 
-	 *  A provider or network failure arrives as `AskEvent::Error`, not as a rejected
-	 *  promise: the answer may be half-streamed, and the palette needs to keep what
-	 *  it already showed.
-	 */
 	llmAsk: (requestId: string, question: string, onEvent: Channel<AskEvent>) => typedError<null, string>(__TAURI_INVOKE("llm_ask", { requestId, question, onEvent })),
-	/**  Stop a running question. A no-op if the request already finished. */
 	llmCancel: (requestId: string) => typedError<null, string>(__TAURI_INVOKE("llm_cancel", { requestId })),
 	s3Configure: (config: S3Config) => typedError<null, string>(__TAURI_INVOKE("s3_configure", { config })),
 	s3GetConfig: () => typedError<{
@@ -164,9 +55,7 @@ export const commands = {
 	s3TestConnection: () => typedError<string, string>(__TAURI_INVOKE("s3_test_connection")),
 	s3List: (prefix: string) => typedError<string[], string>(__TAURI_INVOKE("s3_list", { prefix })),
 	s3Delete: (key: string) => typedError<null, string>(__TAURI_INVOKE("s3_delete", { key })),
-	/**  Save settings encrypted to disk at {vault_path}/.margin/settings.enc */
 	saveSettings: (vaultPath: string, encryptionKey: number[], settings: AppSettings) => typedError<null, string>(__TAURI_INVOKE("save_settings", { vaultPath, encryptionKey, settings })),
-	/**  Load settings from disk and decrypt */
 	loadSettings: (vaultPath: string, encryptionKey: number[]) => typedError<{
 	s3: S3Config | null,
 	attachment_folder?: string | null,
@@ -174,13 +63,9 @@ export const commands = {
 	conflict_strategy?: string | null,
 	llm?: LlmConfig | null,
 } | null, string>(__TAURI_INVOKE("load_settings", { vaultPath, encryptionKey })),
-	/**  Export all settings as an encrypted base64 string (portable) */
 	exportSettingsString: (encryptionKey: number[], settings: AppSettings) => typedError<string, string>(__TAURI_INVOKE("export_settings_string", { encryptionKey, settings })),
-	/**  Import settings from an encrypted base64 string */
 	importSettingsString: (encryptionKey: number[], encoded: string) => typedError<AppSettings, string>(__TAURI_INVOKE("import_settings_string", { encryptionKey, encoded })),
-	/**  Save workspace state encrypted to disk at {vault_path}/.margin/workspace.enc */
 	saveWorkspaceState: (vaultPath: string, encryptionKey: number[], state: WorkspaceState) => typedError<null, string>(__TAURI_INVOKE("save_workspace_state", { vaultPath, encryptionKey, state })),
-	/**  Load workspace state from disk and decrypt */
 	loadWorkspaceState: (vaultPath: string, encryptionKey: number[]) => typedError<{
 	panes: WorkspacePane[],
 	pane_flexes: (number | null)[],
@@ -192,134 +77,45 @@ export const commands = {
 	terminal_open?: boolean,
 	terminal_height?: number | null,
 } | null, string>(__TAURI_INVOKE("load_workspace_state", { vaultPath, encryptionKey })),
-	/**  Legacy compatibility: save_session now saves/updates a profile */
 	saveSession: (mnemonic: string, vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("save_session", { mnemonic, vaultPath })),
-	/**  Legacy compatibility: load_session returns the last-used profile */
 	loadSession: () => typedError<{
 	name: string,
 	mnemonic: string,
 	vault_path: string,
 } | null, string>(__TAURI_INVOKE("load_session")),
-	/**  Legacy compatibility: clear_session removes the last-used flag but keeps profiles */
 	clearSession: () => typedError<null, string>(__TAURI_INVOKE("clear_session")),
-	/**  Load all saved vault profiles */
 	loadVaultProfiles: () => typedError<VaultProfiles, string>(__TAURI_INVOKE("load_vault_profiles")),
-	/**  Save or update a vault profile. If a profile with the same vault_path exists, update it. */
 	saveVaultProfile: (profile: VaultProfile) => typedError<null, string>(__TAURI_INVOKE("save_vault_profile", { profile })),
-	/**  Delete a vault profile by vault_path */
 	deleteVaultProfile: (vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("delete_vault_profile", { vaultPath })),
-	/**  Save a snapshot of the given file content. */
 	saveSnapshot: (vaultPath: string, filePath: string, content: number[]) => typedError<string, string>(__TAURI_INVOKE("save_snapshot", { vaultPath, filePath, content })),
-	/**  List all snapshots for a given file, sorted newest-first. */
 	listSnapshots: (vaultPath: string, filePath: string) => typedError<Snapshot[], string>(__TAURI_INVOKE("list_snapshots", { vaultPath, filePath })),
-	/**  Read the content of a specific snapshot. */
 	readSnapshot: (vaultPath: string, filePath: string, snapshotFilename: string) => typedError<number[], string>(__TAURI_INVOKE("read_snapshot", { vaultPath, filePath, snapshotFilename })),
-	/**  Delete a specific snapshot. */
 	deleteSnapshot: (vaultPath: string, filePath: string, snapshotFilename: string) => typedError<null, string>(__TAURI_INVOKE("delete_snapshot", { vaultPath, filePath, snapshotFilename })),
-	/**
-	 *  Delete all snapshots for a given file. Returns the count as a u32 (not u64)
-	 *  so specta can export it; retention caps a note at `RETENTION_HARD_CAP`
-	 *  snapshots, so the count never approaches u32::MAX.
-	 */
 	clearSnapshots: (vaultPath: string, filePath: string) => typedError<number, string>(__TAURI_INVOKE("clear_snapshots", { vaultPath, filePath })),
-	/**  Move/rename the history directory when a file or directory is renamed. */
 	renameHistory: (vaultPath: string, oldPath: string, newPath: string) => typedError<null, string>(__TAURI_INVOKE("rename_history", { vaultPath, oldPath, newPath })),
-	/**
-	 *  Fast substring search on a flattened ProseMirror document.
-	 * 
-	 *  `text`        – the concatenated text content of every text node.
-	 *  `pm_offsets`  – parallel array: pm_offsets[i] is the ProseMirror position of text[i].
-	 *  `gaps`        – sorted indices into `text` where a block boundary exists
-	 *                  (i.e. pm_offsets[i] != pm_offsets[i-1] + 1). Matches that
-	 *                  span a gap are rejected.
-	 *  `needle`      – the search term.
-	 *  `case_sensitive` – whether to compare case-sensitively.
-	 * 
-	 *  Returns `(from, to)` pairs in ProseMirror position space.
-	 */
 	searchInText: (text: string, pmOffsets: number[], gaps: number[], needle: string, caseSensitive: boolean) => __TAURI_INVOKE<TextMatch[]>("search_in_text", { text, pmOffsets, gaps, needle, caseSensitive }),
-	/**
-	 *  Extract `[[title]]` wiki-links from a batch of ProseMirror text nodes.
-	 * 
-	 *  Each `TextNode` carries the node's text content and its ProseMirror start
-	 *  position. Returns `(from, to, title)` triples in PM position space.
-	 * 
-	 *  This replaces the per-node regex scan in JS — a single IPC call handles
-	 *  all text nodes at once.
-	 */
 	extractWikiLinks: (nodes: TextNode[]) => __TAURI_INVOKE<WikiLinkMatch[]>("extract_wiki_links", { nodes }),
 	fuzzyFilterFiles: (files: FuzzyEntry[], query: string, limit: number) => __TAURI_INVOKE<FuzzyEntry[]>("fuzzy_filter_files", { files, query, limit }),
-	/**  Compute SHA-256 hashes for a batch of files in parallel. */
 	hashFilesBatch: (vaultPath: string, paths: string[]) => typedError<string[], string>(__TAURI_INVOKE("hash_files_batch", { vaultPath, paths })),
-	/**  Load and decrypt the local base manifest, returning a default if missing. */
 	loadManifest: (vaultPath: string, encryptionKey: number[]) => typedError<Manifest_Serialize, string>(__TAURI_INVOKE("load_manifest", { vaultPath, encryptionKey })),
-	/**  Encrypt and atomically save the base manifest to disk. */
 	saveManifest: (vaultPath: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("save_manifest", { vaultPath, encryptionKey, manifest })),
-	/**  3-way diff: compare base, local, and remote manifests to produce sync actions. */
 	computeSyncActions: (baseFiles: ManifestEntry_Deserialize[], localFiles: ManifestEntry_Deserialize[], remoteFiles: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<SyncAction[]>("compute_sync_actions", { baseFiles, localFiles, remoteFiles }),
-	/**  Return only entries that have a `deleted_at` timestamp. */
 	collectTombstones: (files: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("collect_tombstones", { files }),
-	/**  Merge two tombstone lists, keeping the one with the later `deleted_at`. */
 	mergeTombstones: (a: ManifestEntry_Deserialize[], b: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("merge_tombstones", { a, b }),
-	/**
-	 *  Prune tombstones older than 90 days.
-	 * 
-	 *  `now_seconds` is a u32 (unix seconds) so specta can export it; widened to u64
-	 *  internally to match the manifest's `deleted_at` timestamps.
-	 */
 	pruneTombstones: (tombstones: ManifestEntry_Deserialize[], nowSeconds: number) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("prune_tombstones", { tombstones, nowSeconds }),
-	/**  Read, encrypt, and upload files to S3 in a single batch. */
 	syncUploadFiles: (vaultPath: string, s3Prefix: string, paths: string[], encryptionKey: number[]) => typedError<null, string>(__TAURI_INVOKE("sync_upload_files", { vaultPath, s3Prefix, paths, encryptionKey })),
-	/**
-	 *  Download, decrypt, and write files from S3 in a single batch.
-	 * 
-	 *  `paths` and `mtimes` are parallel arrays: after each file is written its
-	 *  modification time is set to `mtimes[i]` (Unix seconds) so the local mtime
-	 *  matches the manifest entry and the file is not seen as locally changed on
-	 *  the next sync. This folds the previously separate per-file `set_mtime` IPC
-	 *  call into this single batch command.
-	 * 
-	 *  `mtimes` are u32 unix seconds (specta cannot export u64); each is widened to
-	 *  u64 internally to match the manifest timestamps and `filetime`.
-	 */
 	syncDownloadFiles: (vaultPath: string, s3Prefix: string, paths: string[], mtimes: number[], encryptionKey: number[]) => typedError<string[], string>(__TAURI_INVOKE("sync_download_files", { vaultPath, s3Prefix, paths, mtimes, encryptionKey })),
-	/**  Encrypt and upload the manifest to S3. */
 	syncUploadManifest: (s3Prefix: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("sync_upload_manifest", { s3Prefix, encryptionKey, manifest })),
-	/**  Delete files from S3 by their relative paths (computes HMAC keys internally). */
 	syncDeleteFiles: (s3Prefix: string, paths: string[], encryptionKey: number[]) => typedError<null, string>(__TAURI_INVOKE("sync_delete_files", { s3Prefix, paths, encryptionKey })),
-	/**
-	 *  Map a relative vault path to an opaque S3 object key.
-	 *  Uses HMAC-SHA256 with the encryption key to derive a deterministic 32-char
-	 *  hex identifier. Same path always maps to same key — no lookup table needed.
-	 */
 	pathToS3Key: (relPath: string, encryptionKey: number[]) => __TAURI_INVOKE<string>("path_to_s3_key", { relPath, encryptionKey }),
-	/**
-	 *  Start a shell in the open vault. `on_output` streams the terminal and
-	 *  `on_exit` fires once with the shell's exit code.
-	 */
 	ptySpawn: (id: number, cols: number, rows: number, onOutput: Channel<string>, onExit: Channel<number>) => typedError<null, string>(__TAURI_INVOKE("pty_spawn", { id, cols, rows, onOutput, onExit })),
-	/**
-	 *  Send keystrokes to a shell. Control characters (Ctrl+C, Ctrl+D) travel this
-	 *  way rather than as signals.
-	 */
 	ptyWrite: (id: number, data: string) => typedError<null, string>(__TAURI_INVOKE("pty_write", { id, data })),
-	/**  Tell the kernel (and through it the shell) that the window changed size. */
 	ptyResize: (id: number, cols: number, rows: number) => typedError<null, string>(__TAURI_INVOKE("pty_resize", { id, cols, rows })),
-	/**
-	 *  Close one shell. Dropping the session closes the master, which hangs up the
-	 *  terminal's foreground process group — the shell's own children included.
-	 */
 	ptyKill: (id: number) => typedError<null, string>(__TAURI_INVOKE("pty_kill", { id })),
-	/**  Close every shell — used when a vault is locked or the window goes away. */
 	ptyKillAll: () => typedError<null, string>(__TAURI_INVOKE("pty_kill_all")),
 };
 
 /* Types */
-/**
- *  The provider's wire protocol. Every OpenAI-compatible and Anthropic-compatible
- *  endpoint speaks one of these two, so the format — not the vendor — picks the
- *  request shape, the auth header and the SSE event vocabulary.
- */
 export type ApiFormat = "openai" | "anthropic";
 
 export type AppSettings = {
@@ -330,36 +126,16 @@ export type AppSettings = {
 	llm?: LlmConfig | null,
 };
 
-/**  Everything the palette learns about a running question, in order. */
-export type AskEvent = 
-/**  A tool is about to run, with a one-line human summary of what for. */
-{ type: "tool"; name: string; summary: string } | 
-/**  A fragment of the answer as the model streams it. */
-{ type: "delta"; text: string } | { type: "done" } | 
-/**  The provider refused, or the stream broke. */
-{ type: "error"; status: number | null; message: string };
+export type AskEvent = { type: "tool"; name: string; summary: string } | { type: "delta"; text: string } | { type: "done" } | { type: "error"; status: number | null; message: string };
 
-/**  A note that links *to* the one being viewed. */
 export type Backlink = {
 	path: string,
 	name: string,
 };
 
-/**
- *  How much reasoning the model may spend before answering.
- * 
- *  `None` on [`LlmConfig`] means the field is not sent at all — the provider's
- *  own default, and the only setting that keeps working on models which reject
- *  reasoning parameters outright.
- */
 export type Effort = "low" | "medium" | "high";
 
-/**
- *  Size and mtime of one vault file. Viewers that only describe a file (no
- *  canvas, no text) use this instead of reading bytes they will never draw.
- */
 export type FileMetadata = {
-	/**  Bytes. f64 because specta refuses a u64 across the IPC boundary. */
 	size: number | null,
 	modified: number,
 };
@@ -368,7 +144,6 @@ export type FsEntry = {
 	name: string,
 	is_dir: boolean,
 	path: string,
-	/**  Seconds since UNIX epoch (file modification time). 0 if unavailable. */
 	modified: number,
 };
 
@@ -421,23 +196,15 @@ export type S3Config = {
 	secret_key: string,
 };
 
-/**  One ranked search result (a whole note, best matches first). */
 export type SearchHit = {
 	path: string,
 	name: string,
-	/**
-	 *  Plain-text excerpt around the best match, for display (highlighted on
-	 *  the frontend). Empty for filename-only matches.
-	 */
 	snippet: string,
 };
 
 export type Snapshot = {
-	/**  Filename of the snapshot (e.g. "1712928000123.md") */
 	filename: string,
-	/**  Unix timestamp (seconds) when the snapshot was taken */
 	timestamp: number,
-	/**  Size of the snapshot in bytes */
 	size: number,
 };
 
@@ -446,7 +213,6 @@ export type SyncAction = {
 	path: string,
 };
 
-/**  A `#tag` and the notes carrying it. */
 export type TagInfo = {
 	tag: string,
 	count: number,
@@ -460,33 +226,23 @@ export type TextMatch = {
 
 export type TextNode = {
 	text: string,
-	/**  ProseMirror position of the first character of this text node. */
 	pos: number,
 };
 
-/**  A deleted entry, as the trash dialog lists it. */
 export type TrashItem = {
-	/**
-	 *  The item's directory name under `.margin/trash` — the handle the UI
-	 *  passes back to restore or purge it.
-	 */
 	id: string,
 	name: string,
-	/**  Vault-relative path the entry had before it was deleted. */
 	path: string,
 	is_dir: boolean,
-	/**  Unix milliseconds (f64 because specta cannot export u64). */
 	deleted_at: number | null,
 	has_history: boolean,
 };
 
-/**  A single row in the file tree, pre-sorted and depth-annotated. */
 export type TreeEntry = {
 	name: string,
 	path: string,
 	is_dir: boolean,
 	modified: number,
-	/**  Nesting depth (0 = vault root level). */
 	depth: number,
 };
 

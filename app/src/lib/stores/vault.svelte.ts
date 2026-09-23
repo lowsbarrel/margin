@@ -42,7 +42,6 @@ export const vault = {
 	},
 
 	unlock(keys: VaultKeys, vaultPath: string, mnemonic?: string, profileName?: string) {
-		// Normalise to forward slashes for cross-platform path matching
 		const normalised = vaultPath.replaceAll('\\', '/');
 		state.isUnlocked = true;
 		state.vaultId = keys.vault_id;

@@ -1,11 +1,6 @@
-//! Which provider answers `?` questions, and where.
-
 use serde::{Deserialize, Serialize};
 use std::fmt;
 
-/// The provider's wire protocol. Every OpenAI-compatible and Anthropic-compatible
-/// endpoint speaks one of these two, so the format — not the vendor — picks the
-/// request shape, the auth header and the SSE event vocabulary.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum ApiFormat {
@@ -22,11 +17,6 @@ impl ApiFormat {
     }
 }
 
-/// How much reasoning the model may spend before answering.
-///
-/// `None` on [`LlmConfig`] means the field is not sent at all — the provider's
-/// own default, and the only setting that keeps working on models which reject
-/// reasoning parameters outright.
 #[derive(Serialize, Deserialize, Clone, Copy, Debug, PartialEq, Eq, specta::Type)]
 #[serde(rename_all = "lowercase")]
 pub enum Effort {
@@ -36,7 +26,6 @@ pub enum Effort {
 }
 
 impl Effort {
-    /// The wire spelling, shared by both formats.
     pub fn as_str(self) -> &'static str {
         match self {
             Effort::Low => "low",
@@ -58,14 +47,12 @@ pub struct LlmConfig {
     pub effort: Option<Effort>,
 }
 
-/// Hand-written Debug that redacts the key, mirroring [`crate::s3::S3Config`]:
-/// `AppSettings` derives Debug, so without this any `{:?}` of the settings would
-/// print the API key in plaintext.
 impl fmt::Debug for LlmConfig {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("LlmConfig")
             .field("api_format", &self.api_format)
             .field("base_url", &self.base_url)
+            // AppSettings derives Debug, so the key must be redacted or {:?} prints it in plaintext.
             .field("api_key", &"<redacted>")
             .field("model", &self.model)
             .field("effort", &self.effort)
@@ -73,13 +60,6 @@ impl fmt::Debug for LlmConfig {
     }
 }
 
-/// Canonical base for both the models list and the chat endpoint.
-///
-/// Trailing slashes are dropped so `{base}/chat/completions` never doubles up;
-/// an Anthropic base gets `/v1` appended because the Messages API lives under it,
-/// while a base that already spells `/v1` is left alone (both
-/// `https://api.anthropic.com` and `https://api.anthropic.com/v1` are what people
-/// paste). An empty value falls back to the format's default host.
 pub fn normalize_base_url(format: ApiFormat, raw: &str) -> String {
     let trimmed = raw.trim().trim_end_matches('/');
     let base = if trimmed.is_empty() {
@@ -99,8 +79,6 @@ pub fn normalize_base_url(format: ApiFormat, raw: &str) -> String {
     }
 }
 
-/// Reject a config the user could only have typed by hand wrongly. Returns the
-/// normalized base URL so callers never re-derive it.
 pub fn validate(config: &LlmConfig) -> Result<String, String> {
     if config.model.trim().is_empty() {
         return Err("Model must not be empty".into());
@@ -108,8 +86,6 @@ pub fn validate(config: &LlmConfig) -> Result<String, String> {
     validate_endpoint(config)
 }
 
-/// The endpoint half of [`validate`]: listing models is how the user picks one,
-/// so it cannot require a model yet.
 pub fn validate_endpoint(config: &LlmConfig) -> Result<String, String> {
     let base = normalize_base_url(config.api_format, &config.base_url);
     let parsed = reqwest::Url::parse(&base).map_err(|e| format!("Invalid base URL: {e}"))?;
@@ -160,7 +136,6 @@ mod tests {
             normalize_base_url(ApiFormat::Openai, "https://api.openai.com/v1/"),
             "https://api.openai.com/v1"
         );
-        // A local server whose OpenAI-compatible routes live under /v1.
         assert_eq!(
             normalize_base_url(ApiFormat::Openai, " http://localhost:11434/v1 "),
             "http://localhost:11434/v1"

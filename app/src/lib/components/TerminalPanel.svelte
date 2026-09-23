@@ -5,6 +5,7 @@
 	import { Plus, X, ChevronDown } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
+	// Never unmounted while closed: each mounted TerminalView owns a live PTY and its scrollback.
 	let resizing = $state(false);
 
 	function startResize(e: MouseEvent) {
@@ -14,7 +15,6 @@
 		const startHeight = terminals.height;
 
 		function onMove(ev: MouseEvent) {
-			// The handle sits on the panel's top edge, so dragging up grows it.
 			terminals.height = startHeight + (startY - ev.clientY);
 		}
 		function onUp() {
@@ -27,8 +27,6 @@
 	}
 </script>
 
-<!-- The panel stays mounted while closed so its shells — and their scrollback —
-     survive a toggle: `hidden` only takes it out of the layout. -->
 <div
 	class="relative flex shrink-0 flex-col border-t border-border bg-surface-1"
 	class:hidden={!terminals.open}

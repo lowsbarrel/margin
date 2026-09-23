@@ -1,14 +1,12 @@
 <script lang="ts">
 	import { motion } from '$lib/stores/motion.svelte';
 
-	/* Older copies fan out from the same bottom edge, the way versions stack up
-	   behind the note you are looking at. */
-	const VERSIONS = [-10, 0, 10];
+	const TILTS = [-10, 0, 10];
 </script>
 
 <div class="art" class:reduced={motion.reduced}>
 	<svg viewBox="0 0 200 130" aria-hidden="true">
-		{#each VERSIONS as tilt, i (i)}
+		{#each TILTS as tilt, i (i)}
 			<g class="version" style="--i: {i}; --tilt: {tilt}">
 				<rect class="sheet" x="44" y="40" width="54" height="68" rx="5" />
 				<line class="sheet-line" x1="56" y1="56" x2="86" y2="56" />

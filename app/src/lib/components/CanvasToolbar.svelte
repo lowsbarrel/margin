@@ -15,6 +15,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import type { Tool } from '$lib/canvas/types';
 	import { colorPresets } from '$lib/canvas/types';
+	import { swatchClass, toolButtonClass } from './canvas/control-classes';
 
 	interface Props {
 		tool: Tool;
@@ -37,31 +38,6 @@
 		onZoomOut,
 		onResetView
 	}: Props = $props();
-
-	// `p-0` / `rounded-xs` are restated rather than inherited: app.css's
-	// `@layer base` button rule gives every bare <button> 8px/14px padding and an
-	// 8px radius, which would inflate these 30px icon buttons.
-	const TOOL_BTN =
-		'flex size-7.5 min-h-7.5 min-w-7.5 shrink-0 items-center justify-center rounded-xs bg-transparent p-0 [transition:background_var(--transition-fast),color_var(--transition-fast)]';
-
-	// Active and hover states are emitted as alternatives rather than stacked,
-	// mirroring the original CSS where `.active` was declared after `:hover` and
-	// therefore won on an active button being hovered.
-	const toolBtnCls = (active: boolean) =>
-		`${TOOL_BTN} ${
-			active
-				? 'bg-surface-2 text-foreground'
-				: 'text-subtle-foreground hover:bg-surface-3 hover:text-foreground'
-		}`;
-
-	// `box-content` keeps the 2px ring outside the 18px dot, as the original
-	// `box-sizing: content-box` did. The transition names `scale` rather than
-	// `transform` because Tailwind's `scale-*` sets the `scale` property.
-	const SWATCH =
-		'size-4.5 min-h-4.5 min-w-4.5 shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
-
-	const swatchCls = (active: boolean) =>
-		`${SWATCH} ${active ? 'border-foreground scale-115' : 'border-transparent hover:scale-120'}`;
 </script>
 
 {#snippet sep()}
@@ -73,21 +49,21 @@
 >
 	<div class="flex shrink-0 items-center gap-0.5">
 		<button
-			class={toolBtnCls(tool === 'hand')}
+			class={toolButtonClass(tool === 'hand')}
 			onclick={() => (tool = 'hand')}
 			title={m.canvas_hand()}
 		>
 			<Hand size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'pen')}
+			class={toolButtonClass(tool === 'pen')}
 			onclick={() => (tool = 'pen')}
 			title={m.canvas_pen()}
 		>
 			<Pencil size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'eraser')}
+			class={toolButtonClass(tool === 'eraser')}
 			onclick={() => (tool = 'eraser')}
 			title={m.canvas_eraser()}
 		>
@@ -95,35 +71,35 @@
 		</button>
 		{@render sep()}
 		<button
-			class={toolBtnCls(tool === 'rect')}
+			class={toolButtonClass(tool === 'rect')}
 			onclick={() => (tool = 'rect')}
 			title={m.canvas_rect()}
 		>
 			<Square size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'ellipse')}
+			class={toolButtonClass(tool === 'ellipse')}
 			onclick={() => (tool = 'ellipse')}
 			title={m.canvas_ellipse()}
 		>
 			<Circle size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'line')}
+			class={toolButtonClass(tool === 'line')}
 			onclick={() => (tool = 'line')}
 			title={m.canvas_line()}
 		>
 			<Minus size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'arrow')}
+			class={toolButtonClass(tool === 'arrow')}
 			onclick={() => (tool = 'arrow')}
 			title={m.canvas_arrow()}
 		>
 			<ArrowUpRight size={16} />
 		</button>
 		<button
-			class={toolBtnCls(tool === 'text')}
+			class={toolButtonClass(tool === 'text')}
 			onclick={() => (tool = 'text')}
 			title={m.canvas_text()}
 		>
@@ -135,9 +111,8 @@
 
 	<div class="flex shrink-0 items-center gap-0.75">
 		{#each colorPresets as c (c)}
-			<!-- `style:background` is canvas data (the pen colour), not theming. -->
 			<button
-				class={swatchCls(penColor === c)}
+				class={swatchClass(penColor === c)}
 				style:background={c}
 				onclick={() => (penColor = c)}
 				title={c}
@@ -166,16 +141,16 @@
 	{@render sep()}
 
 	<div class="flex shrink-0 items-center gap-0.5">
-		<button class={toolBtnCls(false)} onclick={onZoomIn} title={m.canvas_zoom_in()}>
+		<button class={toolButtonClass(false)} onclick={onZoomIn} title={m.canvas_zoom_in()}>
 			<ZoomIn size={14} />
 		</button>
 		<span class="min-w-9 shrink-0 text-center text-xs text-subtle-foreground"
 			>{Math.round(zoom * 100)}%</span
 		>
-		<button class={toolBtnCls(false)} onclick={onZoomOut} title={m.canvas_zoom_out()}>
+		<button class={toolButtonClass(false)} onclick={onZoomOut} title={m.canvas_zoom_out()}>
 			<ZoomOut size={14} />
 		</button>
-		<button class={toolBtnCls(false)} onclick={onResetView} title={m.canvas_reset_view()}>
+		<button class={toolButtonClass(false)} onclick={onResetView} title={m.canvas_reset_view()}>
 			<RotateCcw size={14} />
 		</button>
 	</div>

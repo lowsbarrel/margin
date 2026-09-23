@@ -5,10 +5,8 @@
 	import { cn } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages.js';
 
-	/* One hint line and the load-models result share this; only the colour differs. */
 	const HINT = 'm-0 font-sans text-xs italic text-subtle-foreground';
 
-	/** What the two formats' own hosts are, so switching format is one click. */
 	const DEFAULT_BASE: Record<ApiFormat, string> = {
 		openai: 'https://api.openai.com/v1',
 		anthropic: 'https://api.anthropic.com'
@@ -34,7 +32,6 @@
 	let loadingModels = $state(false);
 	let modelsError = $state('');
 
-	/** A list loaded from one endpoint must not be offered against another. */
 	function clearModels() {
 		models = [];
 		modelsError = '';
@@ -47,7 +44,6 @@
 		clearModels();
 	}
 
-	/** The empty option is the absence of an effort, not a fourth level. */
 	function handleEffortChange(event: Event) {
 		const value = (event.target as HTMLSelectElement).value;
 		effort = value === '' ? null : (value as Effort);
@@ -74,9 +70,6 @@
 
 <Section title={m.settings_ai_title()} icon={Sparkles} collapsible defaultOpen={false}>
 	<Field label={m.settings_ai_format()} forId="aiFormat">
-		<!-- The `@layer base` rule for `select` supplies the font, tracking and the
-		     brand focus glow; these utilities restate only what the old
-		     `.select-field` class overrode on top of it. -->
 		<select
 			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
 			id="aiFormat"
@@ -103,8 +96,6 @@
 	</Field>
 
 	<Field label={m.settings_ai_model()} forId="aiModel">
-		<!-- A datalist rather than a select: hosted routers list hundreds of models,
-		     so the field stays typeable and filters the loaded list as you type. -->
 		<Input
 			id="aiModel"
 			bind:value={model}

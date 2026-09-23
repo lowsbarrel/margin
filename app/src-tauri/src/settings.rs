@@ -19,7 +19,6 @@ pub struct AppSettings {
     pub llm: Option<LlmConfig>,
 }
 
-/// Save settings encrypted to disk at {vault_path}/.margin/settings.enc
 #[tauri::command]
 #[specta::specta]
 pub fn save_settings(
@@ -39,7 +38,6 @@ pub fn save_settings(
     Ok(())
 }
 
-/// Load settings from disk and decrypt
 #[tauri::command]
 #[specta::specta]
 pub fn load_settings(
@@ -59,7 +57,6 @@ pub fn load_settings(
     Ok(Some(settings))
 }
 
-/// Export all settings as an encrypted base64 string (portable)
 #[tauri::command]
 #[specta::specta]
 pub fn export_settings_string(
@@ -71,9 +68,8 @@ pub fn export_settings_string(
     Ok(B64.encode(&encrypted))
 }
 
-/// Validate that imported settings contain plausible values.
 fn validate_settings(settings: &AppSettings) -> Result<(), String> {
-    if let Some(ref s3) = settings.s3 {
+    if let Some(s3) = &settings.s3 {
         if s3.endpoint.trim().is_empty() {
             return Err("S3 endpoint must not be empty".into());
         }
@@ -90,7 +86,7 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
             return Err("S3 secret key must not be empty".into());
         }
     }
-    if let Some(ref strategy) = settings.conflict_strategy
+    if let Some(strategy) = &settings.conflict_strategy
         && strategy != "local_wins"
         && strategy != "keep_newer"
     {
@@ -102,7 +98,6 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
     Ok(())
 }
 
-/// Import settings from an encrypted base64 string
 #[tauri::command]
 #[specta::specta]
 pub fn import_settings_string(
@@ -119,22 +114,17 @@ pub fn import_settings_string(
     Ok(settings)
 }
 
-// ─── Workspace state persistence ─────────────────────────────────────────────
-
+// workspace.enc files already on disk are encrypted blobs: a new field without #[serde(default)] stops every existing one from loading.
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct WorkspaceTab {
     pub path: String,
     #[serde(rename = "type")]
     pub tab_type: String,
-    // `#[serde(default)]` keeps workspace.enc files written before these fields
-    // existed loadable — they decode as an unpinned tab with no saved cursor.
     #[serde(default)]
     pub pinned: bool,
-    // Which surface the tab was last on: "rich" or "source". Older workspaces
-    // decode it as the empty string, which the frontend reads as "rich".
+    // "rich" or "source"; an older workspace decodes the empty string, which the frontend reads as "rich".
     #[serde(default)]
     pub view_mode: String,
-    // ProseMirror document position of the caret, restored on next launch.
     #[serde(default)]
     pub cursor_pos: Option<u32>,
 }
@@ -155,15 +145,12 @@ pub struct WorkspaceState {
     pub sidebar_open: bool,
     pub sidebar_width: f64,
     pub sort_order: String,
-    // Terminal panel visibility and height. `#[serde(default)]` keeps
-    // workspace.enc files written before the panel existed loadable.
     #[serde(default)]
     pub terminal_open: bool,
     #[serde(default)]
     pub terminal_height: f64,
 }
 
-/// Save workspace state encrypted to disk at {vault_path}/.margin/workspace.enc
 #[tauri::command]
 #[specta::specta]
 pub fn save_workspace_state(
@@ -183,7 +170,6 @@ pub fn save_workspace_state(
     Ok(())
 }
 
-/// Load workspace state from disk and decrypt
 #[tauri::command]
 #[specta::specta]
 pub fn load_workspace_state(
@@ -207,8 +193,6 @@ pub fn load_workspace_state(
 mod tests {
     use super::*;
 
-    /// Workspaces are encrypted blobs already on users' disks; a new field
-    /// without `#[serde(default)]` would make every existing one fail to load.
     #[test]
     fn workspace_tab_decodes_without_newer_fields() {
         let json = r#"{"path":"a.md","type":"markdown","pinned":true}"#;
@@ -234,9 +218,6 @@ mod tests {
         assert_eq!(back.cursor_pos, Some(12));
     }
 
-    /// A workspace file written before the sidebar dropped its view switcher still
-    /// carries `sidebar_view`. It must keep loading: serde ignores the field the
-    /// struct no longer declares.
     #[test]
     fn workspace_state_ignores_the_removed_sidebar_view_field() {
         let json = r#"{

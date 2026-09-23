@@ -3,10 +3,6 @@ import type { Node as PMNode } from '@tiptap/pm/model';
 import type MermaidApi from 'mermaid';
 import * as m from '$lib/paraglide/messages.js';
 
-/**
- * Minimal structural type for the tiptap-markdown serializer state we touch.
- * markdown-it@14 ships no bundled .d.ts; we declare only what we use.
- */
 interface MarkdownSerializerState {
 	write(content: string): void;
 	closeBlock(node: PMNode): void;
@@ -14,8 +10,6 @@ interface MarkdownSerializerState {
 
 let renderSeq = 0;
 
-// mermaid is a large dependency, so it is loaded on demand the first time a
-// diagram renders rather than eagerly at editor (and app) startup.
 let mermaidPromise: Promise<typeof MermaidApi> | null = null;
 
 async function loadMermaid(): Promise<typeof MermaidApi> {
@@ -35,7 +29,6 @@ async function loadMermaid(): Promise<typeof MermaidApi> {
 	return mermaidPromise;
 }
 
-/** Render `code` into `target` as an SVG diagram, swallowing render errors. */
 async function renderInto(target: HTMLElement, code: string): Promise<void> {
 	if (!code.trim()) {
 		target.innerHTML = '';
@@ -48,7 +41,6 @@ async function renderInto(target: HTMLElement, code: string): Promise<void> {
 	const id = `mmd-${++renderSeq}`;
 	try {
 		const mermaid = await loadMermaid();
-		// parse() validates without leaving an orphan DOM node on failure
 		await mermaid.parse(code);
 		const { svg } = await mermaid.render(id, code);
 		target.innerHTML = svg;
@@ -81,7 +73,7 @@ export const Mermaid = Node.create({
 	isolating: true,
 	selectable: true,
 	draggable: true,
-	// Beat CodeBlockLowlight when parsing a ```mermaid fence from markdown.
+	// Beat CodeBlockLowlight when parsing a ```mermaid fence out of markdown.
 	priority: 200,
 
 	addAttributes() {
@@ -97,8 +89,6 @@ export const Mermaid = Node.create({
 		return [
 			{ tag: 'div[data-type="mermaid"]' },
 			{
-				// ```mermaid fences round-trip through markdown-it as
-				// <pre><code class="language-mermaid">…</code></pre>
 				tag: 'pre',
 				preserveWhitespace: 'full',
 				getAttrs: (el) => {
@@ -158,7 +148,6 @@ export const Mermaid = Node.create({
 				autoResize(input);
 			}
 
-			// Inserted empty (e.g. from slash menu) → open editor on next frame.
 			let openRafId: number | null = null;
 			if (!node.attrs.code) {
 				openRafId = requestAnimationFrame(() => {
@@ -245,8 +234,6 @@ export const Mermaid = Node.create({
 					state.write(`\`\`\`mermaid\n${node.attrs.code || ''}\n\`\`\``);
 					state.closeBlock(node);
 				}
-				// No parse setup needed: the default markdown-it fence renderer emits
-				// <pre><code class="language-mermaid">, which parseHTML() claims.
 			}
 		};
 	}

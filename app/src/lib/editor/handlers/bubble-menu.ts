@@ -1,7 +1,6 @@
 import type { Editor } from '@tiptap/core';
 import { computePosition, flip, offset, shift } from '@floating-ui/dom';
 
-/** Toggle `is-active` class on toolbar buttons based on editor state */
 export function updateBubbleButtons(editor: Editor, menuEl: HTMLElement): void {
 	menuEl.querySelectorAll<HTMLButtonElement>('[data-cmd]').forEach((btn) => {
 		const cmd = btn.dataset.cmd!;
@@ -9,7 +8,6 @@ export function updateBubbleButtons(editor: Editor, menuEl: HTMLElement): void {
 	});
 }
 
-/** Get selection bounding rect from DOM or editor view coordinates */
 export function getSelectionRect(view: Editor['view'], from: number, to: number): DOMRect | null {
 	const selection = window.getSelection();
 	if (selection && selection.rangeCount > 0) {
@@ -32,10 +30,6 @@ export function getSelectionRect(view: Editor['view'], from: number, to: number)
 	});
 }
 
-/**
- * Position and show/hide the bubble toolbar using @floating-ui/dom.
- * Returns an object with { x, y } if the menu should be shown, or null to hide.
- */
 export async function positionBubbleMenu(
 	editor: Editor,
 	menuEl: HTMLElement

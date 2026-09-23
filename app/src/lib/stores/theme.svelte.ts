@@ -1,16 +1,3 @@
-/**
- * Theme controller.
- *
- * Margin ships exactly one design system (see `$lib/styles/tokens.css`); the
- * only thing that varies is which semantic pairing is active. Setting
- * `data-theme` on `<html>` re-resolves every `--color-*` token at once, so
- * there is nothing else to apply.
- *
- * User-authored custom themes were removed deliberately: they let arbitrary
- * colours bypass the token system's contrast pairings, which is the one thing
- * a single coherent design system cannot tolerate.
- */
-
 type BaseTheme = 'dark' | 'light';
 
 const STORAGE_KEY = 'margin-theme';

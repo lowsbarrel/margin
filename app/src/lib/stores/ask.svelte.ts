@@ -2,7 +2,6 @@ import { llmAsk, llmCancel, llmConfigure, type AskEvent } from '$lib/ai/bridge';
 import { loadSettings } from '$lib/settings/bridge';
 import { vault } from '$lib/stores/vault.svelte';
 
-/** One tool invocation the answer used, as shown in the palette trace. */
 export interface AskStep {
 	name: string;
 	summary: string;
@@ -13,7 +12,6 @@ interface AskState {
 	answer: string;
 	error: string | null;
 	running: boolean;
-	/** `null` until the config has been checked for the current vault. */
 	configured: boolean | null;
 }
 
@@ -26,15 +24,8 @@ const state = $state<AskState>({
 });
 
 let requestId: string | null = null;
-/** The vault whose LLM config has already been handed to Rust state. */
 let configuredFor: string | null = null;
 
-/**
- * Point Rust at the vault's saved endpoint, once per vault.
- *
- * The config lives in state rather than being passed with each question so the
- * key crosses the IPC boundary on settings load rather than on every ask.
- */
 async function ensureConfigured(): Promise<boolean> {
 	if (!vault.vaultPath || !vault.encryptionKey) {
 		state.configured = false;
@@ -93,22 +84,17 @@ async function sendQuestion(question: string): Promise<void> {
 	requestId = id;
 	try {
 		await llmAsk(id, trimmed, (event) => {
-			// Ignore events from a request the user has already abandoned: a
-			// cancelled stream keeps delivering for a moment.
 			if (requestId !== id) return;
 			apply(event);
 		});
 	} catch (err) {
 		if (requestId === id) state.error = String(err);
 	} finally {
-		// The id is kept, not cleared: the channel's last deltas can arrive
-		// after the command's promise resolves, and dropping them would truncate
-		// the answer. Only `cancel` abandons an id.
+		// Late channel deltas can outlive the command's promise, so the id stays set.
 		if (requestId === id) state.running = false;
 	}
 }
 
-/** Esc: stop the stream. The partial answer stays on screen. */
 async function cancel(): Promise<void> {
 	const id = requestId;
 	if (!id) return;
@@ -127,7 +113,6 @@ function reset(): void {
 	state.error = null;
 }
 
-/** Called by the settings form once it has pushed (or removed) a config. */
 function markConfigured(configured: boolean): void {
 	state.configured = configured;
 	configuredFor = configured ? vault.vaultPath : null;

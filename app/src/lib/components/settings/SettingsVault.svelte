@@ -7,9 +7,6 @@
 	import * as m from '$lib/paraglide/messages.js';
 
 	let showPassphrase = $state(false);
-	// Seeded from the store and re-seeded whenever the active vault's name
-	// changes, but still writable so the <Input> can bind to it while editing
-	// (a writable $derived, not $state mirrored by an effect).
 	let editingVaultName = $derived(vault.profileName ?? '');
 
 	async function handleSaveVaultName() {

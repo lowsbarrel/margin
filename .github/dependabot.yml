@@ -1,18 +1,15 @@
 version: 2
 updates:
-  # Keeps the SHA-pinned actions in ci.yml and release.yml up to date.
   - package-ecosystem: github-actions
     directory: /
     schedule:
       interval: weekly
     cooldown:
       default-days: 7
-    # Conventional Commits, so Dependabot PRs pass the CI conventions gate.
     commit-message:
       prefix: chore
       include: scope
 
-  # npm updates observe the same one-week cooldown as bunfig's minimumReleaseAge.
   - package-ecosystem: npm
     directory: /app
     schedule:

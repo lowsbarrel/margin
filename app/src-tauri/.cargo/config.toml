@@ -1,13 +1,5 @@
-# Cargo configuration for the Margin backend crate.
-# (cargo-audit reads the sibling `audit.toml`; this file is for cargo itself.)
-
-# Report future-incompatibility notices on every build rather than once, so a
-# dependency about to stop compiling is visible while there is still time.
 [future-incompat-report]
 frequency = "always"
 
-# The merge-gating lint, runnable by hand exactly as CI runs it
-# (`.github/workflows/ci.yml`, job `rust`). "It passed locally" then means the
-# same thing as "it passed in CI".
 [alias]
 lint = "clippy --all-targets -- -D warnings"

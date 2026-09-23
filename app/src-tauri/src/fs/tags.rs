@@ -1,5 +1,3 @@
-/// Extract `#tag` tokens from markdown content. Called while a note is being
-/// indexed — the `tags` table is the only tag scan in the app.
 pub(crate) fn extract_tags_from_content(content: &str) -> Vec<String> {
     let mut tags = Vec::new();
     let mut in_code_block = false;
@@ -12,16 +10,8 @@ pub(crate) fn extract_tags_from_content(content: &str) -> Vec<String> {
             in_code_block = !in_code_block;
             continue;
         }
-        if in_code_block {
+        if in_code_block || is_heading(bytes) {
             continue;
-        }
-
-        // Skip markdown headings (# Heading, ## Heading, …)
-        if bytes.first() == Some(&b'#') {
-            let hash_end = bytes.iter().position(|&b| b != b'#').unwrap_or(bytes.len());
-            if hash_end >= bytes.len() || bytes[hash_end] == b' ' {
-                continue;
-            }
         }
 
         let mut i = 0usize;
@@ -57,4 +47,12 @@ pub(crate) fn extract_tags_from_content(content: &str) -> Vec<String> {
     }
 
     tags
+}
+
+fn is_heading(bytes: &[u8]) -> bool {
+    if bytes.first() != Some(&b'#') {
+        return false;
+    }
+    let hashes = bytes.iter().take_while(|&&b| b == b'#').count();
+    bytes.get(hashes).is_none_or(|&b| b == b' ')
 }

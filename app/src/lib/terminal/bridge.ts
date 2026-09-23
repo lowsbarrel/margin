@@ -1,20 +1,11 @@
 import { Channel } from '@tauri-apps/api/core';
 import { commands } from '$lib/bindings';
 
-/**
- * What a running terminal needs delivered: bytes from the shell and, once, the
- * exit code when it ends.
- */
 export interface TerminalStream {
 	onOutput: (text: string) => void;
 	onExit: (code: number) => void;
 }
 
-/**
- * Start a shell in the open vault. `on_output`/`on_exit` are Tauri channels, so
- * output streams without a listener registration of its own; the id is the
- * frontend's terminal tab id and keys every later call.
- */
 export async function ptySpawn(
 	id: number,
 	cols: number,

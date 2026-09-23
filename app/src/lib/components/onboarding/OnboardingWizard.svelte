@@ -44,16 +44,20 @@
 		if (canAdvance) go(step + 1);
 	}
 
+	function isTextEntry(target: EventTarget | null) {
+		return (
+			target instanceof HTMLInputElement ||
+			target instanceof HTMLTextAreaElement ||
+			(target instanceof HTMLElement && target.isContentEditable)
+		);
+	}
+
+	function activatesOnEnter(target: EventTarget | null) {
+		return target instanceof HTMLElement && target.tagName === 'BUTTON';
+	}
+
 	function handleKey(e: KeyboardEvent) {
-		// Carets live in these steps: arrows and Enter belong to the field while
-		// it has focus.
-		const el = e.target;
-		if (
-			el instanceof HTMLInputElement ||
-			el instanceof HTMLTextAreaElement ||
-			(el instanceof HTMLElement && el.isContentEditable)
-		)
-			return;
+		if (isTextEntry(e.target)) return;
 
 		if (e.key === 'Escape') {
 			if (!onExit) return;
@@ -62,8 +66,7 @@
 			return;
 		}
 
-		const onControl = el instanceof HTMLElement && el.tagName === 'BUTTON';
-		if (e.key === 'Enter' && onControl) return;
+		if (e.key === 'Enter' && activatesOnEnter(e.target)) return;
 
 		if (e.key === 'Enter' || e.key === 'ArrowRight') {
 			if (isLast) return;

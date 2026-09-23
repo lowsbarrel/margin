@@ -7,22 +7,12 @@ import {
 } from '$lib/editor/image-url';
 import { DEFAULT_ATTACHMENT_FOLDER } from '$lib/editor/attachments';
 
-/**
- * The one home for converting image destinations between what a note stores on
- * disk (vault-relative, percent-encoded) and what the editor and the WebView
- * need (`localfile://` URLs). Rust used to own the resolve half, which left the
- * synchronous save path and the transclusion path running a second, subtly
- * different implementation; both halves live here now.
- */
-
 const LEGACY_LOCALFILE_PREFIX = 'localfile://localhost';
 
-/** Characters CommonMark accepts bare inside a `(…)` destination. */
 const SAFE_DESTINATION = /[A-Za-z0-9\-_.~/]/;
 
 const PERCENT_ESCAPE = /%([0-9A-Fa-f]{2})/g;
 
-/** Decode the percent-escapes in a destination back to the path it names. */
 export function decodeDestination(path: string): string {
 	if (!path.includes('%')) return path;
 	const decoder = new TextDecoder();
@@ -37,12 +27,7 @@ export function decodeDestination(path: string): string {
 	return decoder.decode(Uint8Array.from(bytes));
 }
 
-/**
- * Percent-encode a path for a Markdown destination. A space is invalid there
- * and a `)` would end the destination early, so a note whose file name has
- * either would not round-trip. Already-escaped input is decoded first, so
- * encoding the same path twice changes nothing.
- */
+// A space is invalid in a Markdown destination and a `)` ends it early; already-escaped input is decoded first.
 export function encodeDestination(path: string): string {
 	const bytes = new TextEncoder().encode(decodeDestination(path));
 	let out = '';
@@ -55,7 +40,6 @@ export function encodeDestination(path: string): string {
 	return out;
 }
 
-/** Convert wiki image embeds `![[file.png]]` to standard markdown syntax. */
 export function resolveWikiEmbeds(md: string, attachmentFolder: string | null): string {
 	const folder = attachmentFolder || DEFAULT_ATTACHMENT_FOLDER;
 	let result = '';
@@ -91,8 +75,6 @@ export function resolveWikiEmbeds(md: string, attachmentFolder: string | null): 
 	return result;
 }
 
-/** Unescape `!\[alt\](url)` — what the serializer emits once a destination with
- * a bare space made markdown-it parse the image as plain text. */
 function unescapeImageMarkdown(md: string): string {
 	if (!md.includes('!\\[')) return md;
 	let result = '';
@@ -107,8 +89,6 @@ function unescapeImageMarkdown(md: string): string {
 		result += md.slice(pos, start);
 		const altStart = start + 3;
 
-		// The close may itself be escaped (`\]`), and `\x` pairs must be skipped
-		// so an escaped bracket inside the alt text does not end it early.
 		let i = altStart;
 		let altEnd = -1;
 		let skip = 1;
@@ -139,16 +119,11 @@ function unescapeImageMarkdown(md: string): string {
 	return result;
 }
 
-/**
- * Rewrite a legacy `localfile://localhost` image URL to the scheme form this
- * platform's WebView can actually resolve.
- */
 function rewriteLegacyLocalfileUrls(md: string): string {
 	if (!md.includes(LEGACY_LOCALFILE_PREFIX)) return md;
 	return md.replaceAll(LEGACY_LOCALFILE_PREFIX, LOCALFILE_URL_PREFIX);
 }
 
-/** Encode the spaces inside any localfile URL (image or link). */
 function encodeSpacesInLocalfileUrls(md: string): string {
 	if (!md.includes(`](${LEGACY_LOCALFILE_PREFIX}`) && !md.includes(`](${LOCALFILE_URL_PREFIX}`)) {
 		return md;
@@ -156,8 +131,6 @@ function encodeSpacesInLocalfileUrls(md: string): string {
 	return mapDestinations(md, (url) => (isLocalfileUrl(url) ? url.replaceAll(' ', '%20') : null));
 }
 
-/** Scan `![alt](url)` and rewrite each image for which `transform` returns a
- * replacement. `![[…]]` embeds are left alone — they are not images yet. */
 function mapImageLinks(md: string, transform: (alt: string, url: string) => string | null): string {
 	let result = '';
 	let pos = 0;
@@ -194,8 +167,6 @@ function mapImageLinks(md: string, transform: (alt: string, url: string) => stri
 	return result;
 }
 
-/** Scan the destination of every `](…)` and rewrite it where `transform`
- * returns a replacement. Covers plain links as well as images. */
 function mapDestinations(md: string, transform: (url: string) => string | null): string {
 	let result = '';
 	let pos = 0;
@@ -222,12 +193,6 @@ function mapDestinations(md: string, transform: (url: string) => string | null):
 	return result;
 }
 
-/**
- * Convert relative image destinations in markdown to `localfile://` URLs the
- * WebView can load. Repairs what older builds wrote on the way: a
- * `localfile://localhostC:` URL missing its slash, an escaped `![`, and a URL
- * form this platform cannot resolve.
- */
 export function resolveImagePaths(md: string, vaultPath: string | null): string {
 	if (!vaultPath) return md;
 
@@ -242,14 +207,11 @@ export function resolveImagePaths(md: string, vaultPath: string | null): string 
 
 	return mapImageLinks(prepared, (alt, url) => {
 		if (url === '' || /^(https?:\/\/|data:|localfile:\/\/)/.test(url)) return null;
-		// The destination is already the on-disk spelling (percent-encoded); the
-		// URL keeps it, so a `(` in a file name never reaches the URL text.
 		const absPath = url.startsWith('/') ? `${vaultPath}${url}` : `${vaultPath}/${url}`;
 		return `![${alt}](${buildLocalfileUrl(absPath)})`;
 	});
 }
 
-/** Convert `localfile://` image URLs back to vault-relative destinations. */
 export function unresolveImagePaths(md: string, vaultPath: string | null): string {
 	if (!vaultPath) return md;
 
@@ -265,8 +227,7 @@ export function unresolveImagePaths(md: string, vaultPath: string | null): strin
 	});
 }
 
-/** One spelling of an absolute path: leading slash present, trailing one gone.
- * The localfile URL and the vault root disagree about the leading slash. */
+// The localfile URL and the vault root disagree about a leading slash, so both spellings normalise here.
 function normalizeAbsolute(path: string): string {
 	const withLead = path.startsWith('/') ? path : `/${path}`;
 	return withLead.length > 1 ? withLead.replace(/\/+$/, '') : withLead;

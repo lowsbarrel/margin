@@ -1,11 +1,9 @@
 * text=auto eol=lf
 
-# Generated — collapse in diffs and exclude from language stats.
 app/bun.lock              -diff linguist-generated
 app/src-tauri/Cargo.lock  -diff linguist-generated
 app/src/lib/bindings.ts   linguist-generated
 
-# Binary assets.
 *.png   binary
 *.jpg   binary
 *.ico   binary

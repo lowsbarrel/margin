@@ -2,8 +2,6 @@
 	import { onDestroy, onMount } from 'svelte';
 	import type { Terminal } from '@xterm/xterm';
 	import type { FitAddon } from '@xterm/addon-fit';
-	// The stylesheet carries no JS, so it is safe at module scope; the packages
-	// themselves are browser-only and load on mount.
 	import '@xterm/xterm/css/xterm.css';
 	import { terminals, type TerminalTab } from '$lib/stores/terminals.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
@@ -23,8 +21,7 @@
 	function fitTerminal() {
 		const el = hostEl;
 		const fitAddon = fit;
-		// A hidden panel measures 0×0, and fitting to that would resize the grid
-		// to nothing. The observer fires again once the panel is shown.
+		// FitAddon measures this padded host, so the inset stays on it and a hidden 0×0 panel is never fit.
 		if (!el || !fitAddon || el.clientWidth === 0 || el.clientHeight === 0) return;
 		fitAddon.fit();
 	}
@@ -35,7 +32,6 @@
 		try {
 			await navigator.clipboard.writeText(text);
 		} catch (err) {
-			// A refused write must not look like a successful copy.
 			console.warn('Failed to copy the terminal selection:', err);
 			toast.error(m.terminal_copy_failed());
 		}
@@ -60,10 +56,7 @@
 		term = terminal;
 		fit = fitAddon;
 
-		// The host owns the clipboard: xterm keeps no DOM selection, so the
-		// browser's own copy shortcut has nothing to copy. A selection means
-		// "copy"; without one the key stays the shell's — Ctrl+C is SIGINT, and
-		// Cmd+C sends nothing either way.
+		// Ctrl+C copies only a selection; Ctrl+V must fall through to xterm's paste, not ^V.
 		terminal.attachCustomKeyEventHandler((event) => {
 			if (!event.metaKey && !event.ctrlKey) return true;
 			if (event.altKey) return true;
@@ -75,15 +68,11 @@
 				return false;
 			}
 
-			// Otherwise Ctrl+V sends ^V, which readline reads as quoted-insert
-			// instead of pasting. Returning false leaves the browser's own paste
-			// event to xterm's handler, which writes it to the shell.
 			if (key === 'v' && event.ctrlKey && !event.metaKey && !event.shiftKey) return false;
 
 			return true;
 		});
 
-		// Handlers first: the shell can print before spawn resolves.
 		terminal.onData((data) => {
 			if (tab.exited !== null || tab.error) return;
 			void ptyWrite(tab.id, data).catch(() => {});
@@ -128,8 +117,6 @@
 </script>
 
 <div class="relative h-full w-full bg-background">
-	<!-- Padding lives on the element xterm fits against: FitAddon measures this
-	     box's content width, so the columns stay correct with the inset. -->
 	<div
 		class="h-full w-full"
 		style="padding: var(--space-sm) var(--space-md)"

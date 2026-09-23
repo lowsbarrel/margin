@@ -17,15 +17,13 @@ import {
 } from '$lib/fs/bridge';
 import { createUniqueFilePath } from '$lib/utils/sidebar-ops';
 import { renameHistory } from '$lib/history/bridge';
-import { flushEditorWrites } from '$lib/fs/writeQueue';
+import { flushEditorWrites } from '$lib/fs/write-queue';
 import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
 
 export async function handleRename(oldPath: string, newPath: string, isDir = false) {
 	if (!vault.vaultPath || oldPath === newPath) return;
 	try {
-		// The editor may still be holding a debounced save for the old path. Land
-		// it before the move, or the queued write recreates the file at the old
-		// path once the rename has already happened.
+		// A queued save for the old path would recreate the file there once the rename has landed.
 		await flushEditorWrites();
 		await unwatchFile();
 
@@ -48,12 +46,7 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
 			throw err;
 		}
 
-		// Ordering invariant: the filesystem rename (and its history counterpart)
-		// has already succeeded above, so the entry IS renamed on disk. The
-		// following steps only reconcile in-memory stores and watchers; a failure
-		// in any of them must not abort the rest (which would leave stores stale)
-		// and must not re-throw (which would surface a "rename failed" error to the
-		// caller even though the rename itself succeeded).
+		// The rename has already landed on disk: reconcile the stores, and never re-throw from here.
 		try {
 			panes.remapPaths(oldPath, newPath, isDir);
 			files.remapPaths(oldPath, newPath, isDir);
@@ -75,7 +68,6 @@ export async function handleRename(oldPath: string, newPath: string, isDir = fal
 	}
 }
 
-/** Drop every tab, active-file pointer and selected folder that refers to `path`. */
 function forgetEntry(path: string, isDir: boolean) {
 	panes.removePaths(path, isDir);
 	if (
@@ -106,10 +98,6 @@ export async function handleDelete(path: string, isDir: boolean) {
 	}
 }
 
-/**
- * Close what an OS drag moved out of the vault. The file manager performed the
- * move, so only the app's view of it changes. Returns the entries still on disk.
- */
 export async function reconcileMovedOut(
 	entries: { path: string; isDir: boolean }[]
 ): Promise<{ path: string; isDir: boolean }[]> {
@@ -127,10 +115,6 @@ export async function reconcileMovedOut(
 	return remaining;
 }
 
-/**
- * Folder a new note or folder lands in: the selected folder, else the folder of
- * the active file, else the vault root.
- */
 export function newEntryFolder(): string | null {
 	if (files.selectedFolder) return files.selectedFolder;
 	const active = files.activeFile;
@@ -144,7 +128,6 @@ export async function ensureFolderExpanded(path: string) {
 	await files.expandFolder(path);
 }
 
-/** Create an empty note (or canvas, when `desiredName` names one) and open it. */
 export async function handleNewNote(folder?: string, desiredName?: string) {
 	const base = folder ?? newEntryFolder();
 	const vaultPath = vault.vaultPath;
@@ -161,7 +144,6 @@ export async function handleNewNote(folder?: string, desiredName?: string) {
 	await panes.openFile(path);
 }
 
-/** Start the inline "new folder" input inside `folder`. */
 export async function handleNewFolder(folder?: string) {
 	const base = folder ?? newEntryFolder();
 	if (!base || !vault.vaultPath) return;

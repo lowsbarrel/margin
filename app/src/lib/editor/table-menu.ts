@@ -1,6 +1,3 @@
-// Floating menu for the table row/column grips. Built from plain DOM because it
-// is opened by a ProseMirror plugin, which has no Svelte component to mount into.
-
 import { computePosition, flip, offset, shift, type Placement } from '@floating-ui/dom';
 
 import { getTableUiLayer, releaseTableUiLayer } from './table-ui-layer';
@@ -20,6 +17,22 @@ interface OpenTableMenuOptions {
 	items: TableMenuItem[];
 	placement?: Placement;
 	onclose?: (reason: TableMenuCloseReason) => void;
+}
+
+function pointReference(x: number, y: number): { getBoundingClientRect: () => DOMRect } {
+	return {
+		getBoundingClientRect: () =>
+			({
+				x,
+				y,
+				top: y,
+				bottom: y,
+				left: x,
+				right: x,
+				width: 0,
+				height: 0
+			}) as DOMRect
+	};
 }
 
 let closeCurrentMenu: ((reason: TableMenuCloseReason) => void) | null = null;
@@ -48,8 +61,7 @@ export function openTableMenu({
 	menu.setAttribute('aria-label', label);
 	menu.tabIndex = -1;
 
-	// Keeping the default on mousedown would blur the editor before the item runs;
-	// the table commands read `state.selection`, which must still be the grip's.
+	// The default would blur the editor before the item runs, and the item's command reads the grip's selection.
 	menu.addEventListener('mousedown', (event) => event.preventDefault());
 
 	const buttons: HTMLButtonElement[] = [];
@@ -110,24 +122,7 @@ export function openTableMenu({
 	document.addEventListener('mousedown', onDocumentMouseDown, true);
 	document.addEventListener('keydown', onDocumentKeyDown, true);
 
-	// A point anchor (click coordinates) is expressed as a zero-size rect; floating-ui
-	// otherwise reads a live element's box.
-	const reference: HTMLElement | { getBoundingClientRect: () => DOMRect } =
-		anchor instanceof HTMLElement
-			? anchor
-			: {
-					getBoundingClientRect: () =>
-						({
-							x: anchor.x,
-							y: anchor.y,
-							top: anchor.y,
-							bottom: anchor.y,
-							left: anchor.x,
-							right: anchor.x,
-							width: 0,
-							height: 0
-						}) as DOMRect
-				};
+	const reference = anchor instanceof HTMLElement ? anchor : pointReference(anchor.x, anchor.y);
 
 	computePosition(reference, menu, {
 		strategy: 'fixed',

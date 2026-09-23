@@ -3,12 +3,6 @@ import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Node as PMNode, NodeType } from '@tiptap/pm/model';
 import { extractWikiLinks, type TextNode } from '$lib/fs/bridge';
 
-/**
- * Minimal structural types for the tiptap-markdown serializer state and the
- * markdown-it inline plugin surface we touch. markdown-it@14 ships no bundled
- * .d.ts and @types/markdown-it is not a dependency, so we declare just the
- * members used here instead of falling back to `any`.
- */
 interface MarkdownSerializerState {
 	write(content: string): void;
 }
@@ -97,11 +91,9 @@ const WikiLink = Node.create({
 		];
 	},
 
-	/** Convert plain-text [[title]] to WikiLink nodes on first mount */
 	onCreate() {
 		const nodeType = this.type;
 		const editor = this.editor;
-		// Defer so the editor view is fully ready to accept transactions
 		setTimeout(() => {
 			convertWikiLinksAsync(editor, nodeType);
 		}, 0);
@@ -114,13 +106,11 @@ const WikiLink = Node.create({
 		return [
 			new Plugin({
 				key: pluginKey,
-				// After setContent (external file reload), convert any plain-text [[title]]
 				appendTransaction(transactions, _oldState, _newState) {
 					const isSetContent = transactions.some(
 						(tr) => tr.docChanged && tr.getMeta('addToHistory') === false
 					);
 					if (!isSetContent) return null;
-					// Kick off async Rust extraction — can't return a tr synchronously
 					convertWikiLinksAsync(editorRef, nodeType);
 					return null;
 				}
@@ -144,15 +134,9 @@ const WikiLink = Node.create({
 	}
 });
 
-/**
- * Monotonic token used to coalesce overlapping conversions. Both onCreate and
- * appendTransaction can fire in quick succession (e.g. on file reload); without
- * this, two overlapping extractWikiLinks IPC calls could resolve against a doc
- * that changed in between, applying stale from/to positions.
- */
+// onCreate and appendTransaction can fire together; a stale resolve would apply from/to on a changed doc.
 let convertVersion = 0;
 
-/** Collect text nodes from the PM doc and send them to Rust for wiki-link extraction. */
 async function convertWikiLinksAsync(editor: Editor, nodeType: NodeType) {
 	const version = ++convertVersion;
 	const capturedDoc = editor.state.doc;
@@ -168,14 +152,10 @@ async function convertWikiLinksAsync(editor: Editor, nodeType: NodeType) {
 	try {
 		const replacements = await extractWikiLinks(nodes);
 		if (replacements.length === 0) return;
-		// Verify the editor is still alive.
 		if (!editor.view || editor.isDestroyed) return;
-		// Bail if a newer conversion was started, or the doc changed between
-		// dispatch and resolution (positions would now be stale).
 		if (version !== convertVersion) return;
 		if (editor.state.doc !== capturedDoc) return;
 		const tr = editor.state.tr;
-		// Apply end→start so earlier positions aren't shifted
 		for (let i = replacements.length - 1; i >= 0; i--) {
 			const { from, to, title } = replacements[i];
 			tr.replaceWith(from, to, nodeType.create({ title }));
@@ -183,7 +163,7 @@ async function convertWikiLinksAsync(editor: Editor, nodeType: NodeType) {
 		tr.setMeta('addToHistory', false);
 		editor.view.dispatch(tr);
 	} catch {
-		// IPC failed — silently degrade, links stay as plain text
+		return;
 	}
 }
 
@@ -194,9 +174,9 @@ function wikiLinkPlugin(md: MarkdownIt) {
 		const max = state.posMax;
 
 		if (pos + 3 > max) return false;
-		if (pos > 0 && src.charCodeAt(pos - 1) === 0x21) return false; // skip ![[
-		if (src.charCodeAt(pos) !== 0x5b) return false; // [
-		if (src.charCodeAt(pos + 1) !== 0x5b) return false; // [
+		if (pos > 0 && src.charCodeAt(pos - 1) === 0x21) return false;
+		if (src.charCodeAt(pos) !== 0x5b) return false;
+		if (src.charCodeAt(pos + 1) !== 0x5b) return false;
 
 		const closePos = src.indexOf(']]', pos + 2);
 		if (closePos === -1 || closePos >= max) return false;

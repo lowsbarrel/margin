@@ -14,7 +14,6 @@
 
 	interface Props {
 		onclose: () => void;
-		/** Called with the vault-relative path an item was restored onto. */
 		onrestored?: (path: string) => void;
 	}
 
@@ -22,7 +21,6 @@
 
 	let items = $state<TrashItem[]>([]);
 	let loading = $state(true);
-	/** The item awaiting a second click, or 'all' for the Empty trash button. */
 	let confirming = $state<string | null>(null);
 	let busyId = $state<string | null>(null);
 	let emptying = $state(false);
@@ -99,7 +97,6 @@
 		}
 	}
 
-	/** Vault-relative folder an item sat in, e.g. "notes/sub" ("" for the root). */
 	function folderOf(path: string): string {
 		const cut = path.lastIndexOf('/');
 		return cut === -1 ? '' : path.slice(0, cut);

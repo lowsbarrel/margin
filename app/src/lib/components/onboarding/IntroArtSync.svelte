@@ -2,8 +2,6 @@
 	import { motion } from '$lib/stores/motion.svelte';
 </script>
 
-<!-- The arrow draws towards the bucket, then the lock drops onto it: encryption
-     happens here, before anything leaves. -->
 <div class="art" class:reduced={motion.reduced}>
 	<svg viewBox="0 0 200 130" aria-hidden="true">
 		<rect class="note" x="22" y="42" width="46" height="54" rx="6" />

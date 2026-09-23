@@ -2,6 +2,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import type { Tool } from '$lib/canvas/types';
 	import { colorPresets, sizePresets } from '$lib/canvas/types';
+	import { MENU_ITEM, menuItemClass, sizeButtonClass, swatchClass } from './canvas/control-classes';
 
 	interface Props {
 		x: number;
@@ -24,39 +25,6 @@
 		onClearAll,
 		onClose
 	}: Props = $props();
-
-	// Padding, radius, border and font-size are restated throughout this file
-	// because app.css's `@layer base` rule styles every bare <button>; these
-	// utilities sit in `@layer utilities` and so override it.
-	const ITEM =
-		'block w-full rounded-xs bg-transparent px-2.5 py-1.5 text-left text-sm [transition:background_var(--transition-fast),color_var(--transition-fast)]';
-
-	// Active/hover are alternatives rather than stacked, mirroring the original
-	// CSS where `.active` was declared after `:hover` and so won when an active
-	// row was hovered.
-	const itemCls = (active: boolean) =>
-		`${ITEM} hover:bg-surface-3 hover:text-foreground ${
-			active ? 'text-foreground' : 'text-muted-foreground'
-		}`;
-
-	// `box-content` keeps the 2px ring outside the 18px dot, as the original
-	// `box-sizing: content-box` did. The transition names `scale` rather than
-	// `transform` because Tailwind's `scale-*` sets the `scale` property.
-	const SWATCH =
-		'size-4.5 min-h-4.5 min-w-4.5 shrink-0 box-content rounded-full border-2 p-0 shadow-[inset_0_0_0_1px_var(--color-border-strong)] [transition:border-color_var(--transition-fast),scale_var(--transition-fast)]';
-
-	const swatchCls = (active: boolean) =>
-		`${SWATCH} ${active ? 'border-foreground scale-115' : 'border-transparent hover:scale-120'}`;
-
-	const SIZE_BTN =
-		'size-7 min-h-7 min-w-7 rounded-xs border bg-transparent p-0 text-xs [transition:background_var(--transition-fast),color_var(--transition-fast),border-color_var(--transition-fast)]';
-
-	const sizeBtnCls = (active: boolean) =>
-		`${SIZE_BTN} ${
-			active
-				? 'border-foreground bg-surface-2 text-foreground'
-				: 'border-border text-muted-foreground hover:bg-surface-3'
-		}`;
 </script>
 
 {#snippet sectionLabel(text: string)}
@@ -79,7 +47,7 @@
 >
 	{@render sectionLabel(m.canvas_tool())}
 	<button
-		class={itemCls(tool === 'pen')}
+		class={menuItemClass(tool === 'pen')}
 		onclick={() => {
 			tool = 'pen';
 			onClose();
@@ -89,7 +57,7 @@
 		{m.canvas_pen()}
 	</button>
 	<button
-		class={itemCls(tool === 'eraser')}
+		class={menuItemClass(tool === 'eraser')}
 		onclick={() => {
 			tool = 'eraser';
 			onClose();
@@ -99,7 +67,7 @@
 		{m.canvas_eraser()}
 	</button>
 	<button
-		class={itemCls(tool === 'text')}
+		class={menuItemClass(tool === 'text')}
 		onclick={() => {
 			tool = 'text';
 			onClose();
@@ -113,9 +81,8 @@
 	{@render sectionLabel(m.canvas_color())}
 	<div class="flex max-w-40 flex-wrap gap-1 px-2 py-1">
 		{#each colorPresets as c (c)}
-			<!-- `style:background` is canvas data (the pen colour), not theming. -->
 			<button
-				class={swatchCls(penColor === c)}
+				class={swatchClass(penColor === c)}
 				style:background={c}
 				onclick={() => {
 					penColor = c;
@@ -131,7 +98,7 @@
 	<div class="flex flex-wrap gap-0.75 px-2 py-1">
 		{#each sizePresets as s (s)}
 			<button
-				class={sizeBtnCls(currentSize === s)}
+				class={sizeButtonClass(currentSize === s)}
 				onclick={() => {
 					onSizeChange(s);
 					onClose();
@@ -143,13 +110,8 @@
 	</div>
 	{@render sep()}
 
-	<!--
-		The destructive row keeps its own colour on hover: in the original CSS
-		`.ctx-item.danger` was declared after `.ctx-item:hover`, so hovering only
-		changed the background. Hence no `hover:text-foreground` here.
-	-->
 	<button
-		class="{ITEM} text-destructive hover:bg-destructive/10"
+		class="{MENU_ITEM} text-destructive hover:bg-destructive/10"
 		onclick={onClearAll}
 		role="menuitem"
 	>

@@ -7,7 +7,6 @@ import { toast } from '$lib/stores/toast.svelte';
 import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import * as m from '$lib/paraglide/messages.js';
 
-/** Resolve a src attribute (localfile URL or relative) to an absolute path */
 export function resolveAbsPath(src: string, vaultPath: string | null): string | null {
 	if (isLocalfileUrl(src)) {
 		const tail = stripLocalfilePrefix(src) ?? '';
@@ -30,13 +29,11 @@ export interface ClickHandlerOptions {
 	onWikiLink?: (title: string) => void;
 }
 
-/** Handle left-click on images (lightbox), wiki-links, file-embeds, and anchors */
 export function handleEditorClick(
 	event: MouseEvent,
 	container: HTMLElement,
 	opts: ClickHandlerOptions
 ): void {
-	// Image click → lightbox
 	const img = (event.target as HTMLElement).closest('.editor-wrap img') as HTMLImageElement | null;
 	if (img && container?.contains(img)) {
 		event.preventDefault();
@@ -46,7 +43,6 @@ export function handleEditorClick(
 		return;
 	}
 
-	// Wiki-link click → open the linked note
 	const wikiEl = (event.target as HTMLElement).closest('[data-wiki-link]') as HTMLElement | null;
 	if (wikiEl && container?.contains(wikiEl)) {
 		const linkTitle = wikiEl.getAttribute('data-title');
@@ -59,7 +55,6 @@ export function handleEditorClick(
 		return;
 	}
 
-	// File-embed click → open with default app
 	const embed = (event.target as HTMLElement).closest('.file-embed') as HTMLElement | null;
 	if (embed && container?.contains(embed)) {
 		const src = embed.getAttribute('data-src');
@@ -102,7 +97,6 @@ export interface ContextMenuOptions {
 	onLightbox: (src: string, alt: string) => void;
 }
 
-/** Build context menu items for images, file-embeds, and table cells */
 export function buildEditorContextMenu(
 	event: MouseEvent,
 	container: HTMLElement,
@@ -173,14 +167,12 @@ export function buildEditorContextMenu(
 		}
 	}
 
-	// Table cell context menu
 	const tableCell = (event.target as HTMLElement).closest('td, th') as HTMLElement | null;
 	const tableEl = tableCell?.closest('table');
 	if (tableCell && tableEl && container?.contains(tableEl)) {
 		if (!editor) return null;
 
-		// Right-clicking a cell from elsewhere has to move the selection there
-		// first: every command below acts on the cell the selection sits in.
+		// Every command below acts on the cell the selection sits in, so a right-click from elsewhere moves it there first.
 		const view = editor.view;
 		const hit = view.posAtCoords({ left: event.clientX, top: event.clientY });
 		if (hit != null) {

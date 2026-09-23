@@ -1,10 +1,3 @@
-//! Interactive terminals: real PTYs owned by Rust, streamed to the webview.
-//!
-//! The frontend drives an xterm.js instance; everything that touches a file
-//! descriptor happens here. Output travels over a Tauri `Channel` in chunks
-//! that are always complete UTF-8 sequences, so a multi-byte character is
-//! never split between two messages.
-
 use crate::fs::VaultPathState;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtyPair, PtySize, native_pty_system};
 use std::collections::HashMap;
@@ -12,9 +5,6 @@ use std::io::{Read, Write};
 use std::sync::{Arc, Mutex};
 use tauri::ipc::Channel;
 
-/// Ceiling for one IPC message. Tauri hands JSON payloads of up to 8192 bytes
-/// straight to the webview through `eval`; keeping chunks at half that leaves
-/// room for quoting and keeps every message off the slower `fetch` path.
 const MAX_MESSAGE: usize = 4096;
 
 pub(crate) struct Session {
@@ -23,7 +13,6 @@ pub(crate) struct Session {
     killer: Box<dyn ChildKiller + Send + Sync>,
 }
 
-/// Live PTYs, keyed by the id the frontend allocates per terminal tab.
 pub struct TerminalState(pub(crate) Arc<Mutex<HashMap<u32, Session>>>);
 
 impl TerminalState {
@@ -38,8 +27,6 @@ impl Default for TerminalState {
     }
 }
 
-/// A PTY size, never zero: a window mid-layout can report a zero-sized box and
-/// the kernel rejects it.
 fn size(cols: u16, rows: u16) -> PtySize {
     PtySize {
         rows: rows.max(1),
@@ -49,19 +36,11 @@ fn size(cols: u16, rows: u16) -> PtySize {
     }
 }
 
-/// The user's own shell. `new_default_prog` resolves `$SHELL` (falling back to
-/// the password database) and on unix runs it as a login shell by prefixing
-/// argv0 with `-`, which is how a GUI-launched app gets the PATH that
-/// `/etc/zprofile`'s `path_helper` builds — without it Homebrew is missing.
-/// On Windows it resolves `%COMSPEC%`.
+// On unix this runs $SHELL as a login shell (argv0 prefixed with `-`), which is what gives a GUI-launched app the PATH path_helper builds.
 fn default_shell() -> CommandBuilder {
     CommandBuilder::new_default_prog()
 }
 
-/// Length of the longest prefix of `bytes` that is valid UTF-8. An error with
-/// no `error_len` is an unterminated sequence at the very end of the buffer —
-/// the only case held back for the next read. Bytes that are invalid in any
-/// way are kept so they surface as U+FFFD rather than stalling the stream.
 fn complete_prefix_len(bytes: &[u8]) -> usize {
     match std::str::from_utf8(bytes) {
         Ok(_) => bytes.len(),
@@ -72,9 +51,6 @@ fn complete_prefix_len(bytes: &[u8]) -> usize {
     }
 }
 
-/// Append `bytes` to `pending` and take every complete UTF-8 sequence out of
-/// it, capped at [`MAX_MESSAGE`]. Whatever is left is a partial character
-/// waiting for its continuation bytes.
 fn take_utf8(pending: &mut Vec<u8>, bytes: &[u8]) -> String {
     pending.extend_from_slice(bytes);
     let cut = complete_prefix_len(pending).min(MAX_MESSAGE);
@@ -83,10 +59,6 @@ fn take_utf8(pending: &mut Vec<u8>, bytes: &[u8]) -> String {
     text
 }
 
-/// Read the PTY until it closes, handing each chunk to `emit`. Returning
-/// `false` from `emit` stops the pump — it is how a dead webview ends the
-/// reader instead of queueing output nobody will read. `emit` is a synchronous
-/// IPC hop, so the pump throttles itself: one message is ever in flight.
 fn pump<R: Read>(mut reader: R, mut emit: impl FnMut(&str) -> bool) {
     let mut buf = [0u8; MAX_MESSAGE];
     let mut pending = Vec::with_capacity(MAX_MESSAGE + 4);
@@ -101,8 +73,6 @@ fn pump<R: Read>(mut reader: R, mut emit: impl FnMut(&str) -> bool) {
                 }
             }
             Err(err) if err.kind() == std::io::ErrorKind::Interrupted => continue,
-            // A read error here is the end of the stream: the child closing its
-            // side makes the master return EIO on macOS.
             Err(_) => break,
         }
     }
@@ -136,8 +106,7 @@ fn spawn_session(
     let mut child = slave
         .spawn_command(cmd)
         .map_err(|e| format!("Failed to start the shell: {e}"))?;
-    // Holding the slave open in the parent keeps the master from ever seeing
-    // EOF, so the reader thread would outlive the shell.
+    // Holding the slave open would keep the master from ever seeing EOF, leaving the reader thread alive after the shell exits.
     drop(slave);
 
     let reader = master
@@ -159,15 +128,12 @@ fn spawn_session(
                 killer,
             },
         );
-    // Reusing an id must not leak the previous shell.
     drop(replaced);
 
     std::thread::spawn(move || pump(reader, |text| on_output.send(text.to_owned()).is_ok()));
 
     let owned = Arc::clone(sessions);
     std::thread::spawn(move || {
-        // `wait` is also what reaps the child; without it a finished shell stays
-        // a zombie until the app exits.
         let code = child.wait().map_or(-1, |status| status.exit_code() as i32);
         let _ = on_exit.send(code);
         if let Ok(mut map) = owned.lock() {
@@ -178,8 +144,6 @@ fn spawn_session(
     Ok(())
 }
 
-/// Start a shell in the open vault. `on_output` streams the terminal and
-/// `on_exit` fires once with the shell's exit code.
 #[tauri::command]
 #[specta::specta]
 pub fn pty_spawn(
@@ -202,8 +166,6 @@ pub fn pty_spawn(
     spawn_session(id, &cwd, cols, rows, on_output, on_exit, &state.0)
 }
 
-/// Send keystrokes to a shell. Control characters (Ctrl+C, Ctrl+D) travel this
-/// way rather than as signals.
 #[tauri::command]
 #[specta::specta]
 pub fn pty_write(
@@ -225,7 +187,6 @@ pub fn pty_write(
         .map_err(|e| format!("Failed to write to the terminal: {e}"))
 }
 
-/// Tell the kernel (and through it the shell) that the window changed size.
 #[tauri::command]
 #[specta::specta]
 pub fn pty_resize(
@@ -247,8 +208,6 @@ pub fn pty_resize(
         .map_err(|e| format!("Failed to resize the terminal: {e}"))
 }
 
-/// Close one shell. Dropping the session closes the master, which hangs up the
-/// terminal's foreground process group — the shell's own children included.
 #[tauri::command]
 #[specta::specta]
 pub fn pty_kill(id: u32, state: tauri::State<'_, TerminalState>) -> Result<(), String> {
@@ -263,7 +222,6 @@ pub fn pty_kill(id: u32, state: tauri::State<'_, TerminalState>) -> Result<(), S
     Ok(())
 }
 
-/// Close every shell — used when a vault is locked or the window goes away.
 #[tauri::command]
 #[specta::specta]
 pub fn pty_kill_all(state: tauri::State<'_, TerminalState>) -> Result<(), String> {
@@ -271,9 +229,6 @@ pub fn pty_kill_all(state: tauri::State<'_, TerminalState>) -> Result<(), String
     Ok(())
 }
 
-/// Drop every session. Shells are not part of the app's process tree, so
-/// nothing else reaps them: without this they survive as orphans holding the
-/// vault as their working directory.
 pub fn kill_all(state: &TerminalState) {
     let sessions: Vec<Session> = match state.0.lock() {
         Ok(mut map) => map.drain().map(|(_, session)| session).collect(),
@@ -303,7 +258,6 @@ mod tests {
 
     #[test]
     fn a_character_split_across_reads_arrives_whole() {
-        // "€" is E2 82 AC: the first two reads end mid-character.
         let euro = "€".as_bytes();
         let text = take_in_parts(&[&euro[..1], &euro[1..2], &euro[2..]]);
         assert_eq!(text, "€");
@@ -313,7 +267,6 @@ mod tests {
     fn text_before_a_split_character_is_still_flushed() {
         let mut pending = Vec::new();
         let chunk = [b'a', 0xF0, 0x9F];
-        // Leading ASCII is delivered immediately; the partial emoji is not.
         assert_eq!(take_utf8(&mut pending, &chunk), "a");
         assert_eq!(pending, [0xF0, 0x9F]);
         assert_eq!(take_utf8(&mut pending, &[0x98, 0x80]), "😀");
@@ -324,7 +277,6 @@ mod tests {
         let mut pending = Vec::new();
         let text = take_utf8(&mut pending, &vec![b'x'; MAX_MESSAGE + 10]);
         assert_eq!(text.len(), MAX_MESSAGE);
-        // The remainder is not lost — it is waiting in the buffer.
         assert_eq!(pending.len(), 10);
     }
 
@@ -345,8 +297,6 @@ mod tests {
 
         let reader = master.try_clone_reader().unwrap();
         let mut output = String::new();
-        // The real pump: reading a live PTY is the behaviour under test, and the
-        // child exiting is what ends it.
         pump(reader, |text| {
             output.push_str(text);
             true

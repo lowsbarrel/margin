@@ -4,8 +4,6 @@
 	const CARDS = [58, 84, 110];
 </script>
 
-<!-- Three notes drop into the folder one after another, then the front panel
-     rises over their lower edge so they read as filed away. -->
 <div class="art" class:reduced={motion.reduced}>
 	<svg viewBox="0 0 200 130" aria-hidden="true">
 		<path

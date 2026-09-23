@@ -12,13 +12,10 @@
 		type?: 'text' | 'password' | 'email' | 'url';
 		size?: Size;
 		id?: string;
-		/* Lucide-compatible icon — see the note in Button.svelte for why the type
-		   is the passed prop rather than `LucideProps`. */
 		icon?: Component<{ size?: number }>;
 		disabled?: boolean;
 		readonly?: boolean;
 		mono?: boolean;
-		/** Id of a `<datalist>` offering suggestions while leaving free text allowed. */
 		list?: string;
 	}
 
@@ -42,14 +39,6 @@
 		onchange?.(target.value);
 	}
 
-	/* app.css styles `input:not([type='checkbox'])` outside any cascade layer, so
-	   it outranks utilities on background, border colour, padding, font-size and
-	   radius — hence the `!` modifiers. It also supplies the focus ring
-	   (`border-focus` + a 3px brand-16 glow) and the placeholder colour, which is
-	   exactly what this component wants, so those are left alone.
-
-	   `md:text-*!` is not redundant: shadcn's input carries `md:text-sm`, which
-	   would otherwise win back the font size above the `md` breakpoint. */
 	const BASE =
 		'w-full bg-background text-foreground border-input disabled:bg-muted disabled:opacity-100 disabled:text-(--color-text-disabled) disabled:cursor-not-allowed';
 

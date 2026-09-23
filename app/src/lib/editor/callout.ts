@@ -2,12 +2,6 @@ import { Node, mergeAttributes, wrappingInputRule } from '@tiptap/core';
 import type { Node as PMNode, ResolvedPos } from '@tiptap/pm/model';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 
-/**
- * Minimal structural types for the tiptap-markdown serializer state and the
- * markdown-it block plugin surface we touch. markdown-it@14 ships no bundled
- * .d.ts and @types/markdown-it is not a dependency, so we declare just the
- * members used here instead of falling back to `any`.
- */
 interface MarkdownSerializerState {
 	write(content: string): void;
 	renderContent(node: PMNode): void;
@@ -184,7 +178,6 @@ const Callout = Node.create({
 
 				const calloutNode = $from.node(calloutDepth);
 
-				// If the callout has a single empty child, delete the whole callout
 				if (
 					calloutNode.childCount === 1 &&
 					calloutNode.firstChild &&
@@ -200,7 +193,6 @@ const Callout = Node.create({
 					return true;
 				}
 
-				// At start of the first child inside the callout → lift out
 				const firstChildDepth = calloutDepth + 1;
 				if ($from.depth >= firstChildDepth && $from.index(calloutDepth) === 0) {
 					return editor.commands.lift(this.name);
@@ -219,7 +211,6 @@ const Callout = Node.create({
 
 				const calloutNode = $from.node(calloutDepth);
 
-				// If the callout has a single empty child, delete the whole callout
 				if (
 					calloutNode.childCount === 1 &&
 					calloutNode.firstChild &&
@@ -250,14 +241,12 @@ const Callout = Node.create({
 							const target = event.target as HTMLElement;
 							if (!target.classList.contains('callout-indicator')) return false;
 
-							// Find the callout node this indicator belongs to
 							const calloutEl = target.closest("[data-type='callout']");
 							if (!calloutEl) return false;
 
 							const pos = view.posAtDOM(calloutEl, 0);
 							const $pos = view.state.doc.resolve(pos);
 
-							// Walk up to find the callout node
 							for (let d = $pos.depth; d >= 0; d--) {
 								const node = $pos.node(d);
 								if (node.type.name === 'callout') {
@@ -310,13 +299,11 @@ function findCalloutDepth($pos: ResolvedPos): number | null {
 }
 
 function calloutMarkdownPlugin(md: MarkdownIt) {
-	// Block-level fence for :::type ... :::
 	md.block.ruler.before('fence', 'callout', function (state, startLine, endLine, silent) {
 		const pos = state.bMarks[startLine] + state.tShift[startLine];
 		const max = state.eMarks[startLine];
 		const src = state.src;
 
-		// Must start with :::
 		if (pos + 3 > max) return false;
 		if (
 			src.charCodeAt(pos) !== 0x3a ||
@@ -329,7 +316,6 @@ function calloutMarkdownPlugin(md: MarkdownIt) {
 
 		if (silent) return true;
 
-		// Find closing :::
 		let nextLine = startLine + 1;
 		let found = false;
 		for (; nextLine < endLine; nextLine++) {
@@ -351,13 +337,11 @@ function calloutMarkdownPlugin(md: MarkdownIt) {
 		openToken.attrPush(['data-callout-type', type]);
 		openToken.map = [startLine, nextLine + 1];
 
-		// Parse inner content
 		const oldParent = state.parentType;
 		const oldLineMax = state.lineMax;
 		state.parentType = 'callout';
 		state.lineMax = nextLine;
 
-		// Parse content between opening and closing fences
 		state.md.block.tokenize(state, startLine + 1, nextLine);
 
 		state.parentType = oldParent;

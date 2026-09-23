@@ -1,25 +1,20 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { buildVisibleTree, type TreeEntry } from '$lib/fs/bridge';
 import { remapPath } from '$lib/utils/path-remap';
+import { fileSelection, type SelectedEntry } from '$lib/stores/file-selection.svelte';
 
 export type SortOrder = 'name' | 'date';
 export type TreeRevealTarget =
 	| { kind: 'entry'; path: string }
 	| { kind: 'pending-new-folder'; parentPath: string };
 export type { TreeEntry };
-
-export interface SelectedEntry {
-	path: string;
-	isDir: boolean;
-}
+export type { SelectedEntry };
 
 interface FilesState {
-	/** Flat, sorted, depth-annotated visible tree rows. */
 	flatTree: TreeEntry[];
 	vaultRoot: string | null;
 	activeFile: string | null;
 	selectedFolder: string | null;
-	lastSelectedPath: string | null;
 	loading: boolean;
 	expandedFolders: SvelteSet<string>;
 	pendingNewFolder: string | null;
@@ -34,7 +29,6 @@ const state = $state<FilesState>({
 	vaultRoot: null,
 	activeFile: null,
 	selectedFolder: null,
-	lastSelectedPath: null,
 	loading: false,
 	expandedFolders: new SvelteSet(),
 	pendingNewFolder: null,
@@ -44,52 +38,8 @@ const state = $state<FilesState>({
 	sortOrder: 'name'
 });
 
-/**
- * Selection lives in a separate $state.raw Map so it is NOT deeply proxied by
- * Svelte. Mutations reassign the container (`selectedEntries = ...`) to notify
- * dependents. Because the container identity changes (not every nested entry),
- * rows that read `isSelected(path)` only re-evaluate the cheap `.has` lookup.
- *
- * A plain `Map` here — not the `SvelteMap` used for `expandedFolders` above — is
- * deliberate. `SvelteMap` gives every key its own reactive source, so each of
- * the (potentially thousands of) visible rows calling `isSelected(path)` would
- * register a per-key subscription. The single container dependency is both
- * cheaper and all a row actually needs: any selection change replaces it.
- */
-let selectedEntries = $state.raw<Map<string, SelectedEntry>>(new Map());
-
-/**
- * The only way a new selection is built. Every update produces a fresh map in
- * one shot from an entries list, rather than `.set()`/`.delete()`-ing the live
- * one — mutating in place would change the contents without changing the
- * identity `$state.raw` compares, so dependents would never re-run.
- */
-function selectionMap(
-	entries: Iterable<readonly [string, SelectedEntry]>
-): Map<string, SelectedEntry> {
-	return new Map(entries);
-}
-
-/**
- * Monotonic token for tree rebuilds.
- *
- * Several callers can have a rebuild in flight at once — a batch delete/move
- * fires one per entry, and the vault watcher fires its own on top. Those IPC
- * calls can resolve out of order, and the *last to resolve* used to win. A
- * rebuild issued early (while a file still existed) but resolving late would
- * therefore overwrite a newer, correct tree, leaving already-deleted rows
- * visible — the "I deleted three notes and one stayed" symptom.
- *
- * Stamping each request and dropping any response that is not the newest makes
- * the freshest snapshot win regardless of resolution order.
- */
 let _rebuildGeneration = 0;
 
-/**
- * Absolute paths the tree must not draw — the attachments folder. Held outside
- * `state` because nothing renders it: it only feeds the next rebuild, and a
- * rebuild is what tells the sidebar anything changed.
- */
 let hiddenPaths: string[] = [];
 
 async function _rebuild(): Promise<void> {
@@ -97,71 +47,25 @@ async function _rebuild(): Promise<void> {
 	const generation = ++_rebuildGeneration;
 	const expanded = [...state.expandedFolders];
 	const flatTree = await buildVisibleTree(state.vaultRoot, expanded, state.sortOrder, hiddenPaths);
+	// Rebuilds can resolve out of order; only the newest snapshot may land.
 	if (generation !== _rebuildGeneration) return;
 	state.flatTree = flatTree;
-	_pathIndexDirty = true;
 	_pruneSelection();
 }
 
-/**
- * Whether `path` is absent from the visible tree only because an ancestor is
- * collapsed. Without this, collapsing a folder silently dropped every selected
- * entry inside it on the next rebuild, and the following bulk action then
- * operated on fewer files than the user had highlighted.
- */
-function hiddenByCollapsedAncestor(path: string): boolean {
-	const index = pathIndex();
+function hiddenByCollapsedAncestor(path: string, live: Set<string>): boolean {
 	let slash = path.lastIndexOf('/');
 	while (slash > 0) {
 		const parent = path.slice(0, slash);
-		if (index.get(parent) !== undefined && !state.expandedFolders.has(parent)) return true;
+		if (live.has(parent) && !state.expandedFolders.has(parent)) return true;
 		slash = parent.lastIndexOf('/');
 	}
 	return false;
 }
 
-/**
- * Drop selected/active paths that no longer exist in the tree. Without this a
- * deleted or moved file keeps its highlight (and stays in the selection that
- * the next bulk action would operate on) until something else happens to clear
- * it.
- */
-function _pruneSelection() {
+function _pruneSelection(): void {
 	const live = new Set(state.flatTree.map((r) => r.path));
-	if (selectedEntries.size > 0) {
-		const kept = [...selectedEntries].filter(
-			([path]) => live.has(path) || hiddenByCollapsedAncestor(path)
-		);
-		// Only replace the container when something was actually dropped, so an
-		// unaffected refresh doesn't invalidate every row reading `isSelected`.
-		if (kept.length !== selectedEntries.size) selectedEntries = selectionMap(kept);
-	}
-	if (
-		state.lastSelectedPath &&
-		!live.has(state.lastSelectedPath) &&
-		!hiddenByCollapsedAncestor(state.lastSelectedPath)
-	) {
-		state.lastSelectedPath = null;
-	}
-}
-
-let _pathIndex = new Map<string, number>();
-// _pathIndex is only consumed by selectRange. Rebuild it lazily on demand so
-// user-paced expand/collapse/rebuild operations don't pay an O(n) Map rebuild
-// each time when no range selection ever follows.
-let _pathIndexDirty = true;
-
-function pathIndex(): Map<string, number> {
-	if (_pathIndexDirty) {
-		_pathIndex = new Map(state.flatTree.map((r, i) => [r.path, i]));
-		_pathIndexDirty = false;
-	}
-	return _pathIndex;
-}
-
-function _resetPathIndex() {
-	_pathIndex = new Map();
-	_pathIndexDirty = false;
+	fileSelection.prune(live, (path) => hiddenByCollapsedAncestor(path, live));
 }
 
 function _requestTreeReveal(target: TreeRevealTarget) {
@@ -186,25 +90,9 @@ export const files = {
 		return state.expandedFolders;
 	},
 
-	/**
-	 * Set the file the editor currently has open.
-	 *
-	 * The tree selection follows it. `activeFile` changes from a dozen places
-	 * that know nothing about the tree — tab switches, the quick switcher, wiki
-	 * links, closing a tab — and none of them used to touch `selectedEntries`.
-	 * The previously-clicked row therefore kept its highlight while the newly
-	 * opened row got its own, so two rows looked picked at once.
-	 *
-	 * A path already inside a multi-selection leaves that selection intact: the
-	 * user built it deliberately, and collapsing it just because one of its
-	 * members opened would undo their work.
-	 */
 	setActiveFile(path: string | null) {
 		state.activeFile = path;
-		if (path !== null && !selectedEntries.has(path)) {
-			selectedEntries = selectionMap([[path, { path, isDir: false }]]);
-			state.lastSelectedPath = path;
-		}
+		if (path !== null) fileSelection.followOpened(path);
 	},
 
 	async revealFile(filePath: string, vaultPath: string) {
@@ -216,10 +104,6 @@ export const files = {
 			current += '/' + parts[i];
 			state.expandedFolders.add(current);
 		}
-		// Only re-walk the tree when an ancestor was actually newly expanded. On the
-		// common path (tab switch / opening a file whose ancestors are already
-		// expanded) nothing was added, so skip the build_visible_tree IPC walk and
-		// just fire a scroll request.
 		if (state.expandedFolders.size !== before) {
 			await _rebuild();
 		}
@@ -246,135 +130,73 @@ export const files = {
 		state.selectedFolder = path;
 	},
 
-	/**
-	 * Follow a rename/move. Expanded folders and the selection are keyed by path,
-	 * so without this a moved folder collapses (losing every expansion beneath it,
-	 * which the workspace snapshot then persists) and the old path stays selected.
-	 */
 	remapPaths(oldPath: string, newPath: string, isDir: boolean) {
 		const expanded = [...state.expandedFolders];
 		state.expandedFolders.clear();
 		for (const path of expanded) {
 			state.expandedFolders.add(remapPath(path, oldPath, newPath, isDir));
 		}
-
-		if (selectedEntries.size > 0) {
-			selectedEntries = selectionMap(
-				[...selectedEntries].map(([path, entry]) => {
-					const next = remapPath(path, oldPath, newPath, isDir);
-					return [next, { path: next, isDir: entry.isDir }] as const;
-				})
-			);
-		}
-		if (state.lastSelectedPath) {
-			state.lastSelectedPath = remapPath(state.lastSelectedPath, oldPath, newPath, isDir);
-		}
+		fileSelection.remap(oldPath, newPath, isDir);
 	},
 
-	// ─── Multi-selection ───
-
 	get selectedEntries() {
-		return selectedEntries;
+		return fileSelection.entries;
 	},
 
 	get selectedEntry(): SelectedEntry | null {
-		if (selectedEntries.size === 1) {
-			return selectedEntries.values().next().value!;
+		const entries = fileSelection.entries;
+		if (entries.size === 1) {
+			return entries.values().next().value!;
 		}
-		return selectedEntries.size > 0
+		return entries.size > 0
 			? {
-					path: state.lastSelectedPath!,
-					isDir: selectedEntries.get(state.lastSelectedPath!)?.isDir ?? false
+					path: fileSelection.lastPath!,
+					isDir: entries.get(fileSelection.lastPath!)?.isDir ?? false
 				}
 			: null;
 	},
 
 	get lastSelectedPath() {
-		return state.lastSelectedPath;
+		return fileSelection.lastPath;
 	},
 
 	selectSingle(path: string, isDir: boolean) {
-		selectedEntries = selectionMap([[path, { path, isDir }]]);
-		state.lastSelectedPath = path;
+		fileSelection.selectSingle(path, isDir);
 	},
 
 	selectToggle(path: string, isDir: boolean) {
-		const entries = [...selectedEntries];
-		if (selectedEntries.has(path)) {
-			selectedEntries = selectionMap(entries.filter(([p]) => p !== path));
-		} else {
-			const added: [string, SelectedEntry] = [path, { path, isDir }];
-			selectedEntries = selectionMap([...entries, added]);
-		}
-		state.lastSelectedPath = path;
+		fileSelection.selectToggle(path, isDir);
 	},
 
 	selectRange(path: string) {
-		const anchor = state.lastSelectedPath;
-		if (!anchor) {
-			const row = state.flatTree.find((r) => r.path === path);
-			if (row) {
-				selectedEntries = selectionMap([[path, { path, isDir: row.is_dir }]]);
-				state.lastSelectedPath = path;
-			}
-			return;
-		}
-		const flat = state.flatTree;
-		const idx = pathIndex();
-		const anchorIdx = idx.get(anchor);
-		const targetIdx = idx.get(path);
-		if (anchorIdx === undefined || targetIdx === undefined) return;
-		const lo = Math.min(anchorIdx, targetIdx);
-		const hi = Math.max(anchorIdx, targetIdx);
-		selectedEntries = selectionMap(
-			flat
-				.slice(lo, hi + 1)
-				.map((r): [string, SelectedEntry] => [r.path, { path: r.path, isDir: r.is_dir }])
-		);
+		fileSelection.selectRange(path, state.flatTree);
 	},
 
 	isSelected(path: string) {
-		return selectedEntries.has(path);
+		return fileSelection.entries.has(path);
 	},
 
 	getSelectedPaths(): string[] {
-		return [...selectedEntries.keys()];
+		return [...fileSelection.entries.keys()];
 	},
 
 	getSelectedAsList(): SelectedEntry[] {
-		return [...selectedEntries.values()];
+		return [...fileSelection.entries.values()];
 	},
 
 	clearSelection() {
-		selectedEntries = selectionMap([]);
-		state.lastSelectedPath = null;
+		fileSelection.replace([]);
+		fileSelection.lastPath = null;
 	},
 
 	selectAll() {
-		selectedEntries = selectionMap(
-			state.flatTree.map((r): [string, SelectedEntry] => [
-				r.path,
-				{ path: r.path, isDir: r.is_dir }
-			])
-		);
+		fileSelection.selectAll(state.flatTree);
 	},
 
 	setSelectedEntry(path: string, isDir: boolean) {
 		this.selectSingle(path, isDir);
 	},
 
-	/**
-	 * Expand one folder.
-	 *
-	 * This used to splice the children of a single `build_subtree` result into
-	 * whatever `flatTree` held at that moment, outside the generation guard that
-	 * `_rebuild` applies. A double-click (click expands, click collapses) or a
-	 * watcher refresh landing mid-await therefore re-inserted children for a
-	 * folder that was no longer expanded, or inserted them twice — and the keyed
-	 * `{#each}` then threw on duplicate rows, blanking the sidebar. Rebuilding
-	 * under the guard replaces the whole list from one snapshot, so a stale
-	 * response is discarded instead of patched in.
-	 */
 	async expandFolder(path: string) {
 		state.expandedFolders.add(path);
 		await _rebuild();
@@ -402,7 +224,6 @@ export const files = {
 				const next = [...state.flatTree];
 				next.splice(idx + 1, end - idx - 1);
 				state.flatTree = next;
-				_pathIndexDirty = true;
 			}
 		} else {
 			await _rebuild();
@@ -428,10 +249,6 @@ export const files = {
 		}
 	},
 
-	/**
-	 * Keep these absolute paths out of the tree. Presentation only — sync,
-	 * export, the watcher and the filename index all still see them.
-	 */
 	setHiddenPaths(paths: string[]) {
 		const next = [...paths].sort();
 		if (next.length === hiddenPaths.length && next.every((p, i) => p === hiddenPaths[i])) return;
@@ -444,14 +261,13 @@ export const files = {
 		state.vaultRoot = null;
 		state.activeFile = null;
 		state.selectedFolder = null;
-		selectedEntries = selectionMap([]);
-		state.lastSelectedPath = null;
+		fileSelection.replace([]);
+		fileSelection.lastPath = null;
 		state.expandedFolders.clear();
 		state.pendingNewFolder = null;
 		state.renamingPath = null;
 		state.treeRevealTarget = null;
 		state.treeRevealVersion = 0;
-		_resetPathIndex();
 	},
 
 	get pendingNewFolder() {

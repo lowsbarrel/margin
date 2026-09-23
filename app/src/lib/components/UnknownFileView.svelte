@@ -13,7 +13,6 @@
 		path: string;
 		name: string;
 		size?: number;
-		/** Seconds since the epoch. */
 		modified?: number;
 	}
 

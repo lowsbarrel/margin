@@ -1,12 +1,3 @@
-/**
- * The raw-Markdown surface. The CodeMirror packages are pulled in here on first
- * use so their chunk stays out of the boot bundle; only types are imported
- * statically.
- *
- * Every colour goes through a `--color-*` token, so the surface follows
- * `data-theme` with no JS listening for a theme change.
- */
-
 import type { HighlightStyle } from '@codemirror/language';
 import type { EditorView } from '@codemirror/view';
 import type { tags } from '@lezer/highlight';
@@ -26,7 +17,6 @@ export interface SourceEditorOptions {
 	parent: HTMLElement;
 	doc: string;
 	onChange: (text: string) => void;
-	/** 1-based line and column of the caret, for the status bar. */
 	onCursor: (line: number, col: number) => void;
 }
 
@@ -44,8 +34,6 @@ function buildTheme(view: typeof EditorView) {
 			lineHeight: '1.7',
 			overflow: 'auto'
 		},
-		// Bottom padding keeps the last line clear of the viewport edge when the
-		// caret is at the end of the document.
 		'.cm-content': { padding: '4px 0 40vh', caretColor: 'var(--color-text-primary)' },
 		'.cm-activeLine': { backgroundColor: 'var(--color-brand-8)' },
 		'.cm-cursor, .cm-dropCursor': {
@@ -102,8 +90,6 @@ function buildHighlightStyle(hl: typeof HighlightStyle, hlTags: typeof tags) {
 		{ tag: hlTags.monospace, color: 'var(--color-text-code)' },
 		{ tag: hlTags.quote, color: 'var(--color-syntax-comment)' },
 		{ tag: hlTags.list, color: 'var(--color-syntax-keyword)' },
-		// Markdown's structural punctuation — `#`, `**`, `>`, fence ticks. Kept
-		// quiet so the prose, not the syntax, carries the page.
 		{ tag: hlTags.meta, color: 'var(--color-text-tertiary)' },
 		{ tag: hlTags.processingInstruction, color: 'var(--color-text-tertiary)' },
 		{ tag: hlTags.comment, color: 'var(--color-syntax-comment)', fontStyle: 'italic' },
@@ -148,9 +134,7 @@ export async function createSourceEditor({
 		crosshairCursor
 	} = viewModule;
 
-	// Seeding and cursor restoration are programmatic, so their transactions must
-	// not read back as user edits (which would schedule a save) or move the status
-	// bar's caret readout.
+	// Seeding and cursor moves are programmatic; read as user edits they would schedule a save.
 	let programmatic = false;
 
 	const view = new EditorView({

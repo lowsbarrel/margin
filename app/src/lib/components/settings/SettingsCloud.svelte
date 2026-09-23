@@ -9,7 +9,6 @@
 	import { cn } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages.js';
 
-	/* Four hints and the test result share this; only the colour differs. */
 	const HINT = 'm-0 font-sans text-xs italic text-subtle-foreground';
 
 	interface Props {
@@ -133,15 +132,6 @@
 			<RefreshCw size={14} />
 			{m.settings_auto_sync()}
 		</label>
-		<!-- Hand-rolled switch: shadcn's Switch is not vendored here, and swapping
-		     it in would trade this visually-hidden checkbox for a `role="switch"`
-		     button — a different markup contract and a different binding. The
-		     checkbox stays the source of truth and drives the track through the
-		     `peer` variant.
-
-		     The thumb slides via `transition-[translate,…]`, not `transform`:
-		     Tailwind v4's `translate-x-*` compiles to the standalone `translate`
-		     property, so transitioning `transform` would leave it snapping. -->
 		<label class="relative inline-flex h-5 w-9 shrink-0">
 			<input
 				type="checkbox"
@@ -159,9 +149,6 @@
 	{/if}
 
 	<Field label={m.settings_conflict_resolution()} forId="conflictStrategy">
-		<!-- The `@layer base` rule for `select` supplies the font, tracking and
-		     the brand focus glow; these utilities restate only what the old
-		     `.select-field` class overrode on top of it. -->
 		<select
 			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
 			id="conflictStrategy"

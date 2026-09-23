@@ -62,8 +62,7 @@ pub fn run() {
                 .decode_utf8_lossy()
                 .into_owned();
 
-            // On Windows the URL path looks like "/C:/Users/..." — strip the
-            // leading slash so Path::canonicalize can resolve it.
+            // On Windows the URL path is "/C:/Users/..." — the leading slash has to go before Path::canonicalize can resolve it.
             #[cfg(windows)]
             let decoded = {
                 let bytes = decoded.as_bytes();
@@ -78,8 +77,7 @@ pub fn run() {
                 }
             };
 
-            // 1. Canonicalize first so symlinks are fully resolved before any check.
-            //    This eliminates the TOCTOU window between check and read.
+            // Canonicalize before the containment check: a symlink inside the vault contains no `..` yet escapes it once resolved.
             let path = std::path::Path::new(&decoded);
             let canonical = match path.canonicalize() {
                 Ok(c) => c,
@@ -91,10 +89,6 @@ pub fn run() {
                 }
             };
 
-            // 2. Verify the canonical path is inside the vault root.
-            //    Checking for `..` in the raw path is insufficient because a
-            //    symlink (e.g. /vault/images/foo -> /etc) contains no `..` but
-            //    escapes the vault after resolution.
             let vault_root = {
                 let state = _app.app_handle().state::<VaultPathState>();
 
@@ -144,7 +138,6 @@ pub fn run() {
             }
         })
         .setup(|app| {
-            // Block external navigations
             use tauri::WebviewUrl;
             use tauri::WebviewWindowBuilder;
             let _win = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
@@ -256,9 +249,6 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("error while building tauri application")
         .run(|app, event| {
-            // Shells are separate processes, so quitting the app would leave them
-            // running with the vault as their cwd. Both exit events are covered:
-            // ExitRequested when the app decides to quit, Exit for the last word.
             if matches!(
                 event,
                 tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
@@ -268,14 +258,10 @@ pub fn run() {
         });
 }
 
-/// Build the tauri-specta command/type registry. Used only by [`export_bindings`]
-/// to regenerate the TypeScript bindings — command registration happens in [`run`].
 pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
         crypto::generate_mnemonic,
         crypto::derive_vault_keys,
-        // crypto::encrypt_blob_cmd / decrypt_blob_cmd are raw-byte (Request/Response)
-        // commands not representable in specta — excluded (still registered in run()).
         fs::set_vault_directory,
         fs::list_directory,
         fs::walk_directory,
@@ -317,8 +303,6 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         s3::s3_configure,
         s3::s3_get_config,
         s3::s3_test_connection,
-        // s3::s3_upload / s3_download are raw-byte (Request/Response) commands not
-        // representable in specta — excluded (still registered in run()).
         s3::s3_list,
         s3::s3_delete,
         settings::save_settings,
@@ -362,13 +346,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
     ])
 }
 
-/// Regenerate `src/lib/bindings.ts` from the Rust command/type definitions.
-/// Invoked by the `gen_bindings` binary so codegen never requires launching
-/// the GUI/webview runtime.
 pub fn export_bindings() {
-    // u64/usize fields are second-resolution timestamps / small counts, annotated
-    // with `#[specta(type = f64)]` so they export as TS `number` (matching the
-    // previous hand-written interfaces) rather than tripping specta's BigInt guard.
     specta_builder()
         .export(
             specta_typescript::Typescript::default(),

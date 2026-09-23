@@ -6,11 +6,6 @@ import { resolveImagePaths, resolveWikiEmbeds } from '$lib/editor/image-paths';
 import { createEditorExtensions, type Lowlight } from '$lib/editor/extensions';
 import * as m from '$lib/paraglide/messages.js';
 
-/**
- * Minimal structural types for the tiptap-markdown serializer state and the
- * markdown-it inline plugin surface we touch. markdown-it@14 ships no bundled
- * .d.ts; we declare only the members used here.
- */
 interface MarkdownSerializerState {
 	write(content: string): void;
 	closeBlock(node: PMNode): void;
@@ -41,17 +36,12 @@ interface MarkdownIt {
 export interface NoteEmbedOptions {
 	attachmentFolder: string;
 	lowlight: Lowlight | null;
-	/** How deep this editor is nested inside transclusions (0 = top level). */
 	depth: number;
 }
 
-/**
- * Live nested editors stop one level deep; deeper embeds render as a static
- * preview. This caps work and prevents A→B→A transclusion from recursing.
- */
+// Deeper embeds render as a static preview, which keeps A→B→A transclusion from recursing.
 const MAX_LIVE_DEPTH = 1;
 
-/** `![[Foo]]` and `![[Foo.md]]` are notes; `![[file.pdf]]` is a file embed. */
 function isNoteTarget(name: string): boolean {
 	if (!name.includes('.')) return true;
 	const ext = name.split('.').pop()?.toLowerCase();
@@ -169,8 +159,6 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 	dom.setAttribute('data-title', title);
 	dom.contentEditable = 'false';
 
-	// Header doubles as a wiki-link so the editor's existing click handler opens
-	// the referenced note.
 	const header = document.createElement('div');
 	header.className = 'note-embed-header';
 	header.setAttribute('data-wiki-link', '');
@@ -188,8 +176,6 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 	);
 
 	const body = document.createElement('div');
-	// `editor-wrap` opts the embedded content into the shared editor typography;
-	// `.note-embed-body` overrides apply the embed-specific spacing.
 	body.className = 'note-embed-body editor-wrap';
 
 	dom.appendChild(header);
@@ -227,9 +213,7 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 			md = resolveImagePaths(md, vaultPath);
 
 			if (options.depth >= MAX_LIVE_DEPTH) {
-				// Past the live-render cap: show static HTML, no further nested editors.
-				const parser = (editor.storage as { markdown?: { parser?: { parse(s: string): string } } })
-					.markdown?.parser;
+				const parser = editor.storage.markdown?.parser;
 				body.innerHTML = parser ? parser.parse(md) : md;
 				return;
 			}
@@ -257,7 +241,6 @@ function renderNoteEmbed(node: PMNode, editor: Editor, options: NoteEmbedOptions
 		dom,
 		update(updatedNode: PMNode) {
 			if (updatedNode.type.name !== 'noteEmbed') return false;
-			// Title changes are rare; let ProseMirror rebuild the node view.
 			return updatedNode.attrs.title === title;
 		},
 		stopEvent() {
@@ -283,15 +266,14 @@ function noteEmbedMarkdownPlugin(md: MarkdownIt) {
 		const max = state.posMax;
 
 		if (pos + 4 >= max) return false;
-		if (src.charCodeAt(pos) !== 0x21) return false; // !
-		if (src.charCodeAt(pos + 1) !== 0x5b) return false; // [
-		if (src.charCodeAt(pos + 2) !== 0x5b) return false; // [
+		if (src.charCodeAt(pos) !== 0x21) return false;
+		if (src.charCodeAt(pos + 1) !== 0x5b) return false;
+		if (src.charCodeAt(pos + 2) !== 0x5b) return false;
 
 		const closePos = src.indexOf(']]', pos + 3);
 		if (closePos === -1 || closePos > max) return false;
 
 		const raw = src.slice(pos + 3, closePos).trim();
-		// Not a note target → let the file-embed rule claim it.
 		if (!raw || !isNoteTarget(raw)) return false;
 
 		if (silent) return true;

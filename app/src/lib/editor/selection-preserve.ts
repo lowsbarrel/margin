@@ -1,10 +1,3 @@
-// Selection preservation extension.
-// Adapted from Docmost's Selection extension.
-//
-// Preserves the visual selection highlight when the editor loses focus,
-// so the user can see what they had selected even when interacting with
-// toolbar buttons, dialogs, etc.
-
 import { Extension } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import { Decoration, DecorationSet } from '@tiptap/pm/view';
@@ -30,7 +23,6 @@ export const SelectionPreserve = Extension.create({
 					handleDOMEvents: {
 						focus: (view) => {
 							isFocused = true;
-							// Force decoration update
 							view.dispatch(view.state.tr.setMeta('selectionPreserve', true));
 							return false;
 						},

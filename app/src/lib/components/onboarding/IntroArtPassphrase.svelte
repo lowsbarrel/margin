@@ -1,9 +1,7 @@
 <script lang="ts">
 	import { motion } from '$lib/stores/motion.svelte';
 
-	/* Skeleton bars, not real words: twelve of them communicates "a passphrase
-	   long enough to write down" without looking like a phrase to copy. */
-	const WORDS = Array.from({ length: 12 }, (_, i) => ({
+	const PASSPHRASE_BARS = Array.from({ length: 12 }, (_, i) => ({
 		x: 7 + (i % 4) * 48,
 		y: 14 + Math.floor(i / 4) * 22
 	}));
@@ -11,8 +9,8 @@
 
 <div class="art" class:reduced={motion.reduced}>
 	<svg viewBox="0 0 200 130" aria-hidden="true">
-		{#each WORDS as w, i (i)}
-			<rect class="word" x={w.x} y={w.y} width="42" height="16" rx="4" style="--i: {i}" />
+		{#each PASSPHRASE_BARS as bar, i (i)}
+			<rect class="word" x={bar.x} y={bar.y} width="42" height="16" rx="4" style="--i: {i}" />
 		{/each}
 		<circle class="key-ring" cx="72" cy="104" r="8" pathLength="1" />
 		<path class="key-shaft" d="M80 104h48" pathLength="1" />

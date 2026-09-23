@@ -1,9 +1,11 @@
 import { Extension, type Editor } from '@tiptap/core';
 import { Plugin, PluginKey } from '@tiptap/pm/state';
 import type { Node as PMNode } from '@tiptap/pm/model';
-import { Decoration, DecorationSet } from '@tiptap/pm/view';
+import { DecorationSet } from '@tiptap/pm/view';
 import type { MarkdownStorage } from 'tiptap-markdown';
 import { searchInText, type TextMatch } from '$lib/fs/bridge';
+import { findMatchesSync, flattenDoc, type SearchMatch } from '$lib/editor/search-text';
+import { buildBaseDecos, buildCurrentDeco } from '$lib/editor/search-decorations';
 
 export interface SearchReplaceStorage {
 	searchTerm: string;
@@ -29,61 +31,16 @@ declare module '@tiptap/core' {
 
 	interface Storage {
 		searchReplace: SearchReplaceStorage;
-		// tiptap-markdown's storage (it does not augment this interface itself).
 		markdown: MarkdownStorage;
 	}
 }
 
-interface SearchMatch {
-	from: number;
-	to: number;
-}
-
 const searchPluginKey = new PluginKey('searchReplace');
 
-// ── Document flattening ──
-
-/** Cached flattened document text + ProseMirror position mapping. */
-let cachedDoc: PMNode | null = null;
-let cachedFullText = '';
-let cachedFullTextLower = '';
-let cachedPmPos: number[] = [];
-let cachedGaps: number[] = [];
-
-function flattenDoc(doc: PMNode) {
-	if (doc === cachedDoc) return;
-	cachedDoc = doc;
-	const chars: string[] = [];
-	const pmPos: number[] = [];
-	const gaps: number[] = [];
-	doc.descendants((node: PMNode, pos: number) => {
-		if (!node.isText) return;
-		const t = node.text!;
-		for (let i = 0; i < t.length; i++) {
-			const charPos = pos + i;
-			// Detect block boundary: PM position not consecutive with previous
-			if (pmPos.length > 0 && charPos !== pmPos[pmPos.length - 1] + 1) {
-				gaps.push(chars.length);
-			}
-			chars.push(t[i]);
-			pmPos.push(charPos);
-		}
-	});
-	cachedFullText = chars.join('');
-	cachedFullTextLower = cachedFullText.toLowerCase();
-	cachedPmPos = pmPos;
-	cachedGaps = gaps;
-}
-
-// ── Async search (Rust IPC) ──
-
 let searchVersion = 0;
-
-/** Pending timer for doc-change-triggered re-search debounce. */
 let docChangeSearchTimer: ReturnType<typeof setTimeout> | null = null;
 const DOC_CHANGE_SEARCH_DELAY = 150;
 
-/** Kick off an async Rust search and dispatch results back into the plugin. */
 function triggerAsyncSearch(
 	editor: Editor,
 	doc: PMNode,
@@ -92,10 +49,10 @@ function triggerAsyncSearch(
 	action: string
 ) {
 	if (!searchTerm) return;
-	flattenDoc(doc);
+	const { text, pos, gaps } = flattenDoc(doc);
 	const version = ++searchVersion;
 
-	searchInText(cachedFullText, cachedPmPos, cachedGaps, searchTerm, caseSensitive)
+	searchInText(text, pos, gaps, searchTerm, caseSensitive)
 		.then((rustMatches: TextMatch[]) => {
 			if (version !== searchVersion) return;
 			const { tr } = editor.state;
@@ -106,7 +63,6 @@ function triggerAsyncSearch(
 			editor.view.dispatch(tr);
 		})
 		.catch(() => {
-			// On IPC failure, fall back to sync JS search
 			if (version !== searchVersion) return;
 			const matches = findMatchesSync(doc, searchTerm, caseSensitive);
 			const { tr } = editor.state;
@@ -115,71 +71,12 @@ function triggerAsyncSearch(
 		});
 }
 
-// ── Sync JS fallback ──
-
-function findMatchesSync(doc: PMNode, searchTerm: string, caseSensitive: boolean): SearchMatch[] {
-	if (!searchTerm) return [];
-
-	flattenDoc(doc);
-	const matches: SearchMatch[] = [];
-	const term = caseSensitive ? searchTerm : searchTerm.toLowerCase();
-	const fullText = caseSensitive ? cachedFullText : cachedFullTextLower;
-	const pmPos = cachedPmPos;
-
-	let start = 0;
-	while (start <= fullText.length - term.length) {
-		const idx = fullText.indexOf(term, start);
-		if (idx === -1) break;
-
-		let crossBlock = false;
-		for (let k = idx + 1; k < idx + term.length; k++) {
-			if (pmPos[k] !== pmPos[k - 1] + 1) {
-				crossBlock = true;
-				break;
-			}
-		}
-
-		if (!crossBlock) {
-			matches.push({ from: pmPos[idx], to: pmPos[idx + term.length - 1] + 1 });
-		}
-
-		start = idx + 1;
-	}
-
-	return matches;
-}
-
-// ── Plugin state helpers ──
-
 interface PluginState {
 	baseDecos: DecorationSet;
 	currentDeco: DecorationSet;
 	matches: SearchMatch[];
-	/** Doc reference the matches were computed for — used to verify freshness. */
 	matchDoc: PMNode | null;
 }
-
-function buildBaseDecos(doc: PMNode, matches: SearchMatch[]): DecorationSet {
-	if (matches.length === 0) return DecorationSet.empty;
-	const decorations = matches.map((match) =>
-		Decoration.inline(match.from, match.to, { class: 'search-match' })
-	);
-	return DecorationSet.create(doc, decorations);
-}
-
-function buildCurrentDeco(
-	doc: PMNode,
-	matches: SearchMatch[],
-	currentIndex: number
-): DecorationSet {
-	if (matches.length === 0 || currentIndex >= matches.length) return DecorationSet.empty;
-	const match = matches[currentIndex];
-	return DecorationSet.create(doc, [
-		Decoration.inline(match.from, match.to, { class: 'search-match-current' })
-	]);
-}
-
-// ── Extension ──
 
 export const SearchReplace = Extension.create<Record<string, never>, SearchReplaceStorage>({
 	name: 'searchReplace',
@@ -251,7 +148,6 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 					const storage = editor.storage.searchReplace;
 					if (storage.totalMatches === 0) return false;
 
-					// Use cached matches if fresh, else sync JS fallback
 					const pluginState = searchPluginKey.getState(editor.state) as PluginState | undefined;
 					const matches =
 						pluginState && pluginState.matchDoc === editor.state.doc
@@ -265,7 +161,6 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 					editor
 						.chain()
 						.command(({ tr }) => {
-							// Collect marks from the matched range so we preserve formatting
 							const resolvedFrom = tr.doc.resolve(match.from);
 							const marks =
 								resolvedFrom.marksAcross(tr.doc.resolve(match.to)) ?? resolvedFrom.marks();
@@ -319,7 +214,7 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 					storage.replaceTerm = '';
 					storage.currentIndex = 0;
 					storage.totalMatches = 0;
-					++searchVersion; // cancel any pending async search
+					++searchVersion;
 					if (docChangeSearchTimer) {
 						clearTimeout(docChangeSearchTimer);
 						docChangeSearchTimer = null;
@@ -333,23 +228,14 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 	},
 
 	addProseMirrorPlugins() {
-		// NOTE: `scrollRaf` / `scrollToMatch` MUST stay above the `return` below.
-		// They used to sit after it, which left `scrollRaf` permanently in the
-		// temporal dead zone — every `scrollToMatch()` call threw a ReferenceError
-		// out of the plugin's `apply()`, so the decoration state was never
-		// committed and no match was ever highlighted.
+		// Must stay above the `return`: the plugin's `apply` reads `scrollRaf`.
 		let scrollRaf = 0;
 
-		/** Leave the viewport alone unless the match is within this many px of an edge. */
 		const SCROLL_EDGE_MARGIN = 64;
 
-		// Arrow functions throughout: they inherit `this` (the extension context)
-		// lexically, so the editor/storage are read live at call time.
 		const scrollToMatch = (matches: SearchMatch[], currentIndex: number) => {
 			const current = matches[currentIndex];
 			if (!current) return;
-			// Coalesce rapid next/prev into a single scroll on the next frame, by
-			// which time the new decorations have been written to the DOM.
 			if (scrollRaf) cancelAnimationFrame(scrollRaf);
 			scrollRaf = requestAnimationFrame(() => {
 				scrollRaf = 0;
@@ -357,13 +243,11 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 				if (!editor || editor.isDestroyed) return;
 				try {
 					const view = editor.view;
-					// The doc may have moved on between dispatch and frame.
 					if (current.to > view.state.doc.content.size) return;
 					const scrollContainer = view.dom.closest('.editor-container');
 					if (!scrollContainer) return;
 					const coords = view.coordsAtPos(current.from);
 					const box = scrollContainer.getBoundingClientRect();
-					// Already comfortably on screen — don't yank the page around.
 					if (
 						coords.top >= box.top + SCROLL_EDGE_MARGIN &&
 						coords.bottom <= box.bottom - SCROLL_EDGE_MARGIN
@@ -376,7 +260,7 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 						behavior: 'smooth'
 					});
 				} catch {
-					/* stale position / detached view — nothing useful to do */
+					return;
 				}
 			});
 		};
@@ -397,7 +281,6 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 						const meta = tr.getMeta(searchPluginKey);
 						const docChanged = tr.docChanged;
 
-						// Async results arrived
 						if (meta?.asyncResults) {
 							const matches = meta.asyncResults as SearchMatch[];
 							const storage = this.storage;
@@ -419,7 +302,6 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 
 						const storage = this.storage;
 
-						// Navigate: rebuild current-match deco
 						if (meta?.action === 'navigate' && prev.matchDoc === newState.doc) {
 							const currentDeco = buildCurrentDeco(
 								newState.doc,
@@ -430,10 +312,8 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 							return { ...prev, currentDeco };
 						}
 
-						// Term/doc changed: async re-search
 						if (storage.searchTerm) {
 							if (meta) {
-								// Explicit command (update/navigate): search immediately.
 								if (docChangeSearchTimer) {
 									clearTimeout(docChangeSearchTimer);
 									docChangeSearchTimer = null;
@@ -446,16 +326,13 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 									meta.action ?? 'update'
 								);
 							} else {
-								// Pure doc edit: debounce so rapid typing collapses to one IPC.
-								++searchVersion; // invalidate any in-flight search result
+								++searchVersion;
 								if (docChangeSearchTimer) clearTimeout(docChangeSearchTimer);
 								docChangeSearchTimer = setTimeout(() => {
 									docChangeSearchTimer = null;
 									const editor = this.editor;
 									const liveStorage = this.storage;
 									if (!editor || !liveStorage.searchTerm) return;
-									// 'refresh' repaints the highlights but deliberately does not
-									// scroll — the user is typing in the document, not navigating.
 									triggerAsyncSearch(
 										editor,
 										editor.state.doc,
@@ -475,7 +352,6 @@ export const SearchReplace = Extension.create<Record<string, never>, SearchRepla
 							};
 						}
 
-						// Map stale decos while async search runs
 						if (docChanged && prev.baseDecos !== DecorationSet.empty) {
 							return {
 								...prev,

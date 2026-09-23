@@ -6,10 +6,6 @@ import {
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 
-/**
- * Handle pasting images/files into the editor.
- * Supports clipboard DataTransfer and Windows screenshot fallback (Win+Shift+S).
- */
 export function handleEditorPaste(event: ClipboardEvent, target: AttachmentTarget): void {
 	const clipData = event.clipboardData;
 	if (!clipData) return;
@@ -30,9 +26,7 @@ export function handleEditorPaste(event: ClipboardEvent, target: AttachmentTarge
 		}
 	}
 
-	// Fallback for Windows screenshot paste (Win+Shift+S): WebView2 sometimes
-	// hides the image from the synchronous DataTransfer API but still exposes
-	// it via the async Clipboard API. Detect image intent via types.
+	// WebView2 keeps a Win+Shift+S screenshot out of the synchronous DataTransfer but serves it through the async Clipboard API.
 	const hasImageType =
 		pastedFiles.length === 0 &&
 		Array.from(clipData.types || []).some((t) => t.startsWith('image/'));
@@ -41,8 +35,7 @@ export function handleEditorPaste(event: ClipboardEvent, target: AttachmentTarge
 	event.preventDefault();
 	event.stopPropagation();
 
-	// Read before the first await: a clipboard image read is async, and the
-	// caret must not be wherever the user left it by the time the bytes land.
+	// Read before the first await: the caret may move while the async clipboard read is in flight.
 	const at = captureInsertionPoint(target.editor);
 
 	void (async () => {

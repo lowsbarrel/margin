@@ -15,14 +15,6 @@ interface Toast {
 let nextId = 0;
 let toasts = $state<Toast[]>([]);
 
-/**
- * Pending auto-dismiss timers, keyed by toast id.
- *
- * Deliberately a plain object and deliberately NOT reactive: these handles are
- * never rendered and never read from a template, so tracking them would only
- * add bookkeeping to every push/dismiss. `toasts` above is the reactive half of
- * this store; this is bookkeeping that happens to be keyed by the same id.
- */
 const timers: Record<number, ReturnType<typeof setTimeout> | undefined> = {};
 
 export const toast = {

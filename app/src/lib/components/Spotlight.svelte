@@ -1,147 +1,64 @@
 <script lang="ts">
-	/**
-	 * Spotlight — the single search surface for the vault.
-	 *
-	 * Replaces both the old QuickSwitcher (note names only) and the sidebar
-	 * Search view (contents + tags + replace-across-files). One palette now
-	 * covers all three:
-	 *
-	 *   • plain text  → note names (trie) + note contents (FTS5), two groups
-	 *   • `#…`        → tag browser: tag cloud, then the files carrying that tag
-	 *   • `?…`        → ask the vault: a streamed answer with the tools it used
-	 *   • replace row → replace-across-files over the current content hits
-	 */
 	import { onMount, onDestroy, tick, untrack } from 'svelte';
 	import { ask } from '$lib/stores/ask.svelte';
-	import AskAnswer from '$lib/components/AskAnswer.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
-	import {
-		searchFiles,
-		searchIndex,
-		replaceInFile,
-		type FsEntry,
-		type SearchHit
-	} from '$lib/fs/bridge';
 	import { tags as tagsStore } from '$lib/stores/tags.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import {
-		FileText,
-		Image,
-		FileType,
-		Hash,
-		Search,
-		Replace,
-		ReplaceAll,
-		ChevronLeft,
-		Loader,
-		Sparkles,
-		Wrench
-	} from '@lucide/svelte';
-	import { IMAGE_EXTS } from '$lib/utils/mime';
-	import { displayName } from '$lib/utils/filename';
-	import { displayPath, splitHighlight } from '$lib/utils/sidebar-ops';
+	import { searchFiles } from '$lib/fs/bridge';
+	import { Loader, Replace, Search, Sparkles } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import SpotlightAsk from './spotlight/SpotlightAsk.svelte';
+	import SpotlightReplaceRow from './spotlight/SpotlightReplaceRow.svelte';
+	import SpotlightRow from './spotlight/SpotlightRow.svelte';
+	import SpotlightTagCrumb from './spotlight/SpotlightTagCrumb.svelte';
+	import { buildItems, itemKey, type SpotlightItem } from './spotlight/spotlight-items';
+	import { SpotlightSearch } from './spotlight/spotlight-search.svelte';
+	import { replaceInEveryFile, replaceInOneFile } from './spotlight/spotlight-replace';
 
 	interface Props {
-		/** Open a note. `searchText` scrolls the editor to the matched excerpt. */
 		onselect: (path: string, searchText?: string) => void;
 		onclose: () => void;
-		/** Open Settings — offered when `?` mode has no endpoint to ask. */
 		onsettings: () => void;
 	}
 
 	let { onselect, onclose, onsettings }: Props = $props();
 
-	/** How many filename hits to surface before the content group starts. */
-	const MAX_NAME_RESULTS = 8;
-	/** Content hits fetched — also the working set for "replace in all files". */
-	const MAX_CONTENT_RESULTS = 100;
-	const DEBOUNCE_MS = 90;
-
 	let query = $state('');
-	let nameResults = $state<FsEntry[]>([]);
-	let contentResults = $state<SearchHit[]>([]);
 	let selectedIndex = $state(0);
-	let searching = $state(false);
 	let inputEl = $state<HTMLInputElement | null>(null);
 	let listEl = $state<HTMLDivElement | null>(null);
-
-	let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-	/**
-	 * Monotonic ticket for in-flight searches. Every keystroke takes a new one;
-	 * a response whose ticket is stale is dropped, so a slow content query can
-	 * never land on top of a newer, faster one.
-	 */
-	let searchGeneration = 0;
-
-	// ── Tag mode ──
-	let allTags = $derived(tagsStore.items);
-	let tagsLoading = $derived(tagsStore.loading);
-	/** Set once the user drills into a tag; null means "showing the tag cloud". */
 	let selectedTag = $state<string | null>(null);
-
-	// ── Replace across files ──
 	let showReplace = $state(false);
 	let replaceQuery = $state('');
 	let replacing = $state(false);
+	let askedQuestion = $state('');
+
+	const search = new SpotlightSearch(() => (selectedIndex = 0));
 
 	let trimmedQuery = $derived(query.trim());
 	let isTagMode = $derived(query.trimStart().startsWith('#'));
 	let tagFilter = $derived(isTagMode ? query.trimStart().slice(1).trim().toLowerCase() : '');
-
-	// ── Ask mode ──
 	let isAskMode = $derived(query.trimStart().startsWith('?'));
 	let askQuery = $derived(isAskMode ? query.trimStart().slice(1).trim() : '');
-	/** The question the answer on screen belongs to; empty before the first ask. */
-	let askedQuestion = $state('');
 
-	// ── Flattened item list ───────────────────────────────────────────────
-	// Keyboard nav runs over one flat array regardless of mode; the template
-	// draws a group header wherever the kind changes.
-
-	type Item =
-		| { kind: 'name'; path: string; entry: FsEntry }
-		| { kind: 'content'; path: string; hit: SearchHit }
-		| { kind: 'tag'; tag: string; count: number }
-		| { kind: 'tagfile'; path: string; tag: string };
-
-	let items = $derived.by((): Item[] => {
-		// Ask mode has no result list: the palette shows one answer instead.
-		if (isAskMode) return [];
-
-		if (isTagMode) {
-			if (selectedTag) {
-				const tag = selectedTag;
-				const paths = allTags.find((t) => t.tag === tag)?.files ?? [];
-				return paths.map((path) => ({ kind: 'tagfile', path, tag }));
-			}
-			return allTags
-				.filter((t) => !tagFilter || t.tag.includes(tagFilter))
-				.map((t) => ({ kind: 'tag', tag: t.tag, count: t.count }));
-		}
-
-		const out: Item[] = [];
-		const named = nameResults.map((entry) => entry.path);
-		for (const entry of nameResults) out.push({ kind: 'name', path: entry.path, entry });
-		for (const hit of contentResults) {
-			// A note whose name matched is already listed above; repeating it in
-			// the content group would fill the palette with duplicates (the index
-			// weights note names 10x, so almost every name hit is also a content
-			// hit). `named` holds at most MAX_NAME_RESULTS entries, so the linear
-			// scan is cheaper than the Set it replaces.
-			if (named.includes(hit.path)) continue;
-			out.push({ kind: 'content', path: hit.path, hit });
-		}
-		return out;
-	});
+	let items = $derived(
+		buildItems({
+			askMode: isAskMode,
+			tagMode: isTagMode,
+			selectedTag,
+			tags: tagsStore.items,
+			tagFilter,
+			names: search.names,
+			hits: search.contents
+		})
+	);
 
 	let nameCount = $derived(items.filter((i) => i.kind === 'name').length);
 	let contentCount = $derived(items.filter((i) => i.kind === 'content').length);
 	let canReplace = $derived(
-		!isTagMode && !isAskMode && trimmedQuery.length > 0 && contentResults.length > 0
+		!isTagMode && !isAskMode && trimmedQuery.length > 0 && search.contents.length > 0
 	);
 
-	// Keep the cursor inside the list when results shrink under it.
 	$effect(() => {
 		const len = items.length;
 		untrack(() => {
@@ -149,7 +66,6 @@
 		});
 	});
 
-	// The tag list is loaded lazily — only someone who types `#` pays for it.
 	$effect(() => {
 		if (isTagMode && vault.vaultPath) {
 			const root = vault.vaultPath;
@@ -157,15 +73,11 @@
 		}
 	});
 
-	// Same laziness for the endpoint: typing `?` is what pushes the saved config
-	// into Rust state, and the store caches it per vault.
 	$effect(() => {
 		if (isAskMode && vault.vaultPath) {
 			untrack(() => void ask.ensureConfigured());
 		}
 	});
-
-	// ── Ask mode ──────────────────────────────────────────────────────────
 
 	function submitAsk() {
 		if (!askQuery || ask.running) return;
@@ -173,7 +85,6 @@
 		void ask.ask(askQuery);
 	}
 
-	/** A `[[cite]]` in an answer opens the note it names, like any wiki-link. */
 	async function openCitation(title: string) {
 		if (!vault.vaultPath) return;
 		const results = await searchFiles(vault.vaultPath, title);
@@ -188,79 +99,15 @@
 		onclose();
 	}
 
-	function getIcon(path: string) {
-		const ext = path.slice(path.lastIndexOf('.')).toLowerCase();
-		if (ext === '.md') return FileText;
-		if (IMAGE_EXTS.has(ext)) return Image;
-		if (ext === '.pdf') return FileType;
-		return Hash;
-	}
-
-	// ── Search ────────────────────────────────────────────────────────────
-
-	async function runSearch(q: string) {
-		const gen = ++searchGeneration;
-		const trimmed = q.trim();
-
-		if (!vault.vaultPath || !trimmed || trimmed.startsWith('#') || trimmed.startsWith('?')) {
-			nameResults = [];
-			contentResults = [];
-			searching = false;
-			return;
-		}
-
-		searching = true;
-		try {
-			// Names come from the in-memory trie, contents from the FTS5 index.
-			// Issued together so the palette isn't gated on the slower of the two.
-			const [names, hits] = await Promise.all([
-				searchFiles(vault.vaultPath, trimmed),
-				searchIndex(vault.vaultPath, trimmed, MAX_CONTENT_RESULTS).catch(() => [] as SearchHit[])
-			]);
-			if (gen !== searchGeneration) return;
-			// `searchFiles` is already ranked best-first by the Rust trie
-			// (name prefix → token prefix → substring → path → fuzzy); do not re-sort.
-			nameResults = names.slice(0, MAX_NAME_RESULTS);
-			contentResults = hits;
-			selectedIndex = 0;
-		} catch (err) {
-			if (gen !== searchGeneration) return;
-			console.warn('Spotlight search failed:', err);
-			nameResults = [];
-			contentResults = [];
-		} finally {
-			if (gen === searchGeneration) searching = false;
-		}
-	}
-
 	function handleInput() {
 		selectedTag = null;
 		selectedIndex = 0;
-		if (debounceTimer) clearTimeout(debounceTimer);
-
-		// Tag mode reads a list we already hold in memory, and ask mode answers
-		// only when Enter is pressed — neither does a round trip per keystroke.
-		// Bump the generation anyway to void any content search still in flight
-		// from before the `#`/`?`.
-		if (query.trimStart().startsWith('#') || query.trimStart().startsWith('?') || !query.trim()) {
-			searchGeneration++;
-			nameResults = [];
-			contentResults = [];
-			searching = false;
-			return;
-		}
-
-		searching = true;
-		const q = query;
-		debounceTimer = setTimeout(() => runSearch(q), DEBOUNCE_MS);
+		search.input(vault.vaultPath, query);
 	}
 
-	// ── Activation ────────────────────────────────────────────────────────
-
-	function activate(item: Item) {
+	function activate(item: SpotlightItem) {
 		if (item.kind === 'tag') {
-			// Drill into the tag. Assigning `query` does not fire `oninput`, so
-			// `selectedTag` survives.
+			// Assigning `query` does not fire `oninput`, so the drill-down survives.
 			selectedTag = item.tag;
 			query = `#${item.tag}`;
 			selectedIndex = 0;
@@ -281,16 +128,11 @@
 		inputEl?.focus();
 	}
 
-	// ── Keyboard ──────────────────────────────────────────────────────────
-
 	function handleKeydown(e: KeyboardEvent) {
 		if (e.key === 'Escape') {
 			e.preventDefault();
 			e.stopPropagation();
-			// Escape stops a running question before it closes anything: the
-			// partial answer is worth more than the palette is.
 			if (ask.running) ask.cancel();
-			// Escape steps out of a tag before it closes the palette.
 			else if (selectedTag) backToTagCloud();
 			else onclose();
 			return;
@@ -326,7 +168,6 @@
 			e.preventDefault();
 			const item = items[selectedIndex];
 			if (item) activate(item);
-			return;
 		}
 	}
 
@@ -338,19 +179,13 @@
 		});
 	}
 
-	// ── Replace across files ──────────────────────────────────────────────
-
 	async function handleReplaceInFile(path: string) {
 		if (!canReplace) return;
 		replacing = true;
 		try {
-			const count = await replaceInFile(path, trimmedQuery, replaceQuery, false);
-			if (count > 0) {
-				toast.success(m.toast_replaced({ count: String(count) }));
-				await runSearch(query);
+			if (await replaceInOneFile(path, trimmedQuery, replaceQuery)) {
+				await search.rerun(vault.vaultPath, query);
 			}
-		} catch (err) {
-			toast.error(m.toast_replace_failed({ error: String(err) }));
 		} finally {
 			replacing = false;
 		}
@@ -359,25 +194,11 @@
 	async function handleReplaceAll() {
 		if (!canReplace) return;
 		replacing = true;
-		const paths = contentResults.map((h) => h.path);
-		let total = 0;
-		let failed = 0;
 		try {
-			for (const path of paths) {
-				try {
-					total += await replaceInFile(path, trimmedQuery, replaceQuery, false);
-				} catch (err) {
-					failed += 1;
-					console.warn(`Replace in ${path} failed:`, err);
-				}
+			const paths = search.contents.map((hit) => hit.path);
+			if (await replaceInEveryFile(paths, trimmedQuery, replaceQuery)) {
+				await search.rerun(vault.vaultPath, query);
 			}
-			if (total > 0) {
-				toast.success(
-					m.toast_replaced_in_files({ count: String(total), files: String(paths.length) })
-				);
-				await runSearch(query);
-			}
-			if (failed > 0) toast.error(m.toast_replace_failed_count({ count: failed }));
 		} finally {
 			replacing = false;
 		}
@@ -388,7 +209,7 @@
 	});
 
 	onDestroy(() => {
-		if (debounceTimer) clearTimeout(debounceTimer);
+		search.dispose();
 	});
 </script>
 
@@ -407,9 +228,8 @@
 		aria-label={m.spotlight_title()}
 		onclick={(e) => e.stopPropagation()}
 	>
-		<!-- Query row -->
 		<div class="flex items-center gap-2.5 border-b border-border px-4 py-3">
-			{#if searching || ask.running}
+			{#if search.searching || ask.running}
 				<Loader size={16} class="shrink-0 animate-spin text-subtle-foreground" />
 			{:else if isAskMode}
 				<Sparkles size={16} class="shrink-0 text-subtle-foreground" />
@@ -445,113 +265,25 @@
 			>
 		</div>
 
-		<!-- Replace row -->
 		{#if showReplace && !isTagMode && !isAskMode}
-			<div class="flex items-center gap-2.5 border-b border-border px-4 py-2.5">
-				<Replace size={14} class="shrink-0 text-subtle-foreground" />
-				<input
-					bind:value={replaceQuery}
-					placeholder={m.spotlight_replace_placeholder()}
-					type="text"
-					spellcheck="false"
-					autocomplete="off"
-					class="min-w-0 flex-1 border-none bg-transparent p-0 text-sm text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
-				/>
-				<button
-					type="button"
-					onclick={handleReplaceAll}
-					disabled={!canReplace || replacing}
-					title={m.spotlight_replace_all_files()}
-					class="flex shrink-0 items-center gap-1.5 rounded-xs border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent"
-				>
-					<ReplaceAll size={13} />
-					{m.spotlight_replace_all_short({ count: String(contentResults.length) })}
-				</button>
-			</div>
+			<SpotlightReplaceRow
+				bind:replaceQuery
+				{canReplace}
+				{replacing}
+				count={search.contents.length}
+				onreplaceall={handleReplaceAll}
+			/>
 		{/if}
 
-		<!-- Tag drill-down breadcrumb -->
 		{#if isTagMode && selectedTag}
-			<div class="flex items-center justify-between border-b border-border px-4 py-2">
-				<button
-					type="button"
-					onclick={backToTagCloud}
-					class="flex items-center gap-1.5 text-xs text-muted-foreground transition-colors hover:text-foreground"
-				>
-					<ChevronLeft size={13} />
-					<span class="font-mono text-accent-foreground">#{selectedTag}</span>
-				</button>
-				<span class="text-xs text-subtle-foreground">
-					{items.length}
-					{m.tags_files({ count: items.length })}
-				</span>
-			</div>
+			<SpotlightTagCrumb tag={selectedTag} count={items.length} onback={backToTagCloud} />
 		{/if}
 
-		<!-- Ask answer -->
 		{#if isAskMode}
-			<div class="flex min-h-0 flex-1 flex-col">
-				{#if ask.configured === false}
-					<div class="flex flex-col items-start gap-3 px-4 py-8">
-						<p class="m-0 text-sm text-muted-foreground">{m.spotlight_ask_not_configured()}</p>
-						<button
-							type="button"
-							onclick={onsettings}
-							class="flex items-center gap-1.5 rounded-xs border border-border px-2.5 py-1.5 text-xs text-foreground transition-colors hover:bg-surface-3"
-						>
-							<Sparkles size={13} />
-							{m.spotlight_ask_open_settings()}
-						</button>
-					</div>
-				{:else if !askedQuestion}
-					<div class="px-4 py-8 text-center text-sm text-subtle-foreground">
-						{m.spotlight_ask_hint()}
-					</div>
-				{:else}
-					<!-- Tool trace: what the answer looked at, in the order it looked. -->
-					{#if ask.steps.length > 0}
-						<div class="flex flex-col gap-1 border-b border-border px-4 py-2.5">
-							{#each ask.steps as step, i (i)}
-								<div class="flex items-center gap-2 text-xs text-subtle-foreground">
-									<Wrench size={12} class="shrink-0" />
-									<span class="min-w-0 truncate">{step.summary}</span>
-								</div>
-							{/each}
-						</div>
-					{/if}
-
-					<div class="min-h-0 flex-1 overflow-y-auto px-4 py-3">
-						{#if ask.answer}
-							<AskAnswer markdown={ask.answer} oncite={openCitation} />
-						{:else if ask.running}
-							<p class="m-0 text-sm text-subtle-foreground">{m.spotlight_ask_thinking()}</p>
-						{:else if !ask.error}
-							<p class="m-0 text-sm text-subtle-foreground">{m.spotlight_ask_empty()}</p>
-						{/if}
-						{#if ask.error}
-							<p class="m-0 mt-2 font-sans text-xs text-destructive">
-								{m.spotlight_ask_error({ error: ask.error })}
-							</p>
-						{/if}
-					</div>
-
-					{#if ask.running}
-						<div class="flex items-center justify-between border-t border-border px-4 py-2">
-							<span class="text-xs text-subtle-foreground">{askedQuestion}</span>
-							<button
-								type="button"
-								onclick={() => ask.cancel()}
-								class="shrink-0 rounded-xs border border-border px-2 py-1 text-xs text-muted-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
-							>
-								{m.spotlight_ask_cancel()}
-							</button>
-						</div>
-					{/if}
-				{/if}
-			</div>
+			<SpotlightAsk {askedQuestion} {onsettings} oncite={openCitation} />
 		{:else if items.length > 0}
 			<div class="min-h-0 flex-1 overflow-y-auto p-1.5" role="listbox" bind:this={listEl}>
-				{#each items as item, i (item.kind + ':' + (item.kind === 'tag' ? item.tag : item.path))}
+				{#each items as item, i (itemKey(item))}
 					{@const prev = items[i - 1]}
 
 					{#if item.kind === 'name' && prev?.kind !== 'name'}
@@ -574,89 +306,26 @@
 						</div>
 					{/if}
 
-					<!-- svelte-ignore a11y_click_events_have_key_events -->
-					<div
-						data-index={i}
-						role="option"
-						tabindex="-1"
-						aria-selected={i === selectedIndex}
-						onclick={() => activate(item)}
-						onmouseenter={() => (selectedIndex = i)}
-						class="relative flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-1.5 transition-colors {i ===
-						selectedIndex
-							? 'bg-accent'
-							: ''}"
-					>
-						{#if i === selectedIndex}
-							<span class="absolute top-2 bottom-2 left-0 w-0.5 rounded-full bg-brand"></span>
-						{/if}
-
-						{#if item.kind === 'tag'}
-							<Hash
-								size={16}
-								class="shrink-0 {i === selectedIndex
-									? 'text-accent-foreground'
-									: 'text-subtle-foreground'}"
-							/>
-							<span class="min-w-0 truncate font-mono text-sm text-foreground">#{item.tag}</span>
-							<span class="ml-auto shrink-0 text-xs text-subtle-foreground">{item.count}</span>
-						{:else}
-							{@const Icon = item.kind === 'name' ? getIcon(item.path) : FileText}
-							{@const name =
-								item.kind === 'name' ? item.entry.name : (item.path.split('/').pop() ?? item.path)}
-							{@const folder = displayPath(item.path, vault.vaultPath)}
-							<Icon
-								size={16}
-								class="shrink-0 self-start {i === selectedIndex
-									? 'text-accent-foreground'
-									: 'text-subtle-foreground'} mt-0.5"
-							/>
-							<div class="flex min-w-0 flex-1 flex-col gap-0.5">
-								<div class="flex min-w-0 items-baseline gap-2">
-									<span class="min-w-0 truncate text-sm font-medium text-foreground"
-										>{displayName(name)}</span
-									>
-									{#if folder}
-										<span class="ml-auto min-w-0 shrink truncate text-xs text-subtle-foreground"
-											>{folder}</span
-										>
-									{/if}
-								</div>
-								{#if item.kind === 'content' && item.hit.snippet}
-									<span class="min-w-0 truncate text-xs text-muted-foreground">
-										{#each splitHighlight(item.hit.snippet, trimmedQuery) as seg, si (si)}{#if seg.match}<mark
-													class="rounded-xs bg-(--color-brand-32) px-0.5 font-medium text-foreground"
-													>{seg.text}</mark
-												>{:else}{seg.text}{/if}{/each}
-									</span>
-								{/if}
-							</div>
-							{#if item.kind === 'content' && showReplace}
-								<!-- svelte-ignore a11y_click_events_have_key_events -->
-								<span
-									role="button"
-									tabindex="-1"
-									onclick={(e) => {
-										e.stopPropagation();
-										handleReplaceInFile(item.path);
-									}}
-									title={m.spotlight_replace_all_in_file()}
-									class="flex size-6 shrink-0 items-center justify-center self-center rounded-xs text-subtle-foreground transition-colors hover:bg-surface-3 hover:text-foreground"
-								>
-									<Replace size={12} />
-								</span>
-							{/if}
-						{/if}
-					</div>
+					<SpotlightRow
+						{item}
+						index={i}
+						selected={i === selectedIndex}
+						query={trimmedQuery}
+						vaultPath={vault.vaultPath}
+						{showReplace}
+						onactivate={() => activate(item)}
+						onhover={() => (selectedIndex = i)}
+						onreplace={handleReplaceInFile}
+					/>
 				{/each}
 			</div>
-		{:else if isTagMode && tagsLoading}
+		{:else if isTagMode && tagsStore.loading}
 			<div class="px-4 py-8 text-center text-sm text-subtle-foreground">{m.tags_loading()}</div>
 		{:else if isTagMode && selectedTag}
 			<div class="px-4 py-8 text-center text-sm text-subtle-foreground">{m.tags_no_files()}</div>
 		{:else if isTagMode}
 			<div class="px-4 py-8 text-center text-sm text-subtle-foreground">{m.tags_empty()}</div>
-		{:else if trimmedQuery && !searching}
+		{:else if trimmedQuery && !search.searching}
 			<div class="px-4 py-8 text-center text-sm text-subtle-foreground">
 				{m.spotlight_no_results()}
 			</div>

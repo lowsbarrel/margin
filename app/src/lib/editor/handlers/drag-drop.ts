@@ -8,7 +8,6 @@ import {
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 
-/** Move the editor cursor to a screen coordinate */
 export function setCursorAtCoords(editor: Editor, x: number, y: number): void {
 	const result = editor.view.posAtCoords({ left: x, top: y });
 	if (result == null) return;
@@ -16,18 +15,9 @@ export function setCursorAtCoords(editor: Editor, x: number, y: number): void {
 	try {
 		const tr = editor.view.state.tr.setSelection(TextSelection.create(editor.view.state.doc, pos));
 		editor.view.dispatch(tr);
-	} catch {
-		/* pos may be invalid for non-text nodes */
-	}
+	} catch {}
 }
 
-/**
- * Insert a file dragged out of the tree into the active note.
- *
- * The caret was already moved to where the row was dropped, so the insertion
- * point is read from there — a file that lives in the vault is linked where it
- * is, and never copied alongside itself.
- */
 export async function insertFileAtCursor(path: string, target: AttachmentTarget): Promise<void> {
 	try {
 		await insertDroppedPath(path, target, captureInsertionPoint(target.editor));
@@ -36,14 +26,7 @@ export async function insertFileAtCursor(path: string, target: AttachmentTarget)
 	}
 }
 
-/**
- * Insert a set of OS-dropped paths at `position`.
- *
- * The OS-drop router has already hit-tested the drop onto this editor and
- * converted the physical position Tauri reports into CSS pixels, so the only
- * jobs left here are to place the caret and to insert — at the position read
- * once, before the first import round-trip.
- */
+// The OS-drop router already hit-tested this editor and converted Tauri's physical drop point to CSS pixels.
 export async function handleTauriFileDrop(
 	paths: string[],
 	position: { x: number; y: number } | undefined,

@@ -28,8 +28,7 @@
 	let region = $state('us-east-1');
 	let accessKey = $state('');
 	let secretKey = $state('');
-	/* No longer editable: a folder chosen before attachments became automatic is
-	   carried through saves so its existing embeds keep resolving. */
+	/* Carried through saves so a folder chosen before attachments became automatic still resolves. */
 	let attachmentFolder = $state('');
 	let autoSync = $state(false);
 	let conflictStrategy = $state<ConflictStrategy>('local_wins');
@@ -59,8 +58,6 @@
 					llmModel = settings.llm.model;
 					llmEffort = settings.llm.effort ?? null;
 				}
-				// Hand the endpoint to Rust here, where the key is in hand, so the
-				// answer loop never needs it over IPC again.
 				if (settings?.llm) {
 					llmConfigure(settings.llm)
 						.then(() => ask.markConfigured(true))
@@ -88,8 +85,6 @@
 	function getAppSettings(): AppSettings {
 		const config = getS3Config();
 		const hasS3 = config.endpoint && config.bucket && config.access_key && config.secret_key;
-		// A model is what makes the endpoint usable; without one there is nothing
-		// to ask, so the AI section stays unconfigured rather than half-saved.
 		const model = llmModel.trim();
 		return {
 			s3: hasS3 ? config : null,
@@ -136,7 +131,6 @@
 		try {
 			const settings = getAppSettings();
 			if (settings.s3) await s3Configure(settings.s3);
-			// Rust state, not the settings file, is what the answer loop reads.
 			if (settings.llm) await llmConfigure(settings.llm);
 			ask.markConfigured(Boolean(settings.llm));
 			await saveSettings(vault.vaultPath, vault.encryptionKey, settings);

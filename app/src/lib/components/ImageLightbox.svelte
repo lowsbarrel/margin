@@ -13,7 +13,6 @@
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
-		/** Every image of the note the lightbox was opened from, in document order. */
 		images: LightboxImage[];
 		index: number;
 		onclose: () => void;
@@ -31,8 +30,6 @@
 		onnavigate((index + delta + images.length) % images.length);
 	}
 
-	// The scrim takes focus so Escape and the arrows work before any click, which
-	// a non-focusable div could never do.
 	onMount(() => scrimEl?.focus());
 
 	function handleKeydown(e: KeyboardEvent) {
@@ -49,12 +46,6 @@
 	}
 </script>
 
-<!--
-	The scrim and its chrome are deliberately theme-independent: a photo lightbox
-	is always a dark room, in light mode as much as dark. So these use literal
-	black/white with an alpha modifier rather than the semantic surface tokens,
-	which would flip with `data-theme` and wash the image out.
--->
 <div
 	class="fixed inset-0 z-300 flex flex-col bg-black/85 backdrop-blur-[6px]"
 	bind:this={scrimEl}
