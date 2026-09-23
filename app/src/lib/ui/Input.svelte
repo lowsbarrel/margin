@@ -18,6 +18,8 @@
 		disabled?: boolean;
 		readonly?: boolean;
 		mono?: boolean;
+		/** Id of a `<datalist>` offering suggestions while leaving free text allowed. */
+		list?: string;
 	}
 
 	let {
@@ -30,7 +32,8 @@
 		icon: Icon,
 		disabled = false,
 		readonly = false,
-		mono = false
+		mono = false,
+		list
 	}: Props = $props();
 
 	function handleInput(e: Event) {
@@ -66,6 +69,7 @@
 	<ShadInput
 		{type}
 		{id}
+		{list}
 		{placeholder}
 		{disabled}
 		{readonly}

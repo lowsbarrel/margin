@@ -78,6 +78,12 @@ pub fn validate(config: &LlmConfig) -> Result<String, String> {
     if config.model.trim().is_empty() {
         return Err("Model must not be empty".into());
     }
+    validate_endpoint(config)
+}
+
+/// The endpoint half of [`validate`]: listing models is how the user picks one,
+/// so it cannot require a model yet.
+pub fn validate_endpoint(config: &LlmConfig) -> Result<String, String> {
     let base = normalize_base_url(config.api_format, &config.base_url);
     let parsed = reqwest::Url::parse(&base).map_err(|e| format!("Invalid base URL: {e}"))?;
     if parsed.scheme() != "http" && parsed.scheme() != "https" {
@@ -143,6 +149,18 @@ mod tests {
         let mut empty_model = config(ApiFormat::Openai, "https://x.test/v1");
         empty_model.model = "  ".into();
         assert!(validate(&empty_model).is_err());
+    }
+
+    #[test]
+    fn listing_models_needs_an_endpoint_but_no_model_yet() {
+        let mut unpicked = config(ApiFormat::Openai, "https://openrouter.ai/api/v1");
+        unpicked.model = String::new();
+        assert_eq!(
+            validate_endpoint(&unpicked).as_deref(),
+            Ok("https://openrouter.ai/api/v1")
+        );
+        unpicked.base_url = "file:///etc".into();
+        assert!(validate_endpoint(&unpicked).is_err());
     }
 
     #[test]
