@@ -4,7 +4,17 @@ import { startPointerDrag } from '$lib/utils/drag-handler';
 import { startDrag as startNativeDrag } from '@crabnebula/tauri-plugin-drag';
 import type { TreeEntry } from '$lib/fs/bridge';
 
+/**
+ * How long the pointer must stay outside the window before an in-app drag is
+ * promoted to a native OS drag. A drag that merely brushes the edge of the
+ * webview reports a point at or past the boundary for a frame or two; requiring
+ * a sustained exit means only a deliberate one converts the gesture.
+ */
+const NATIVE_DRAG_EXIT_DWELL_MS = 250;
 const NATIVE_DRAG_END_SETTLE_MS = 100;
+
+/** When the pointer was first seen outside the window during the current drag. */
+let outsideSince: number | null = null;
 
 export function isDescendantOrSelf(source: string, target: string): boolean {
 	return target === source || target.startsWith(source + '/');
@@ -46,49 +56,49 @@ async function applySequentially(
 	}
 }
 
-export async function handleFolderDrop(
-	e: MouseEvent,
+/**
+ * Move the dragged entries into `folderPath` (the vault root included).
+ *
+ * Entries already in that folder, and folders dropped inside themselves or a
+ * descendant, are filtered out rather than attempted: the backend would refuse
+ * them, and the user sees no drag at all instead of a failed move.
+ */
+export async function moveEntriesInto(
 	folderPath: string,
 	onmoveentry: (fromPath: string, toDir: string, isDir: boolean) => Promise<void>,
 	setDropTarget: (path: string | null) => void
 ) {
-	if (!drag.active || !drag.item || drag.item.kind !== 'file') return;
-	e.stopPropagation();
+	if (!drag.active || drag.item?.kind !== 'file') return;
 	const entries = getDropEntries();
 	const valid = entries.filter((entry) => {
 		if (isDescendantOrSelf(entry.path, folderPath)) return false;
-		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
-		return parent !== folderPath;
+		return entry.path.slice(0, entry.path.lastIndexOf('/')) !== folderPath;
 	});
+	// End the pointer drag before the first await: the page-level mouseup handler
+	// runs after this one and must not resolve the same drop a second time.
 	drag.end();
+	drag.setExternalDropTarget(null);
 	setDropTarget(null);
+	outsideSince = null;
 	await applySequentially(valid, (path, isDir) => onmoveentry(path, folderPath, isDir));
 }
 
-export async function handleRootDrop(
-	e: MouseEvent,
-	vaultPath: string,
-	onmoveentry: (fromPath: string, toDir: string, isDir: boolean) => Promise<void>,
-	setDropTarget: (path: string | null) => void
-) {
-	if (!drag.active || !drag.item || drag.item.kind !== 'file') return;
-	const entries = getDropEntries();
-	const valid = entries.filter((entry) => {
-		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
-		return parent !== vaultPath;
-	});
-	drag.end();
-	setDropTarget(null);
-	await applySequentially(valid, (path, isDir) => onmoveentry(path, vaultPath, isDir));
-}
-
 /**
- * Start native OS drag when cursor exits the window.
+ * Start a native OS drag once the pointer has deliberately left the window.
  *
  * A drop outside the window is a copy: the OS hands the target application a
  * copy of the file. The vault entry is never removed — the OS reports `Dropped`
  * for both copy and move gestures, so treating a drop as a move deleted notes
  * the user had merely dragged somewhere.
+ *
+ * "Deliberately left" is the pointer strictly outside the viewport bounds
+ * (`clientX < 0 || clientX >= innerWidth || clientY < 0 || clientY >=
+ * innerHeight`) for {@link NATIVE_DRAG_EXIT_DWELL_MS}. Neither the boundary
+ * point nor a one-frame excursion counts, so a drag toward the sidebar rail can
+ * no longer convert mid-gesture. The cost of the rule is that if the webview
+ * stops delivering mousemove as soon as the pointer leaves, the native drag is
+ * never started — the failure mode is a gesture that stays in-app, which is
+ * strictly better than one that silently abandons its own drop target.
  */
 export function tryNativeDrag(
 	clientX: number,
@@ -96,17 +106,29 @@ export function tryNativeDrag(
 	dragIconPath: string,
 	nativeDragState: { started: boolean }
 ) {
-	if (!drag.active || drag.nativeDragActive || nativeDragState.started) return;
+	if (!drag.active || drag.nativeDragActive || nativeDragState.started) {
+		outsideSince = null;
+		return;
+	}
 	const item = drag.item;
-	if (!item || item.kind !== 'file') return;
+	if (!item || item.kind !== 'file') {
+		outsideSince = null;
+		return;
+	}
 
-	const margin = 2;
 	const outside =
-		clientX <= margin ||
-		clientY <= margin ||
-		clientX >= window.innerWidth - margin ||
-		clientY >= window.innerHeight - margin;
-	if (!outside) return;
+		clientX < 0 || clientY < 0 || clientX >= window.innerWidth || clientY >= window.innerHeight;
+	if (!outside) {
+		outsideSince = null;
+		return;
+	}
+	const now = performance.now();
+	if (outsideSince === null) {
+		outsideSince = now;
+		return;
+	}
+	if (now - outsideSince < NATIVE_DRAG_EXIT_DWELL_MS) return;
+	outsideSince = null;
 
 	nativeDragState.started = true;
 	drag.end();

@@ -20,6 +20,13 @@ let insertState = $state<PendingInsert | null>(null);
 /** Tracks whether a native OS drag is in progress (file dragged outside the window). */
 let _nativeDragActive = false;
 
+/**
+ * The folder an OS drop is currently hovering, so the tree can highlight it.
+ * Separate from the in-app drag's own highlight: an OS drag never starts a
+ * pointer drag, so nothing else would tell the row it is the target.
+ */
+let _externalDropTarget = $state<string | null>(null);
+
 export const drag = {
 	get active() {
 		return state !== null;
@@ -65,5 +72,12 @@ export const drag = {
 	/** Whether a native OS drag is currently in progress. */
 	get nativeDragActive() {
 		return _nativeDragActive;
+	},
+	/** Folder highlighted as the target of an in-flight OS drop, if any. */
+	get externalDropTarget() {
+		return _externalDropTarget;
+	},
+	setExternalDropTarget(path: string | null) {
+		_externalDropTarget = path;
 	}
 };

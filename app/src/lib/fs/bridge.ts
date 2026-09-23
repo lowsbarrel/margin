@@ -166,6 +166,17 @@ export async function copyDirectory(from: string, to: string): Promise<void> {
 	if (r.status === 'error') throw r.error;
 }
 
+/**
+ * Copy a directory from an arbitrary source *outside* the vault into a
+ * vault-contained destination — the directory counterpart of
+ * `importExternalFile`, for a folder dropped onto the tree from a file manager.
+ * Only the destination is containment-checked.
+ */
+export async function importExternalDirectory(from: string, to: string): Promise<void> {
+	const r = await commands.importExternalDirectory(from, to);
+	if (r.status === 'error') throw r.error;
+}
+
 export async function watchFile(path: string): Promise<void> {
 	const r = await commands.watchFile(path);
 	if (r.status === 'error') throw r.error;

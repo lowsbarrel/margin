@@ -55,27 +55,20 @@ export async function insertFileAtCursor(
 	}
 }
 
-/** Handle Tauri drag-drop events (OS-level file drops) */
+/**
+ * Insert a set of OS-dropped paths at `position`.
+ *
+ * The OS-drop router has already hit-tested the drop onto this editor and
+ * converted the physical position Tauri reports into CSS pixels, so the only
+ * job left here is to place the caret and insert.
+ */
 export async function handleTauriFileDrop(
 	paths: string[],
 	position: { x: number; y: number } | undefined,
 	editor: Editor,
-	container: HTMLElement,
 	vaultPath: string,
 	attachmentFolder: string | null
 ): Promise<void> {
-	// Only handle drops that land on the editor container
-	if (position && container) {
-		const rect = container.getBoundingClientRect();
-		if (
-			position.x < rect.left ||
-			position.x > rect.right ||
-			position.y < rect.top ||
-			position.y > rect.bottom
-		)
-			return;
-	}
-
 	// Place cursor at drop position before inserting
 	if (position) setCursorAtCoords(editor, position.x, position.y);
 
