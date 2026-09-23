@@ -1,7 +1,7 @@
 use crate::crypto;
 use crate::fs::normalise_slashes;
-use aes_gcm_siv::aead::OsRng;
-use rand::RngCore;
+use rand::TryRng;
+use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
@@ -69,7 +69,9 @@ fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
     }
 
     let mut key = vec![0u8; 32];
-    OsRng.fill_bytes(&mut key);
+    SysRng
+        .try_fill_bytes(&mut key)
+        .map_err(|e| format!("OS random source failed: {e}"))?;
     // Write atomically via a sibling temp file so a crash mid-write doesn't
     // leave a zero-byte or partial device key that would corrupt all sessions.
     let tmp_key_path = key_path.with_extension("tmp");
