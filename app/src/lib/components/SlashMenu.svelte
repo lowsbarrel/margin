@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { SlashMenuItem } from '$lib/editor/slash-command';
+	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
 		items: SlashMenuItem[];
@@ -28,7 +29,7 @@
 
 <div class="slash-menu" bind:this={listEl}>
 	{#if items.length === 0}
-		<div class="slash-menu-empty">No results</div>
+		<div class="slash-menu-empty">{m.menu_no_results()}</div>
 	{:else}
 		{#each items as item, index (item.title)}
 			<button

@@ -86,8 +86,11 @@
 			await setVaultDirectory(profile.vault_path);
 			vault.unlock(keys, profile.vault_path, profile.mnemonic, profile.name);
 		} catch (err) {
+			// A transient failure (unmounted volume, permissions) must not forget the
+			// vault: `vault.lock()` clears the stored session, and auto-open would
+			// then never happen again until the mnemonic was re-entered.
 			console.warn('Auto-login failed:', err);
-			vault.lock();
+			error = String(err);
 			autoLogging = false;
 		}
 	}
@@ -386,7 +389,7 @@
 												<button
 													class="absolute top-2 right-2 flex bg-transparent p-1 text-subtle-foreground transition-colors hover:text-foreground"
 													onclick={copyMnemonic}
-													aria-label="Copy"
+													aria-label={m.login_copy_passphrase()}
 												>
 													{#if copied}
 														<Check size={14} />

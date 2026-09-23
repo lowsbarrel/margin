@@ -9,6 +9,7 @@
 	import { serialize, deserialize } from '$lib/canvas/serialization';
 	import { render as renderCanvas, type RenderOptions } from '$lib/canvas/renderer';
 	import { SnapCache } from '$lib/canvas/snapping';
+	import { isFormControlFocused } from '$lib/utils/modal';
 	import CanvasToolbar from './CanvasToolbar.svelte';
 	import CanvasContextMenu from './CanvasContextMenu.svelte';
 
@@ -353,6 +354,9 @@
 
 	let spaceHeld = false;
 	function handleKeyDown(e: KeyboardEvent) {
+		// A focused control owns Space (it activates buttons and selects) and
+		// Cmd+Z: acting on the drawing instead would be a surprise edit.
+		if (isFormControlFocused()) return;
 		if (e.code === 'Space' && !e.repeat) {
 			spaceHeld = true;
 			if (!isDrawing) wrapperEl.style.cursor = 'grab';
@@ -486,7 +490,7 @@
 	onpointerenter={() => (showCursor = true)}
 	onpointerleave={() => (showCursor = false)}
 	role="application"
-	aria-label="Canvas editor"
+	aria-label={m.canvas_label()}
 >
 	<canvas
 		class="absolute top-0 left-0 block"

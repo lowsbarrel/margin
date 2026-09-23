@@ -1,5 +1,6 @@
 import { Node, nodeInputRule, mergeAttributes } from '@tiptap/core';
 import type { Node as PMNode } from '@tiptap/pm/model';
+import * as m from '$lib/paraglide/messages.js';
 
 /**
  * Minimal structural types for the tiptap-markdown serializer state and the
@@ -198,7 +199,7 @@ export const MathBlock = Node.create({
 						renderArea.innerHTML = html;
 					}
 				} catch {
-					renderArea.textContent = text || 'Empty math block';
+					renderArea.textContent = text || m.editor_empty_math();
 				}
 				renderArea.classList.toggle('math-empty', !text);
 			}
