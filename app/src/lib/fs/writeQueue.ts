@@ -26,6 +26,69 @@ export function initWriteQueue(rawWrite: WriteFn): void {
 	_rawWrite = rawWrite;
 }
 
+/** How many recent writes per path the watcher can recognise as the app's own. */
+const RECENT_WRITES_PER_PATH = 3;
+const recentWrites = new Map<string, string[]>();
+
+/**
+ * Content fingerprint for "did we write this?". Two independently seeded
+ * FNV-1a lanes give a 64-bit digest — the file watcher decides whether an
+ * event is our own write by comparing fingerprints, and a collision would
+ * silently swallow a real external edit.
+ */
+function fingerprint(bytes: Uint8Array): string {
+	let a = 0x811c9dc5;
+	let b = 0x01000193;
+	for (let i = 0; i < bytes.length; i++) {
+		const byte = bytes[i];
+		a = ((a ^ byte) * 0x01000193) >>> 0;
+		b = ((b ^ byte) * 0x811c9dc5) >>> 0;
+	}
+	return `${bytes.length}:${a.toString(36)}:${b.toString(36)}`;
+}
+
+function recordRecentWrite(path: string, content: Uint8Array): void {
+	const digest = fingerprint(content);
+	const list = recentWrites.get(path) ?? [];
+	if (list[list.length - 1] === digest) return;
+	list.push(digest);
+	if (list.length > RECENT_WRITES_PER_PATH) list.shift();
+	recentWrites.set(path, list);
+}
+
+/**
+ * Whether `content` matches something the app itself wrote for `path` recently.
+ * The file watcher uses this to tell our own saves from external edits by
+ * content: a time window either suppresses a real external edit that lands
+ * during it or lets our own save through after it.
+ */
+export function isOwnRecentWrite(path: string, content: Uint8Array): boolean {
+	return recentWrites.get(path)?.includes(fingerprint(content)) ?? false;
+}
+
+/** Follow a rename/move so the new paths inherit the old paths' recent writes. */
+export function remapRecentWrites(from: string, to: string): void {
+	for (const [path, list] of Array.from(recentWrites)) {
+		if (path === from) {
+			recentWrites.delete(path);
+			recentWrites.set(to, list);
+		} else if (path.startsWith(`${from}/`)) {
+			recentWrites.delete(path);
+			recentWrites.set(to + path.slice(from.length), list);
+		}
+	}
+}
+
+/**
+ * Flush every editor's pending debounced save and await the write queue, so the
+ * disk holds the latest content before a rename or a close. The `margin:flush`
+ * listeners are synchronous, so every write is enqueued before the drain starts.
+ */
+export async function flushEditorWrites(): Promise<void> {
+	window.dispatchEvent(new Event('margin:flush'));
+	await flushWriteQueue();
+}
+
 /**
  * Queue a write for `path`. Only one write per path is in flight at a time;
  * while one is in flight, a newer call replaces any queued content (latest
@@ -87,6 +150,9 @@ function endSettle(path: string): void {
 }
 
 async function runWrite(path: string, content: Uint8Array): Promise<void> {
+	// Recorded before the bytes hit disk so the watcher can recognise the event
+	// as ours no matter when it fires.
+	recordRecentWrite(path, content);
 	beginSettle(path);
 	inflight.set(path, true);
 	try {

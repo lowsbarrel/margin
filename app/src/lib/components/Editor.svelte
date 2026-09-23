@@ -9,7 +9,8 @@
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
-	import { writeFileBytes } from '$lib/fs/bridge';
+	import { writeFileBytes, fileExists } from '$lib/fs/bridge';
+	import { fileTitle } from '$lib/stores/panes.svelte';
 	import { saveSnapshot } from '$lib/history/bridge';
 	import { getCurrentWebview } from '@tauri-apps/api/webview';
 	import { drag } from '$lib/stores/drag.svelte';
@@ -69,7 +70,7 @@
 		active?: boolean;
 		/** Caret position to restore once, on first mount (workspace restore). */
 		initialCursorPos?: number;
-		onrename?: (oldPath: string, newPath: string) => void;
+		onrename?: (oldPath: string, newPath: string) => void | Promise<void>;
 		onwikilink?: (title: string) => void;
 		onsave?: (content: string) => void;
 		/** Report the current caret position so it can be persisted per tab. */
@@ -97,9 +98,9 @@
 	 * The note title lives in a `contenteditable` div, so its text is state the
 	 * component owns rather than something to poke into the DOM by hand:
 	 * `bind:textContent` seeds it on mount and writes the reverted name back when
-	 * an edit fails validation. Seeded through `untrack` because the `title` prop
-	 * follows the file path — a rename originates *here*, and letting the prop
-	 * feed back in would fight the caret while typing.
+	 * an edit fails validation. Seeded through `untrack` because a rename
+	 * originates *here*: only a path change from outside (the sync effect below)
+	 * may overwrite it, never the prop feeding back mid-edit.
 	 */
 	let titleText = $state(untrack(() => initialTitle));
 	let tiptap = $state<Editor | null>(null);
@@ -119,6 +120,10 @@
 	let pendingSaveText: string | null = null;
 	let alive = true;
 	let currentPath = $state(untrack(() => filePath));
+	/** Last `filePath` prop value seen, to tell a real move from a re-render. */
+	let syncedFilePath = untrack(() => filePath);
+	/** True while a title rename started here is awaiting its callback. */
+	let titleRenamePending = false;
 	let unlistenDragDrop: (() => void) | null = null;
 	let handleFindHotkeyRef: EventListener | null = null;
 	let lightboxSrc = $state<string | null>(null);
@@ -138,6 +143,18 @@
 	let lastSnapshotTime = 0;
 	let lastSnapshotMd: string | null = null;
 
+	// The tab's path changes underneath us when the sidebar renames or moves the
+	// note; without this, saves keep writing to the path the file no longer has.
+	$effect(() => {
+		const path = filePath;
+		if (path === syncedFilePath) return;
+		syncedFilePath = path;
+		// A rename started here owns both fields until its callback settles.
+		if (titleRenamePending) return;
+		currentPath = path;
+		titleText = fileTitle(path);
+	});
+
 	// Reload content on external update
 	let lastSeenVersion = untrack(() => externalContentVersion);
 	let externalUpdateToken = 0;
@@ -146,8 +163,14 @@
 		if (v !== lastSeenVersion) {
 			lastSeenVersion = v;
 			if (tiptap && initialContent != null) {
-				// Flush any in-flight local edit before swapping content so it isn't lost.
-				flushPendingSave();
+				// Whatever local text is still queued for the debounced save is
+				// superseded by the incoming content. Snapshot the document as it
+				// stands so the edit survives in history, then drop the stale write
+				// — flushing it would put the old text back on disk over the very
+				// change being adopted.
+				snapshot(serializeDocument(tiptap));
+				cancelPendingSave();
+				editorStore.setDirty(false);
 				// Guard against out-of-order async resolution (mirror bubblePositionToken).
 				const token = ++externalUpdateToken;
 				transformImagePaths(
@@ -179,19 +202,7 @@
 		writeFileBytes(currentPath, encoded)
 			.then(() => {
 				editorStore.setDirty(false);
-				const now = Date.now();
-				if (
-					vault.vaultPath &&
-					now - lastSnapshotTime >= SNAPSHOT_INTERVAL_MS &&
-					text !== lastSnapshotMd
-				) {
-					lastSnapshotTime = now;
-					lastSnapshotMd = text;
-					saveSnapshot(vault.vaultPath, currentPath, encoded).catch((err) => {
-						console.warn('Snapshot save failed:', err);
-						toast.error(m.toast_save_snapshot_failed());
-					});
-				}
+				if (Date.now() - lastSnapshotTime >= SNAPSHOT_INTERVAL_MS) snapshot(text);
 			})
 			.catch((err) => {
 				console.error('Save failed:', err);
@@ -220,6 +231,30 @@
 		const text = pendingSaveText;
 		pendingSaveText = null;
 		if (text != null) saveNow(text);
+	}
+
+	/**
+	 * Keep a copy of `text` in the note's history. Skipped when the last snapshot
+	 * already holds this content, so the periodic interval and the pre-overwrite
+	 * snapshot don't duplicate each other.
+	 */
+	function snapshot(text: string) {
+		if (!vault.vaultPath || text === lastSnapshotMd) return;
+		lastSnapshotTime = Date.now();
+		lastSnapshotMd = text;
+		saveSnapshot(vault.vaultPath, currentPath, new TextEncoder().encode(text)).catch((err) => {
+			console.warn('Snapshot save failed:', err);
+			toast.error(m.toast_save_snapshot_failed());
+		});
+	}
+
+	/** Drop the pending debounced save — its text has been superseded. */
+	function cancelPendingSave() {
+		if (saveTimer) {
+			clearTimeout(saveTimer);
+			saveTimer = null;
+		}
+		pendingSaveText = null;
 	}
 
 	/** Report the caret position to the parent so it can be persisted per tab. */
@@ -258,9 +293,7 @@
 		if (!alive) return;
 		if (!raw) return;
 
-		const currentName = currentPath.split('/').pop() ?? '';
-		const currentTitle = currentName.endsWith('.md') ? currentName.slice(0, -3) : currentName;
-		if (raw === currentTitle) return;
+		if (raw === fileTitle(currentPath)) return;
 
 		if (renameTimer) clearTimeout(renameTimer);
 		renameTimer = setTimeout(() => {
@@ -272,20 +305,50 @@
 			}
 			const dir = currentPath.substring(0, currentPath.lastIndexOf('/'));
 			const newPath = `${dir}/${raw}.md`;
-			if (newPath !== currentPath) {
-				const oldPath = currentPath;
-				currentPath = newPath;
-				onrename?.(oldPath, newPath);
-			}
+			if (newPath !== currentPath) void renameTo(newPath);
 		}, RENAME_DELAY);
 	}
 
-	function handleTitleBlur() {
-		const error = validateName(titleText.trim());
-		if (error) {
-			const name = currentPath.split('/').pop() ?? '';
-			titleText = name.endsWith('.md') ? name.slice(0, -3) : name;
+	/** Put the title input back to the name of the file this editor still holds. */
+	function revertTitle() {
+		titleText = fileTitle(currentPath);
+	}
+
+	/**
+	 * Rename the file behind this editor, leaving `currentPath` untouched until
+	 * the rename has gone through: while it is in flight a flush must still write
+	 * to the old path, and the backend refuses to overwrite an existing file.
+	 */
+	async function renameTo(newPath: string) {
+		// A second attempt while one is in flight would still be targeting the path
+		// this editor has not moved to yet; the first one settles the title.
+		if (titleRenamePending) return;
+		titleRenamePending = true;
+		try {
+			// A case-only rename targets the same directory entry, so `fileExists()`
+			// reports it as present — only a destination that differs beyond case can
+			// be a collision.
+			const differsBeyondCase = newPath.toLowerCase() !== currentPath.toLowerCase();
+			if (differsBeyondCase && (await fileExists(newPath))) {
+				toast.error(m.toast_path_exists({ name: newPath.split('/').pop() ?? '' }));
+				revertTitle();
+				return;
+			}
+
+			await onrename?.(currentPath, newPath);
+			currentPath = newPath;
+			titleText = fileTitle(newPath);
+		} catch (err) {
+			console.error('Rename failed:', err);
+			revertTitle();
+			toast.error(m.toast_rename_failed({ error: String(err) }));
+		} finally {
+			titleRenamePending = false;
 		}
+	}
+
+	function handleTitleBlur() {
+		if (validateName(titleText.trim())) revertTitle();
 	}
 
 	function handleTitleKeydown(e: KeyboardEvent) {
@@ -391,11 +454,8 @@
 	}
 
 	async function handleTauriDrop(paths: string[], position?: { x: number; y: number }) {
-		// If this drop originated from our own native drag, flag it and skip
-		if (drag.nativeDragActive) {
-			drag.markDroppedBackInApp();
-			return;
-		}
+		// If this drop originated from our own native drag, skip it
+		if (drag.nativeDragActive) return;
 		if (!vault.vaultPath || !tiptap) return;
 		await handleTauriFileDrop(
 			paths,

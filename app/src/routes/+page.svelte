@@ -21,8 +21,9 @@
 		rebuildIndex
 	} from '$lib/fs/bridge';
 	import { loadSettings } from '$lib/settings/bridge';
+	import { saveSnapshot } from '$lib/history/bridge';
 	import { s3Configure } from '$lib/s3/bridge';
-	import { flushWriteQueue } from '$lib/fs/writeQueue';
+	import { flushEditorWrites, isOwnRecentWrite } from '$lib/fs/writeQueue';
 	import { getCurrentWindow } from '@tauri-apps/api/window';
 	import {
 		startAutoSync,
@@ -64,7 +65,6 @@
 	let sidebarWidth = $state(280);
 	let attachmentFolder = $state<string | null>(null);
 	let pendingScrollText = $state<string | null>(null);
-	let lastSaveTime = 0;
 	let unlistenFileChange: (() => void) | null = null;
 	let unlistenVaultChange: (() => void) | null = null;
 	let unlistenCloseRequested: (() => void) | null = null;
@@ -255,10 +255,6 @@
 	// Effects
 
 	$effect(() => {
-		if (!editor.dirty) lastSaveTime = Date.now();
-	});
-
-	$effect(() => {
 		const tiptap = editor.tiptap;
 		const text = pendingScrollText;
 		if (tiptap?.state?.doc && text) {
@@ -274,12 +270,26 @@
 		updateInterval = setInterval(checkForAppUpdate, 5 * 60 * 1000);
 
 		onFileChanged(async () => {
-			if (Date.now() - lastSaveTime < 2000) return;
 			const tab = panes.activeTab;
 			if (!tab) return;
 			try {
 				const bytes = await readFileBytes(tab.path);
+				// Our own saves echo back through the watcher. Recognise them by
+				// content — a time window either swallows a real external edit that
+				// lands inside it or lets our own save through after it.
+				if (isOwnRecentWrite(tab.path, bytes)) return;
 				const newContent = new TextDecoder().decode(bytes);
+				if (newContent === tab.content) return;
+				// This is a genuine external change and applying it replaces whatever
+				// the editor holds. Snapshot the version being replaced first so an
+				// external edit can never cost the user their local text.
+				if (vault.vaultPath) {
+					try {
+						await saveSnapshot(vault.vaultPath, tab.path, new TextEncoder().encode(tab.content));
+					} catch (err) {
+						console.warn('Failed to snapshot before applying external change:', err);
+					}
+				}
 				if (panes.applyExternalContent(tab.path, newContent)) {
 					editor.markLocalChange();
 				}
@@ -320,14 +330,13 @@
 				closing = true;
 				event.preventDefault();
 				try {
-					window.dispatchEvent(new Event('margin:flush'));
 					// Stop autosync now so it can't keep enqueuing writes while we drain;
-					// otherwise flushWriteQueue()'s loop may never see settled.size hit 0.
+					// otherwise the flush loop may never see settled.size hit 0.
 					stopAutoSync();
 					// Bound the flush: a stuck/looping write queue (locked file, stalled
 					// IPC) must never be able to wedge the window permanently open.
 					await Promise.race([
-						flushWriteQueue(),
+						flushEditorWrites(),
 						new Promise((resolve) => setTimeout(resolve, 3000))
 					]);
 				} finally {

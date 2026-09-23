@@ -229,31 +229,6 @@ pub fn clear_snapshots(vault_path: &str, file_path: &str) -> Result<u32, String>
     Ok(count)
 }
 
-/// Delete the entire history subtree for a given path (file or directory).
-/// When a directory is deleted, all history for every file beneath it is removed.
-#[tauri::command]
-#[specta::specta]
-pub fn clear_history_tree(vault_path: &str, entry_path: &str) -> Result<(), String> {
-    let vault = normalise_slashes(vault_path);
-    let entry = normalise_slashes(entry_path);
-    let rel = rel_under_vault(&vault, &entry)
-        .ok_or_else(|| "Path is not inside the vault".to_string())?;
-    reject_parent_dir(&rel)?;
-    let vault = vault.trim_end_matches('/');
-    let history_path = format!("{vault}/.margin/history/{rel}");
-    let p = Path::new(&history_path);
-
-    if p.exists() {
-        if p.is_dir() {
-            fs::remove_dir_all(p).map_err(|e| format!("Failed to remove history tree: {e}"))?;
-        } else {
-            fs::remove_file(p).map_err(|e| format!("Failed to remove history entry: {e}"))?;
-        }
-    }
-
-    Ok(())
-}
-
 /// Move/rename the history directory when a file or directory is renamed.
 #[tauri::command]
 #[specta::specta]

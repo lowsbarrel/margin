@@ -19,7 +19,6 @@ let insertState = $state<PendingInsert | null>(null);
 
 /** Tracks whether a native OS drag is in progress (file dragged outside the window). */
 let _nativeDragActive = false;
-let _droppedBackInApp = false;
 
 export const drag = {
 	get active() {
@@ -58,7 +57,6 @@ export const drag = {
 	/** Mark that a native OS drag has started (file dragged outside the window). */
 	startNativeDrag() {
 		_nativeDragActive = true;
-		_droppedBackInApp = false;
 	},
 	/** Mark that the native OS drag has ended. */
 	endNativeDrag() {
@@ -67,13 +65,5 @@ export const drag = {
 	/** Whether a native OS drag is currently in progress. */
 	get nativeDragActive() {
 		return _nativeDragActive;
-	},
-	/** Signal that the dragged file was dropped back into the app. */
-	markDroppedBackInApp() {
-		_droppedBackInApp = true;
-	},
-	/** Whether the file was dropped back into the app window. */
-	get droppedBackInApp() {
-		return _droppedBackInApp;
 	}
 };
