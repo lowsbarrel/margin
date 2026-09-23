@@ -5,15 +5,12 @@
 	import { saveSettings, loadSettings, type AppSettings } from '$lib/settings/bridge';
 	import { startAutoSync, stopAutoSync, type ConflictStrategy } from '$lib/sync/s3sync';
 	import { GlassModal } from '$lib/ui';
-	import { listDirectory } from '$lib/fs/bridge';
-	import { resolveAttachmentFolder } from '$lib/editor/attachments';
 	import * as m from '$lib/paraglide/messages.js';
 	import { llmConfigure, type ApiFormat } from '$lib/ai/bridge';
 	import { ask } from '$lib/stores/ask.svelte';
 	import SettingsVault from './settings/SettingsVault.svelte';
 	import SettingsCloud from './settings/SettingsCloud.svelte';
 	import SettingsAi from './settings/SettingsAi.svelte';
-	import SettingsAttachments from './settings/SettingsAttachments.svelte';
 	import SettingsLocale from './settings/SettingsLocale.svelte';
 	import SettingsAppearance from './settings/SettingsAppearance.svelte';
 	import SettingsExportZip from './settings/SettingsExportZip.svelte';
@@ -22,21 +19,20 @@
 
 	interface Props {
 		onclose: () => void;
-		/** The attachments folder changed — the app hides it in the file tree. */
-		onattachmentschange?: (folder: string) => void;
 	}
 
-	let { onclose, onattachmentschange }: Props = $props();
+	let { onclose }: Props = $props();
 
 	let endpoint = $state('');
 	let bucket = $state('');
 	let region = $state('us-east-1');
 	let accessKey = $state('');
 	let secretKey = $state('');
+	/* No longer editable: a folder chosen before attachments became automatic is
+	   carried through saves so its existing embeds keep resolving. */
 	let attachmentFolder = $state('');
 	let autoSync = $state(false);
 	let conflictStrategy = $state<ConflictStrategy>('local_wins');
-	let vaultFolders = $state<string[]>([]);
 	let llmFormat = $state<ApiFormat>('openai');
 	let llmBaseUrl = $state('');
 	let llmApiKey = $state('');
@@ -73,12 +69,6 @@
 				} else {
 					ask.markConfigured(false);
 				}
-			});
-			listDirectory(vault.vaultPath).then((entries) => {
-				vaultFolders = entries
-					.filter((e) => e.is_dir && !e.name.startsWith('.'))
-					.map((e) => e.name)
-					.sort();
 			});
 		}
 	});
@@ -155,7 +145,6 @@
 				stopAutoSync();
 			}
 
-			onattachmentschange?.(resolveAttachmentFolder(settings.attachment_folder));
 			toast.success(m.toast_settings_saved());
 		} catch (err) {
 			toast.error(m.toast_save_failed({ error: String(err) }));
@@ -180,7 +169,6 @@
 		bind:apiKey={llmApiKey}
 		bind:model={llmModel}
 	/>
-	<SettingsAttachments bind:attachmentFolder {vaultFolders} />
 	<SettingsLocale />
 	<SettingsAppearance />
 	<SettingsExportZip />

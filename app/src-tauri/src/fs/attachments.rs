@@ -10,8 +10,13 @@ use std::collections::HashSet;
 use std::fs;
 use std::io;
 use std::path::Path;
+use std::time::{Duration, SystemTime};
 
 use super::{WalkAction, normalise_slashes, path_to_string, walk_dir};
+
+/// How long an unreferenced attachment survives the automatic sweep: a note can
+/// lose an image and get it back through undo, history or a late sync.
+pub(crate) const SWEEP_GRACE: Duration = Duration::from_secs(7 * 24 * 60 * 60);
 
 /// Characters of the hex digest kept in the name. Eight hex digits is 32 bits —
 /// a collision between two different files is possible in principle, which is
@@ -281,6 +286,56 @@ pub(crate) fn unused_files(root: &str, folder: &str) -> Result<Vec<String>, Stri
     Ok(unused)
 }
 
+/// Whether `stem` ends in the `-<hash>` [`attachment_name`] appends.
+fn has_hash_tail(stem: &str) -> bool {
+    stem.rsplit_once('-').is_some_and(|(head, tail)| {
+        !head.is_empty()
+            && tail.len() == HASH_CHARS
+            && tail.bytes().all(|b| matches!(b, b'0'..=b'9' | b'a'..=b'f'))
+    })
+}
+
+/// Whether `name` has the shape [`store`] gives a file (`stem-hash[-n].ext`).
+/// Only files the app stored itself are ever swept; one a user put in the folder
+/// by hand is left alone.
+fn is_stored_name(name: &str) -> bool {
+    let stem = name.rsplit_once('.').map_or(name, |(stem, _)| stem);
+    has_hash_tail(stem)
+        || stem.rsplit_once('-').is_some_and(|(head, n)| {
+            !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()) && has_hash_tail(head)
+        })
+}
+
+/// Move to the trash every attachment in `folder` that the app stored, no note
+/// refers to, and nothing has touched for `grace`. Returns how many moved.
+pub(crate) fn sweep_unused(root: &str, folder: &str, grace: Duration) -> Result<u32, String> {
+    let now = SystemTime::now();
+    let mut swept = 0;
+    for rel in unused_files(root, folder)? {
+        let path = Path::new(root).join(&rel);
+        let stored = path
+            .file_name()
+            .and_then(|n| n.to_str())
+            .is_some_and(is_stored_name);
+        let stale = fs::metadata(&path)
+            .and_then(|m| m.modified())
+            .ok()
+            .and_then(|modified| now.duration_since(modified).ok())
+            .is_some_and(|age| age >= grace);
+        if !stored || !stale {
+            continue;
+        }
+        let Ok(canonical) = path.canonicalize() else {
+            continue;
+        };
+        match super::trash::trash_entry(root, &canonical) {
+            Ok(()) => swept += 1,
+            Err(e) => eprintln!("Failed to trash unused attachment {rel}: {e}"),
+        }
+    }
+    Ok(swept)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -437,5 +492,49 @@ mod tests {
         assert_eq!(unused, vec!["attachments/orphan.png".to_string()]);
 
         fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn the_sweep_trashes_only_old_unreferenced_files_the_app_stored() {
+        let root = temp_dir("sweep");
+        let att = root.join("attachments");
+        fs::create_dir_all(&att).unwrap();
+        let hash = hash_prefix(b"x");
+        let used = format!("used-{hash}.png");
+        let stale = format!("stale-{hash}.png");
+        let clash = format!("clash-{hash}-2.png");
+        let fresh = format!("fresh-{hash}.png");
+        let by_hand = "hand-placed.pdf".to_string();
+        fs::write(root.join("note.md"), format!("![a](attachments/{used})")).unwrap();
+        for name in [&used, &stale, &clash, &fresh, &by_hand] {
+            fs::write(att.join(name), b"x").unwrap();
+        }
+        let month_ago = SystemTime::now() - Duration::from_secs(30 * 24 * 60 * 60);
+        let month_ago = filetime::FileTime::from_system_time(month_ago);
+        for name in [&used, &stale, &clash, &by_hand] {
+            filetime::set_file_mtime(att.join(name), month_ago).unwrap();
+        }
+
+        let swept = sweep_unused(&root.to_string_lossy(), "attachments", SWEEP_GRACE).unwrap();
+
+        // Referenced, too recent, or not named by the app: all three stay.
+        assert_eq!(swept, 2);
+        let mut kept = vec![by_hand, fresh, used];
+        kept.sort();
+        assert_eq!(files_in(&att), kept);
+        assert!(root.join(".margin/trash").is_dir());
+
+        fs::remove_dir_all(&root).ok();
+    }
+
+    #[test]
+    fn stored_names_are_recognised_by_their_hash_tail() {
+        assert!(is_stored_name("shot-0a1b2c3d.png"));
+        assert!(is_stored_name("shot-0a1b2c3d-2.png"));
+        assert!(is_stored_name("noext-12345678"));
+        assert!(!is_stored_name("shot.png"));
+        assert!(!is_stored_name("shot-0A1B2C3D.png"));
+        assert!(!is_stored_name("shot-0a1b2c3.png"));
+        assert!(!is_stored_name("-0a1b2c3d.png"));
     }
 }
