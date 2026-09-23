@@ -92,6 +92,7 @@ pub async fn answer(session: &mut AskSession<'_>) -> Result<(), LlmError> {
         messages.push(ChatMessage::Assistant {
             text: turn.text.clone(),
             calls: turn.calls.clone(),
+            reasoning: turn.reasoning.clone(),
         });
         messages.push(ChatMessage::ToolResults(outcomes));
     }

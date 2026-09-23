@@ -346,6 +346,15 @@ export type Backlink = {
 };
 
 /**
+ *  How much reasoning the model may spend before answering.
+ * 
+ *  `None` on [`LlmConfig`] means the field is not sent at all — the provider's
+ *  own default, and the only setting that keeps working on models which reject
+ *  reasoning parameters outright.
+ */
+export type Effort = "low" | "medium" | "high";
+
+/**
  *  Size and mtime of one vault file. Viewers that only describe a file (no
  *  canvas, no text) use this instead of reading bytes they will never draw.
  */
@@ -373,6 +382,7 @@ export type LlmConfig = {
 	base_url?: string,
 	api_key?: string,
 	model: string,
+	effort?: Effort | null,
 };
 
 export type Manifest = Manifest_Serialize | Manifest_Deserialize;

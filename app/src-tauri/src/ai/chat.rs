@@ -29,6 +29,11 @@ pub enum ChatMessage {
     Assistant {
         text: String,
         calls: Vec<ToolCall>,
+        /// The reasoning blocks the model streamed, in the provider's own shape
+        /// (`reasoning_details` objects for one format, thinking blocks for the
+        /// other). Opaque here on purpose: replaying them unmodified is what keeps
+        /// a tool-result turn acceptable.
+        reasoning: Vec<serde_json::Value>,
     },
     /// Tool results, always sent as one message (OpenAI wants one `role:tool`
     /// message per call; Anthropic one user message holding all the blocks).
@@ -49,6 +54,9 @@ pub struct ToolSpec {
 pub struct AssistantTurn {
     pub text: String,
     pub calls: Vec<ToolCall>,
+    /// Provider-native reasoning blocks, in stream order. Never shown as answer
+    /// text; they exist only to be echoed when this turn's tools run.
+    pub reasoning: Vec<serde_json::Value>,
 }
 
 /// A failed turn. Kept separate from `String` so the HTTP status survives to the
