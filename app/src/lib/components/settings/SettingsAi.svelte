@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Button, Field, Input, Section } from '$lib/ui';
 	import { Sparkles, Download } from '@lucide/svelte';
-	import { llmListModels, type ApiFormat } from '$lib/ai/bridge';
+	import { llmListModels, type ApiFormat, type Effort } from '$lib/ai/bridge';
 	import { cn } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages.js';
 
@@ -19,13 +19,15 @@
 		baseUrl: string;
 		apiKey: string;
 		model: string;
+		effort: Effort | null;
 	}
 
 	let {
 		apiFormat = $bindable(),
 		baseUrl = $bindable(),
 		apiKey = $bindable(),
-		model = $bindable()
+		model = $bindable(),
+		effort = $bindable()
 	}: Props = $props();
 
 	let models = $state<string[]>([]);
@@ -45,6 +47,12 @@
 		clearModels();
 	}
 
+	/** The empty option is the absence of an effort, not a fourth level. */
+	function handleEffortChange(event: Event) {
+		const value = (event.target as HTMLSelectElement).value;
+		effort = value === '' ? null : (value as Effort);
+	}
+
 	async function handleLoadModels() {
 		loadingModels = true;
 		clearModels();
@@ -53,7 +61,8 @@
 				api_format: apiFormat,
 				base_url: baseUrl.trim(),
 				api_key: apiKey.trim(),
-				model: model.trim()
+				model: model.trim(),
+				effort
 			});
 		} catch (err) {
 			modelsError = m.settings_ai_models_failed({ error: String(err) });
@@ -110,6 +119,20 @@
 				{/each}
 			</datalist>
 		{/if}
+	</Field>
+
+	<Field label={m.settings_ai_effort()} forId="aiEffort" hint={m.settings_ai_effort_hint()}>
+		<select
+			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
+			id="aiEffort"
+			value={effort ?? ''}
+			onchange={handleEffortChange}
+		>
+			<option value="">{m.settings_ai_effort_default()}</option>
+			<option value="low">{m.settings_ai_effort_low()}</option>
+			<option value="medium">{m.settings_ai_effort_medium()}</option>
+			<option value="high">{m.settings_ai_effort_high()}</option>
+		</select>
 	</Field>
 
 	<div class="flex flex-wrap items-center gap-2">

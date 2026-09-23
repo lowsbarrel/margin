@@ -1,7 +1,7 @@
 import { Channel } from '@tauri-apps/api/core';
 import { commands, type AskEvent, type LlmConfig } from '$lib/bindings';
 
-export type { ApiFormat, AskEvent, LlmConfig } from '$lib/bindings';
+export type { ApiFormat, AskEvent, Effort, LlmConfig } from '$lib/bindings';
 
 /**
  * Hand the endpoint config to Rust, where the agent loop reads it. The API key
