@@ -26,3 +26,8 @@ export function useInlineEdit(options: {
 
 	return { handleKeydown, handleBlur };
 }
+
+// The `autofocus` attribute only fires while the body has focus, so a click on a toolbar button left the field unfocused.
+export function focusOnMount(input: HTMLInputElement): void {
+	queueMicrotask(() => input.focus());
+}

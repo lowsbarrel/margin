@@ -3,7 +3,7 @@
 	import type { TreeEntry } from '$lib/fs/bridge';
 	import * as m from '$lib/paraglide/messages.js';
 	import { files } from '$lib/stores/files.svelte';
-	import { useInlineEdit } from '$lib/utils/inline-edit.svelte';
+	import { focusOnMount, useInlineEdit } from '$lib/utils/inline-edit.svelte';
 	import { INLINE_INPUT, ROW_BASE, fileRowClass, folderRowClass } from './row-classes';
 	import { parentDir } from './tree-paths';
 	import { selectStem } from './tree-rename';
@@ -41,10 +41,9 @@
 {#if item.kind === 'new-folder'}
 	<div class="{ROW_BASE} text-muted-foreground" style="padding-left: {newFolderDepth * 16 + 8}px;">
 		<Folder size={16} />
-		<!-- svelte-ignore a11y_autofocus -->
 		<input
 			class={INLINE_INPUT}
-			autofocus
+			use:focusOnMount
 			placeholder={m.folder_name_placeholder()}
 			onfocus={(e) => e.currentTarget.select()}
 			onkeydown={newFolderEdit.handleKeydown}
@@ -60,10 +59,9 @@
 		{#if renaming}
 			<div class={ROW_BASE} style="padding-left: {indent + 8}px;">
 				{#if expanded}<FolderOpen size={16} />{:else}<Folder size={16} />{/if}
-				<!-- svelte-ignore a11y_autofocus -->
 				<input
 					class={INLINE_INPUT}
-					autofocus
+					use:focusOnMount
 					value={row.name}
 					onfocus={(e) => selectStem(e.currentTarget)}
 					onkeydown={renameEdit.handleKeydown}
@@ -98,10 +96,9 @@
 	{:else if renaming}
 		<div class={ROW_BASE} style="padding-left: {indent + 8}px;">
 			<FileText size={16} />
-			<!-- svelte-ignore a11y_autofocus -->
 			<input
 				class={INLINE_INPUT}
-				autofocus
+				use:focusOnMount
 				value={row.name}
 				onfocus={(e) => selectStem(e.currentTarget)}
 				onkeydown={renameEdit.handleKeydown}
