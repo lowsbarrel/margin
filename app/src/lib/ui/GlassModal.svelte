@@ -44,7 +44,7 @@
 		<Dialog.Header
 			class="flex shrink-0 flex-row items-center justify-between gap-0 border-b border-border bg-background px-6 py-4"
 		>
-			<Dialog.Title class="text-base leading-5.5 font-semibold tracking-tight text-foreground">
+			<Dialog.Title class="text-base leading-[22px] font-semibold tracking-tight text-foreground">
 				{title}
 			</Dialog.Title>
 			<Dialog.Close

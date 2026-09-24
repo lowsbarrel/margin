@@ -38,7 +38,7 @@
 
 	const SIZES: Record<Size, string> = {
 		sm: "h-7 px-2.5 text-xs rounded-sm [&_svg:not([class*='size-'])]:size-[13px]",
-		md: "h-8.5 px-3.5 text-sm rounded-sm [&_svg:not([class*='size-'])]:size-4",
+		md: "h-[34px] px-3.5 text-sm rounded-sm [&_svg:not([class*='size-'])]:size-4",
 		lg: "h-10 px-4.5 text-sm rounded-md [&_svg:not([class*='size-'])]:size-4"
 	};
 
@@ -63,7 +63,7 @@
 >
 	{#if loading}
 		<span
-			class="size-3.25 shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent animation-duration-[0.6s]"
+			class="size-[13px] shrink-0 animate-spin rounded-full border-[1.5px] border-current border-t-transparent animation-duration-[0.6s]"
 		></span>
 	{:else if Icon}
 		<Icon size={iconSize} />

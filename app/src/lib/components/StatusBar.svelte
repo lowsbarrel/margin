@@ -121,7 +121,7 @@
 
 	<div class="flex items-center gap-1.5">
 		<span
-			class="flex items-center gap-1.25 rounded-full px-2 py-0.75 {syncChipClass}"
+			class="flex items-center gap-[5px] rounded-full px-2 py-[3px] {syncChipClass}"
 			class:cursor-help={!!editor.syncError}
 			title={editor.syncError ?? undefined}
 		>
@@ -220,7 +220,7 @@
 
 		{#if onswitchvault}
 			<button
-				class="flex h-6 max-w-40 items-center gap-1.25 rounded-full border border-border bg-transparent px-2 py-0 text-muted-foreground hover:border-hairline hover:bg-surface-2 hover:text-foreground"
+				class="flex h-6 max-w-40 items-center gap-[5px] rounded-full border border-border bg-transparent px-2 py-0 text-muted-foreground hover:border-hairline hover:bg-surface-2 hover:text-foreground"
 				onclick={onswitchvault}
 				title={m.statusbar_switch_vault()}
 			>

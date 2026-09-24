@@ -100,7 +100,7 @@
 			aria-label={m.canvas_color()}
 		>
 			<span
-				class="size-4.5 rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
+				class="size-[18px] rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
 				style:background={penColor === INK_COLOR ? inkCss : penColor}
 			></span>
 		</Popover.Trigger>

@@ -40,7 +40,7 @@
 					</button>
 				{/if}
 				<button
-					class="flex size-5.5 shrink-0 items-center justify-center rounded-xs bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
+					class="flex size-[22px] shrink-0 items-center justify-center rounded-xs bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:bg-muted hover:text-foreground"
 					onclick={() => toast.dismiss(item.id)}
 				>
 					<X size={12} />
