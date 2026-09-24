@@ -9,7 +9,13 @@
 	import CanvasEditor from '$lib/components/CanvasEditor.svelte';
 	import { X, ChevronRight, Pin } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
-	import { handleTabMouseDown } from '$lib/utils/tab-drag';
+	import {
+		handleTabMouseDown,
+		paneZoneMode,
+		stripDropGap,
+		stripGapAt,
+		tabStripAccepts
+	} from '$lib/utils/tab-drag';
 
 	let {
 		pane,
@@ -65,9 +71,39 @@
 			active ? 'bg-brand/22' : ''
 		}`;
 	}
+
+	let stripEl: HTMLDivElement | undefined;
+
+	let zoneMode = $derived(paneZoneMode(drag.item, paneIndex, pane.tabs.length));
+	let stripRawGap = $derived(
+		drag.stripTarget?.paneIndex === paneIndex ? drag.stripTarget.index : null
+	);
+	let stripGap = $derived(
+		stripRawGap === null ? null : stripDropGap(drag.item, paneIndex, pane.tabs, stripRawGap)
+	);
+
+	function handleStripMove(e: MouseEvent) {
+		if (!stripEl || !tabStripAccepts(drag.item, paneIndex, pane.tabs.length)) return;
+		if (dropTarget?.paneIndex === paneIndex) ondropleave(paneIndex, dropTarget.zone);
+		drag.setStripTarget(paneIndex, stripGapAt(stripEl, e.clientX));
+	}
+
+	function handleStripLeave() {
+		if (drag.stripTarget?.paneIndex === paneIndex) drag.clearStripTarget();
+	}
 </script>
 
-<div class="flex h-10 min-h-10 items-center overflow-hidden border-b border-border bg-surface-1">
+<!-- svelte-ignore a11y_no_static_element_interactions -->
+<div
+	bind:this={stripEl}
+	class="relative z-110 flex h-10 min-h-10 items-center overflow-hidden border-b border-border {stripGap ===
+	null
+		? 'bg-surface-1'
+		: 'bg-brand/8'}"
+	onmouseenter={handleStripMove}
+	onmousemove={handleStripMove}
+	onmouseleave={handleStripLeave}
+>
 	<div
 		class="flex flex-1 scrollbar-none overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
 	>
@@ -77,6 +113,7 @@
 				pane.activeTabIndex
 					? ACTIVE_TAB
 					: INACTIVE_TAB}"
+				data-tab=""
 				role="tab"
 				tabindex={0}
 				aria-selected={i === pane.activeTabIndex}
@@ -89,6 +126,14 @@
 					if (e.key === 'Enter' || e.key === ' ') panes.switchTab(paneIndex, i);
 				}}
 			>
+				{#if stripGap === i}
+					<span class="pointer-events-none absolute inset-y-1 -left-px w-0.5 rounded-full bg-brand"
+					></span>
+				{/if}
+				{#if i === pane.tabs.length - 1 && stripGap === pane.tabs.length}
+					<span class="pointer-events-none absolute inset-y-1 -right-px w-0.5 rounded-full bg-brand"
+					></span>
+				{/if}
 				{#if tab.pinned}
 					<Pin size={11} class="shrink-0 text-accent-foreground" />
 				{/if}
@@ -210,7 +255,7 @@
 	{/if}
 </main>
 
-{#if drag.active && !(drag.item?.kind === 'tab' && drag.item.paneIndex === paneIndex)}
+{#if zoneMode !== 'none'}
 	{@const fileDrag = drag.item?.kind === 'file'}
 	{@const leftActive = dropTarget?.paneIndex === paneIndex && dropTarget.zone === 'left'}
 	{@const centerActive = dropTarget?.paneIndex === paneIndex && dropTarget.zone === 'center'}
@@ -221,43 +266,45 @@
 			? 'justify-between'
 			: 'bg-brand/6'}"
 	>
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class={dropZoneClass('left', fileDrag, leftActive)}
-			onmouseenter={() => ondropenter(paneIndex, 'left')}
-			onmouseleave={() => ondropleave(paneIndex, 'left')}
-		>
-			<span
-				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {leftActive
-					? 'opacity-100'
-					: 'opacity-0'}">{m.pane_split_left()}</span
-			>
-		</div>
-		{#if drag.item?.kind === 'tab'}
+		{#if stripGap === null}
 			<!-- svelte-ignore a11y_no_static_element_interactions -->
 			<div
-				class={dropZoneClass('center', fileDrag, centerActive)}
-				onmouseenter={() => ondropenter(paneIndex, 'center')}
-				onmouseleave={() => ondropleave(paneIndex, 'center')}
+				class={dropZoneClass('left', fileDrag, leftActive)}
+				onmouseenter={() => ondropenter(paneIndex, 'left')}
+				onmouseleave={() => ondropleave(paneIndex, 'left')}
 			>
 				<span
-					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {centerActive
+					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {leftActive
 						? 'opacity-100'
-						: 'opacity-0'}">{m.pane_move_here()}</span
+						: 'opacity-0'}">{m.pane_split_left()}</span
+				>
+			</div>
+			{#if zoneMode === 'all'}
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class={dropZoneClass('center', fileDrag, centerActive)}
+					onmouseenter={() => ondropenter(paneIndex, 'center')}
+					onmouseleave={() => ondropleave(paneIndex, 'center')}
+				>
+					<span
+						class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {centerActive
+							? 'opacity-100'
+							: 'opacity-0'}">{m.pane_move_here()}</span
+					>
+				</div>
+			{/if}
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class={dropZoneClass('right', fileDrag, rightActive)}
+				onmouseenter={() => ondropenter(paneIndex, 'right')}
+				onmouseleave={() => ondropleave(paneIndex, 'right')}
+			>
+				<span
+					class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {rightActive
+						? 'opacity-100'
+						: 'opacity-0'}">{m.pane_split_right()}</span
 				>
 			</div>
 		{/if}
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
-		<div
-			class={dropZoneClass('right', fileDrag, rightActive)}
-			onmouseenter={() => ondropenter(paneIndex, 'right')}
-			onmouseleave={() => ondropleave(paneIndex, 'right')}
-		>
-			<span
-				class="pointer-events-none rounded-xs border border-brand/50 bg-surface-1 px-2 py-0.75 text-xs font-medium text-accent-foreground transition-opacity {rightActive
-					? 'opacity-100'
-					: 'opacity-0'}">{m.pane_split_right()}</span
-			>
-		</div>
 	</div>
 {/if}

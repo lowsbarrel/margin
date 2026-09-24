@@ -11,6 +11,34 @@ export interface LayoutMove {
 	tab: Tab;
 }
 
+export function clampInsertIndex(tabs: Tab[], pinned: boolean, index: number): number {
+	const pinnedCount = tabs.filter((t) => t.pinned).length;
+	return pinned
+		? Math.max(0, Math.min(index, pinnedCount))
+		: Math.max(pinnedCount, Math.min(index, tabs.length));
+}
+
+export function reorderTabGap(tabs: Tab[], from: number, gap: number): number {
+	const tab = tabs[from];
+	if (!tab) return gap;
+	const rest = tabs.filter((_, i) => i !== from);
+	const to = clampInsertIndex(rest, tab.pinned, gap > from ? gap - 1 : gap);
+	return to <= from ? to : to + 1;
+}
+
+export function reorderTab(panes: Pane[], paneIndex: number, from: number, gap: number): void {
+	const pane = panes[paneIndex];
+	const tab = pane?.tabs[from];
+	if (!tab) return;
+	const droppable = reorderTabGap(pane.tabs, from, gap);
+	if (droppable === from || droppable === from + 1) return;
+	const activeId = pane.tabs[pane.activeTabIndex]?.id ?? null;
+	const next = pane.tabs.filter((_, i) => i !== from);
+	next.splice(droppable > from ? droppable - 1 : droppable, 0, tab);
+	pane.tabs = next;
+	pane.activeTabIndex = activeId === null ? -1 : next.findIndex((t) => t.id === activeId);
+}
+
 export function removeFlexAt(flexes: number[], index: number): number[] {
 	const removed = flexes[index];
 	const next = flexes.filter((_, i) => i !== index);
@@ -68,7 +96,8 @@ export function moveTabIntoPane(
 	flexes: number[],
 	srcPaneIndex: number,
 	srcTabIndex: number,
-	destPaneIndex: number
+	destPaneIndex: number,
+	insertIndex?: number
 ): LayoutMove | null {
 	const workPanes: Pane[] = panes.map((p) => ({ ...p, tabs: [...p.tabs] }));
 	const workFlexes: number[] = [...flexes];
@@ -81,8 +110,14 @@ export function moveTabIntoPane(
 		removePaneAt(workPanes, workFlexes, srcPaneIndex, 'neighbour');
 	}
 
-	workPanes[actualDest].tabs = [...workPanes[actualDest].tabs, detached.tab];
-	workPanes[actualDest].activeTabIndex = workPanes[actualDest].tabs.length - 1;
+	const destPane = workPanes[actualDest];
+	const at = clampInsertIndex(
+		destPane.tabs,
+		detached.tab.pinned,
+		insertIndex ?? destPane.tabs.length
+	);
+	destPane.tabs = [...destPane.tabs.slice(0, at), detached.tab, ...destPane.tabs.slice(at)];
+	destPane.activeTabIndex = at;
 
 	return {
 		panes: workPanes,
