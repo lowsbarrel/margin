@@ -72,4 +72,4 @@
 	});
 </script>
 
-<div class="editor-wrap ask-answer text-sm text-foreground" bind:this={host}></div>
+<div class="editor-wrap text-sm text-foreground" bind:this={host}></div>

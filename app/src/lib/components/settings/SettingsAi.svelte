@@ -45,7 +45,7 @@
 	}
 
 	function handleEffortChange(value: string) {
-		effort = value === '' ? null : (value as Effort);
+		effort = value === 'default' ? null : (value as Effort);
 	}
 
 	async function handleLoadModels() {
@@ -69,10 +69,15 @@
 
 <Section title={m.settings_ai_title()} icon={Sparkles} collapsible defaultOpen={false}>
 	<Field label={m.settings_ai_format()} forId="aiFormat">
-		<Select id="aiFormat" value={apiFormat} onchange={handleFormatChange}>
-			<option value="openai">{m.settings_ai_format_openai()}</option>
-			<option value="anthropic">{m.settings_ai_format_anthropic()}</option>
-		</Select>
+		<Select
+			id="aiFormat"
+			value={apiFormat}
+			onchange={handleFormatChange}
+			options={[
+				{ value: 'openai', label: m.settings_ai_format_openai() },
+				{ value: 'anthropic', label: m.settings_ai_format_anthropic() }
+			]}
+		/>
 	</Field>
 
 	<Field label={m.settings_ai_base_url()} forId="aiBaseUrl">
@@ -107,12 +112,17 @@
 	</Field>
 
 	<Field label={m.settings_ai_effort()} forId="aiEffort" hint={m.settings_ai_effort_hint()}>
-		<Select id="aiEffort" value={effort ?? ''} onchange={handleEffortChange}>
-			<option value="">{m.settings_ai_effort_default()}</option>
-			<option value="low">{m.settings_ai_effort_low()}</option>
-			<option value="medium">{m.settings_ai_effort_medium()}</option>
-			<option value="high">{m.settings_ai_effort_high()}</option>
-		</Select>
+		<Select
+			id="aiEffort"
+			value={effort ?? 'default'}
+			onchange={handleEffortChange}
+			options={[
+				{ value: 'default', label: m.settings_ai_effort_default() },
+				{ value: 'low', label: m.settings_ai_effort_low() },
+				{ value: 'medium', label: m.settings_ai_effort_medium() },
+				{ value: 'high', label: m.settings_ai_effort_high() }
+			]}
+		/>
 	</Field>
 
 	<div class="flex flex-wrap items-center gap-2">

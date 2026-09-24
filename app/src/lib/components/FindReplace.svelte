@@ -115,7 +115,7 @@
 				<CaseSensitive size={14} />
 			</button>
 		</div>
-		<span class="min-w-12.5 text-center text-xs whitespace-nowrap text-subtle-foreground">
+		<span class="min-w-[50px] text-center text-xs whitespace-nowrap text-subtle-foreground">
 			{#if searchValue && stats.total > 0}
 				{stats.index} / {stats.total}
 			{:else if searchValue}
@@ -124,7 +124,7 @@
 		</span>
 		<div class="flex gap-0.5">
 			<button
-				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={() => step(true)}
 				title={m.find_previous()}
 				disabled={stats.total === 0}
@@ -132,7 +132,7 @@
 				<ChevronUp size={16} />
 			</button>
 			<button
-				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={() => step(false)}
 				title={m.find_next()}
 				disabled={stats.total === 0}
@@ -140,7 +140,7 @@
 				<ChevronDown size={16} />
 			</button>
 			<button
-				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {showReplace
+				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {showReplace
 					? 'bg-surface-2 text-foreground'
 					: ''}"
 				onclick={ontogglereplace}
@@ -149,7 +149,7 @@
 				<Replace size={14} />
 			</button>
 			<button
-				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+				class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 				onclick={close}
 				title={m.find_close()}
 			>
@@ -171,7 +171,7 @@
 			</div>
 			<div class="flex gap-0.5">
 				<button
-					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 					onclick={replaceCurrent}
 					title={m.find_replace()}
 					disabled={stats.total === 0}
@@ -179,7 +179,7 @@
 					<Replace size={14} />
 				</button>
 				<button
-					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
+					class="flex size-[26px] items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 					onclick={replaceEvery}
 					title={m.find_replace_all()}
 					disabled={stats.total === 0}

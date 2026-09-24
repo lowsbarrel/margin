@@ -3,9 +3,9 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ShapeKind, Tool } from '$lib/canvas/types';
 	import { INK_COLOR, inkCss, isShapeTool } from '$lib/canvas/types';
-	import CanvasPopover from './canvas/CanvasPopover.svelte';
 	import CanvasShapePicker from './canvas/CanvasShapePicker.svelte';
 	import CanvasStylePicker from './canvas/CanvasStylePicker.svelte';
+	import * as Popover from '$lib/components/ui/popover/index.js';
 	import { colorButtonClass, toolButtonClass } from './canvas/control-classes';
 	import { shapeIcons, shapeLabels } from './canvas/shape-ui';
 
@@ -33,17 +33,13 @@
 
 	const ShapeIcon = $derived(shapeIcons[shape]);
 
-	function toggle(which: 'shape' | 'style') {
-		open = open === which ? null : which;
-	}
+	const POPOVER = 'w-auto gap-0 rounded-sm border border-border p-1.5 shadow-(--shadow-lg) ring-0';
 
 	function pickShape(kind: ShapeKind) {
 		onshape(kind);
 		open = null;
 	}
 </script>
-
-<svelte:window onkeydown={(e) => e.key === 'Escape' && (open = null)} />
 
 <div
 	class="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-1 shadow-(--shadow-lg) select-none"
@@ -73,22 +69,18 @@
 		<Eraser size={16} />
 	</button>
 
-	<div class="relative">
-		<button
+	<Popover.Root open={open === 'shape'} onOpenChange={(next) => (open = next ? 'shape' : null)}>
+		<Popover.Trigger
 			class={toolButtonClass(isShapeTool(tool))}
-			onclick={() => toggle('shape')}
 			title={shapeLabels[shape]()}
-			aria-expanded={open === 'shape'}
 			aria-pressed={isShapeTool(tool)}
 		>
 			<ShapeIcon size={16} />
-		</button>
-		{#if open === 'shape'}
-			<CanvasPopover onclose={() => (open = null)}>
-				<CanvasShapePicker {shape} onselect={pickShape} />
-			</CanvasPopover>
-		{/if}
-	</div>
+		</Popover.Trigger>
+		<Popover.Content side="top" sideOffset={8} class={POPOVER}>
+			<CanvasShapePicker {shape} onselect={pickShape} />
+		</Popover.Content>
+	</Popover.Root>
 
 	<button
 		class={toolButtonClass(tool === 'text')}
@@ -101,29 +93,25 @@
 
 	<span class="mx-1 h-5 w-px shrink-0 bg-border"></span>
 
-	<div class="relative">
-		<button
+	<Popover.Root open={open === 'style'} onOpenChange={(next) => (open = next ? 'style' : null)}>
+		<Popover.Trigger
 			class={colorButtonClass(open === 'style')}
-			onclick={() => toggle('style')}
 			title={m.canvas_color()}
 			aria-label={m.canvas_color()}
-			aria-expanded={open === 'style'}
 		>
 			<span
-				class="size-4.5 rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
+				class="size-[18px] rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
 				style:background={penColor === INK_COLOR ? inkCss : penColor}
 			></span>
-		</button>
-		{#if open === 'style'}
-			<CanvasPopover onclose={() => (open = null)}>
-				<CanvasStylePicker
-					{tool}
-					color={penColor}
-					{size}
-					oncolor={(c) => (penColor = c)}
-					onsize={onSizeChange}
-				/>
-			</CanvasPopover>
-		{/if}
-	</div>
+		</Popover.Trigger>
+		<Popover.Content side="top" sideOffset={8} class={POPOVER}>
+			<CanvasStylePicker
+				{tool}
+				color={penColor}
+				{size}
+				oncolor={(c) => (penColor = c)}
+				onsize={onSizeChange}
+			/>
+		</Popover.Content>
+	</Popover.Root>
 </div>

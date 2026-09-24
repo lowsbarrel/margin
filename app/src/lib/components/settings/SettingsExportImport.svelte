@@ -73,7 +73,7 @@
 		<div class="relative">
 			<TextArea value={exportString} readonly rows={3} />
 			<button
-				class="absolute top-2 right-2 flex size-6.5 cursor-pointer items-center justify-center rounded-xs border border-border bg-background p-0 text-subtle-foreground backdrop-blur-md transition-colors duration-150 ease-out hover:text-foreground"
+				class="absolute top-2 right-2 flex size-[26px] cursor-pointer items-center justify-center rounded-xs border border-border bg-background p-0 text-subtle-foreground backdrop-blur-md transition-colors duration-150 ease-out hover:text-foreground"
 				onclick={handleCopy}
 			>
 				{#if copied}<Check size={14} />{:else}<Copy size={14} />{/if}

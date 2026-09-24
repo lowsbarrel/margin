@@ -21,8 +21,8 @@ export const liveTheme = EditorView.theme({
 	},
 	'.cm-content': {
 		padding: '12px 2.5rem 50vh',
-		// 46.875rem is the inline title's column (`max-w-187.5`); a px value would drift from it.
-		maxWidth: '46.875rem',
+		// Same column as the inline title's `max-w-[750px]`; a rem value would drift with the root size.
+		maxWidth: '750px',
 		margin: '0 auto',
 		width: '100%',
 		cursor: 'text',

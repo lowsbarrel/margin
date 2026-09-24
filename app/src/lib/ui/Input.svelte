@@ -44,7 +44,7 @@
 
 	const SIZES: Record<Size, string> = {
 		sm: 'h-7 pl-2.5 pr-2.5 py-0 text-xs md:text-xs rounded-sm',
-		md: 'h-8.5 pl-3 pr-3 py-0 text-sm md:text-sm rounded-sm',
+		md: 'h-[34px] pl-3 pr-3 py-0 text-sm md:text-sm rounded-sm',
 		lg: 'h-10 pl-3.5 pr-3.5 py-0 text-sm md:text-sm rounded-md'
 	};
 </script>
@@ -64,6 +64,6 @@
 		{readonly}
 		bind:value
 		oninput={handleInput}
-		class={cn(BASE, SIZES[size], mono && 'font-mono', Icon && 'pl-8.5')}
+		class={cn(BASE, SIZES[size], mono && 'font-mono', Icon && 'pl-[34px]')}
 	/>
 </div>
