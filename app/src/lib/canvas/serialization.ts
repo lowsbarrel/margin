@@ -1,3 +1,4 @@
+import { INK_COLOR } from './types';
 import type { Point, Stroke, Shape, TextLabel, CanvasData } from './types';
 
 export function serialize(
@@ -38,7 +39,7 @@ function parseStrokes(raw: unknown): Stroke[] {
 		const tool = item.tool === 'eraser' ? 'eraser' : 'pen';
 		out.push({
 			points,
-			color: typeof item.color === 'string' ? item.color : '#ffffff',
+			color: typeof item.color === 'string' ? item.color : INK_COLOR,
 			size: asNumber(item.size, 3),
 			tool
 		});
@@ -68,7 +69,7 @@ function parseShapes(raw: unknown): Shape[] {
 			y1: item.y1,
 			x2: item.x2,
 			y2: item.y2,
-			color: typeof item.color === 'string' ? item.color : '#ffffff',
+			color: typeof item.color === 'string' ? item.color : INK_COLOR,
 			size: asNumber(item.size, 3)
 		});
 	}
@@ -86,7 +87,7 @@ function parseTextLabels(raw: unknown): TextLabel[] {
 			x: item.x,
 			y: item.y,
 			text: item.text,
-			color: typeof item.color === 'string' ? item.color : '#ffffff',
+			color: typeof item.color === 'string' ? item.color : INK_COLOR,
 			fontSize: asNumber(item.fontSize, 16)
 		});
 	}
