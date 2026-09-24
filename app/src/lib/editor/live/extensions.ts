@@ -14,10 +14,16 @@ import { liveKeymap } from './commands';
 import { livePaste } from './paste';
 import { livePreview } from './preview';
 import { markdownSyntax } from './syntax';
+import { liveTableEditing } from './tables';
 import { liveTheme } from './theme';
 
 // Live-preview features live here and are switched off wholesale in raw Markdown mode.
-export const previewExtensions: readonly Extension[] = [livePreview, blockWidgets, liveClicks];
+export const previewExtensions: readonly Extension[] = [
+	livePreview,
+	blockWidgets,
+	liveClicks,
+	liveTableEditing
+];
 
 // Editor behaviour that stays on in both modes.
 export const baseExtensions: readonly Extension[] = [

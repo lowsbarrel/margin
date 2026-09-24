@@ -2,6 +2,8 @@ import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
 import { markdownKeymap } from '@codemirror/lang-markdown';
 import type { ChangeSpec, EditorState, Line } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
+import { alignColumn, deleteColumn, deleteRow, insertColumn, insertRow } from './table-ops';
+import { emptyRow, serializeTable, tableAt, type Align, type TableModel } from './table-model';
 
 const HEADING = /^(#{1,6})[ \t]+/;
 const MARKER = /^([ \t]*)(?:([-*+])|(\d+[.)]))([ \t]+)(\[[ xX]\][ \t]+)?/;
@@ -158,3 +160,79 @@ export const liveKeymap = keymap.of([
 ]);
 
 export const liveHistory = history();
+
+function tableCommand(
+	view: EditorView,
+	anchor: number,
+	action: (table: TableModel) => void
+): boolean {
+	const table = tableAt(view.state, anchor);
+	if (!table) return false;
+	action(table);
+	return true;
+}
+
+// The slash menu and the editor context menu reach tables through these five, keyed by caret.
+export function insertTable(view: EditorView, rows = 3, cols = 3): boolean {
+	const height = Math.max(1, Math.min(50, Math.floor(rows)));
+	const width = Math.max(1, Math.min(20, Math.floor(cols)));
+	const text = serializeTable(
+		Array.from({ length: height }, () => emptyRow(width)),
+		Array.from({ length: width }, () => 'none' as Align)
+	);
+	const { from, to } = view.state.selection.main;
+	const line = view.state.doc.lineAt(from);
+	const prefix = line.text.slice(0, from - line.from).trim() ? '\n' : '';
+	const suffix = view.state.doc.sliceString(to, line.to).trim() ? '\n' : '';
+	const at = from + prefix.length;
+	view.dispatch({
+		changes: { from, to, insert: prefix + text + suffix },
+		selection: { anchor: at + 2 },
+		scrollIntoView: true,
+		userEvent: 'input'
+	});
+	return true;
+}
+
+export function insertTableRow(
+	view: EditorView,
+	index: number,
+	side: 'above' | 'below',
+	anchor: number = view.state.selection.main.head
+): boolean {
+	return tableCommand(view, anchor, (table) => insertRow(view, table, index, side));
+}
+
+export function deleteTableRow(
+	view: EditorView,
+	index: number,
+	anchor: number = view.state.selection.main.head
+): boolean {
+	return tableCommand(view, anchor, (table) => deleteRow(view, table, index));
+}
+
+export function insertTableColumn(
+	view: EditorView,
+	index: number,
+	side: 'left' | 'right',
+	anchor: number = view.state.selection.main.head
+): boolean {
+	return tableCommand(view, anchor, (table) => insertColumn(view, table, index, side));
+}
+
+export function deleteTableColumn(
+	view: EditorView,
+	index: number,
+	anchor: number = view.state.selection.main.head
+): boolean {
+	return tableCommand(view, anchor, (table) => deleteColumn(view, table, index));
+}
+
+export function alignTableColumn(
+	view: EditorView,
+	index: number,
+	align: Align,
+	anchor: number = view.state.selection.main.head
+): boolean {
+	return tableCommand(view, anchor, (table) => alignColumn(view, table, index, align));
+}

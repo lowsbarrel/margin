@@ -88,6 +88,11 @@ root → attachment folder, `![[name]]` → attachment folder → vault-wide ind
 reuse it instead of resolving paths again. CodeMirror packages load through
 dynamic `import()` from `components/Editor.svelte`.
 
+GFM tables (`live/tables.ts` + `table-*.ts`) render as a block widget with
+hover row/column handles; Tab/Enter move between cells, and Escape leaves the
+table through a window listener because `+layout.svelte` swallows Escape in a
+capture-phase handler.
+
 ## The vault on disk
 
 App state lives in `<vault>/.margin/`: `vault.id`, `settings.enc`,
