@@ -27,8 +27,8 @@
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
 			class={cn(
-				'flex items-center justify-between bg-surface-1 px-4 py-3',
-				(!collapsible || open) && 'border-b border-border',
+				'flex items-center justify-between border-border bg-surface-1 px-4 py-3',
+				(!collapsible || open) && 'border-b',
 				collapsible &&
 					'cursor-pointer transition-colors duration-120 ease-out select-none hover:bg-surface-2'
 			)}
