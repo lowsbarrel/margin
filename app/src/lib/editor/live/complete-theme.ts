@@ -5,6 +5,7 @@ import { mount } from 'svelte';
 import {
 	Calendar,
 	FileText,
+	Hash,
 	Heading,
 	Heading1,
 	Heading2,
@@ -47,6 +48,7 @@ const ICONS: Record<string, Component<{ size?: number }>> = {
 	'📄': FileText,
 	date: Calendar,
 	'🖼': Image,
+	hash: Hash,
 	'§': Heading
 };
 

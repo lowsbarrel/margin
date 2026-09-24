@@ -8,16 +8,9 @@ import SelectionToolbar from '$lib/components/editor/SelectionToolbar.svelte';
 import { ToolbarState } from './bubble-state.svelte';
 import { fencedRange, type BlockType } from './commands';
 import { ESCAPE_BUBBLE, onEscape } from './escape';
-import { HIGHLIGHT } from './syntax';
+import { activeMarks } from './marks';
 import './assist.css';
 
-const MARKER_NODES: Record<string, string> = {
-	StrongEmphasis: 'bold',
-	Emphasis: 'italic',
-	Strikethrough: 'strike',
-	InlineCode: 'code',
-	[HIGHLIGHT]: 'highlight'
-};
 const HEADS: BlockType[] = [
 	'text',
 	'heading1',
@@ -42,21 +35,6 @@ function ancestorNames(state: EditorState): Set<string> {
 	return names;
 }
 
-// Marks nest (`***both***`), so a mark fully inside the selection counts alongside the enclosing ones.
-function markNames(state: EditorState): Set<string> {
-	const { from, to } = state.selection.main;
-	const names = ancestorNames(state);
-	if (from === to) return names;
-	syntaxTree(state).iterate({
-		from,
-		to,
-		enter: (node) => {
-			if (node.from >= from && node.to <= to) names.add(node.name);
-		}
-	});
-	return names;
-}
-
 function insideCode(state: EditorState, names: Set<string>): boolean {
 	if (names.has('CodeBlock')) return true;
 	const fence = fencedRange(state);
@@ -75,17 +53,6 @@ function blockType(state: EditorState, names: Set<string>): BlockType {
 	if (names.has('OrderedList')) return 'ordered';
 	if (names.has('Blockquote')) return 'quote';
 	return 'text';
-}
-
-function activeState(
-	state: EditorState,
-	names: Set<string>
-): { marks: string[]; block: BlockType } {
-	const markable = markNames(state);
-	const marks = Object.entries(MARKER_NODES)
-		.filter(([name]) => markable.has(name))
-		.map(([, mark]) => mark);
-	return { marks, block: blockType(state, names) };
 }
 
 function selectionRect(view: EditorView): DOMRect | null {
@@ -183,9 +150,8 @@ export const liveBubble = ViewPlugin.fromClass(
 				this.hide();
 				return;
 			}
-			const active = activeState(view.state, names);
-			status.marks = active.marks;
-			status.block = active.block;
+			status.marks = activeMarks(view.state);
+			status.block = blockType(view.state, names);
 			const { x, y } = await computePosition({ getBoundingClientRect: () => rect }, this.host, {
 				strategy: 'fixed',
 				placement: 'top',

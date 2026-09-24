@@ -26,7 +26,8 @@
 	import { cn } from '$lib/utils';
 	import * as DropdownMenu from '$lib/components/ui/dropdown-menu/index.js';
 	import * as Tooltip from '$lib/components/ui/tooltip/index.js';
-	import { setBlock, setLink, toggleMark, type BlockType } from '$lib/editor/live/commands';
+	import { setBlock, setLink, type BlockType } from '$lib/editor/live/commands';
+	import { toggleMark, type MarkKind } from '$lib/editor/live/marks';
 	import type { ToolbarState } from '$lib/editor/live/bubble-state.svelte';
 
 	interface Props {
@@ -44,12 +45,12 @@
 	const LINK_BTN =
 		'flex size-6.5 shrink-0 cursor-pointer items-center justify-center rounded-xs p-0 transition-colors hover:bg-surface-3';
 
-	const MARKS: { id: string; marker: string; label: () => string; icon: Icon }[] = [
-		{ id: 'bold', marker: '**', label: m.bubble_bold, icon: Bold },
-		{ id: 'italic', marker: '*', label: m.bubble_italic, icon: Italic },
-		{ id: 'strike', marker: '~~', label: m.bubble_strike, icon: Strikethrough },
-		{ id: 'code', marker: '`', label: m.bubble_code, icon: Code },
-		{ id: 'highlight', marker: '==', label: m.bubble_highlight, icon: Highlighter }
+	const MARKS: { kind: MarkKind; label: () => string; icon: Icon }[] = [
+		{ kind: 'bold', label: m.bubble_bold, icon: Bold },
+		{ kind: 'italic', label: m.bubble_italic, icon: Italic },
+		{ kind: 'strike', label: m.bubble_strike, icon: Strikethrough },
+		{ kind: 'code', label: m.bubble_code, icon: Code },
+		{ kind: 'highlight', label: m.bubble_highlight, icon: Highlighter }
 	];
 
 	const BLOCK_LABEL: Record<BlockType, () => string> = {
@@ -105,8 +106,8 @@
 		if (linkOpen) linkInput?.focus();
 	});
 
-	function runMark(marker: string) {
-		toggleMark(view, marker);
+	function runMark(kind: MarkKind) {
+		toggleMark(view, kind);
 		view.focus();
 	}
 
@@ -204,14 +205,14 @@
 
 			<span class="mx-0.75 h-4.5 w-px bg-border"></span>
 
-			{#each MARKS as item (item.id)}
+			{#each MARKS as item (item.kind)}
 				{@const Icon = item.icon}
 				<Tooltip.Root>
 					<Tooltip.Trigger
-						class={cn(TOGGLE, status.marks.includes(item.id) && ACTIVE)}
+						class={cn(TOGGLE, status.marks.includes(item.kind) && ACTIVE)}
 						aria-label={item.label()}
-						data-cmd={item.id}
-						onclick={() => runMark(item.marker)}
+						data-cmd={item.kind}
+						onclick={() => runMark(item.kind)}
 					>
 						<Icon size={16} />
 					</Tooltip.Trigger>

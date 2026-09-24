@@ -1,6 +1,7 @@
 import { defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { markdownKeymap } from '@codemirror/lang-markdown';
 import { syntaxTree } from '@codemirror/language';
+import { toggleMark } from './marks';
 import type { ChangeSpec, EditorState, Line } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
@@ -204,57 +205,6 @@ export function setBlock(view: EditorView, type: BlockType): boolean {
 	return true;
 }
 
-export function toggleMark(view: EditorView, marker: string): boolean {
-	const { state } = view;
-	const range = state.selection.main;
-	if (range.empty) {
-		view.dispatch({
-			changes: { from: range.from, insert: marker + marker },
-			selection: { anchor: range.from + marker.length },
-			userEvent: 'input'
-		});
-		return true;
-	}
-	const { from, to } = range;
-	const text = state.sliceDoc(from, to);
-	const outer = marker.length;
-	if (text.length > outer * 2 && text.startsWith(marker) && text.endsWith(marker)) {
-		view.dispatch({
-			changes: [
-				{ from, to: from + outer },
-				{ from: to - outer, to }
-			],
-			selection: { anchor: from, head: to - outer * 2 },
-			userEvent: 'input'
-		});
-		return true;
-	}
-	if (
-		from >= outer &&
-		state.sliceDoc(from - outer, from) === marker &&
-		state.sliceDoc(to, to + outer) === marker
-	) {
-		view.dispatch({
-			changes: [
-				{ from: from - outer, to: from },
-				{ from: to, to: to + outer }
-			],
-			selection: { anchor: from - outer, head: from - outer + text.length },
-			userEvent: 'input'
-		});
-		return true;
-	}
-	view.dispatch({
-		changes: [
-			{ from, insert: marker },
-			{ from: to, insert: marker }
-		],
-		selection: { anchor: from, head: to + outer * 2 },
-		userEvent: 'input'
-	});
-	return true;
-}
-
 export function insertLink(view: EditorView): boolean {
 	const range = view.state.selection.main;
 	const text = view.state.sliceDoc(range.from, range.to);
@@ -299,11 +249,11 @@ function indentList(view: EditorView, outdent: boolean): boolean {
 }
 
 export const liveKeymap = keymap.of([
-	{ key: 'Mod-b', run: (view) => toggleMark(view, '**'), preventDefault: true },
-	{ key: 'Mod-i', run: (view) => toggleMark(view, '*'), preventDefault: true },
-	{ key: 'Mod-e', run: (view) => toggleMark(view, '`'), preventDefault: true },
-	{ key: 'Mod-Shift-x', run: (view) => toggleMark(view, '~~'), preventDefault: true },
-	{ key: 'Mod-Shift-h', run: (view) => toggleMark(view, '=='), preventDefault: true },
+	{ key: 'Mod-b', run: (view) => toggleMark(view, 'bold'), preventDefault: true },
+	{ key: 'Mod-i', run: (view) => toggleMark(view, 'italic'), preventDefault: true },
+	{ key: 'Mod-e', run: (view) => toggleMark(view, 'code'), preventDefault: true },
+	{ key: 'Mod-Shift-x', run: (view) => toggleMark(view, 'strike'), preventDefault: true },
+	{ key: 'Mod-Shift-h', run: (view) => toggleMark(view, 'highlight'), preventDefault: true },
 	{ key: 'Mod-k', run: insertLink, preventDefault: true },
 	{ key: 'Mod-Shift-7', run: (view) => toggleList(view, 'ordered') },
 	{ key: 'Mod-Shift-8', run: (view) => toggleList(view, 'bullet') },
