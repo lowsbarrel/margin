@@ -183,7 +183,7 @@
 	}
 </script>
 
-<div class="pdf-viewer flex h-full w-full flex-col overflow-hidden bg-surface-2">
+<div class="flex h-full w-full flex-col overflow-hidden bg-surface-2">
 	{#if errorMessage}
 		<div
 			class="flex flex-1 items-center justify-center p-6 text-center text-[13px] text-subtle-foreground"
@@ -205,11 +205,11 @@
 				<PdfFindBar {search} onclose={() => (findOpen = false)} />
 			{/if}
 
-			<div class="pdf-scroll h-full [scrollbar-gutter:stable] overflow-auto">
-				<div class="pdf-pages flex flex-col items-center gap-3 px-4 py-4">
+			<div class="h-full scrollbar-gutter-stable overflow-auto">
+				<div class="flex flex-col items-center gap-3 px-4 py-4">
 					{#each slots as slot (slot.num)}
 						<div
-							class="pdf-page-wrapper relative max-w-full rounded-xs shadow-(--shadow-md)"
+							class="relative max-w-full rounded-xs shadow-(--shadow-md)"
 							data-page-num={slot.num}
 							style:width="{slot.width * scale}px"
 							style:height="{slot.height * scale}px"
@@ -220,7 +220,7 @@
 						>
 							{#if mounted[slot.num - 1]}
 								{#key scale}
-									<canvas class="pdf-page block" use:pages.renderPage={slot}></canvas>
+									<canvas class="block" use:pages.renderPage={slot}></canvas>
 									<div class="pdf-text-layer" use:pages.textLayer={slot.num}></div>
 								{/key}
 							{/if}
