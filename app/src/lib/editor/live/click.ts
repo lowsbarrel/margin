@@ -1,9 +1,8 @@
 import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNode } from '@lezer/common';
 import { ViewPlugin, type EditorView } from '@codemirror/view';
-import { openPath, openUrl, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openPath, openUrl } from '@tauri-apps/plugin-opener';
 import { isLocalfileUrl, stripLocalfilePrefix, toOsPath } from '$lib/editor/image-url';
-import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import { contextOf } from './context';
@@ -24,7 +23,9 @@ export function resolveAbsPath(src: string, vaultPath: string | null): string | 
 	return null;
 }
 
-function targetAt(view: EditorView, pos: number): LinkTarget | null {
+export type { LinkTarget };
+
+export function targetAt(view: EditorView, pos: number): LinkTarget | null {
 	let node: SyntaxNode | null = syntaxTree(view.state).resolveInner(pos, 1);
 	while (node) {
 		if (node.name === WIKI_LINK) {
@@ -47,7 +48,7 @@ function targetAt(view: EditorView, pos: number): LinkTarget | null {
 	return null;
 }
 
-function openHref(href: string, vaultPath: string | null): void {
+export function openHref(href: string, vaultPath: string | null): void {
 	if (/^https?:/.test(href)) {
 		openUrl(href).catch((err) => toast.error(m.toast_cannot_open_url({ error: String(err) })));
 		return;
@@ -57,36 +58,6 @@ function openHref(href: string, vaultPath: string | null): void {
 		? toOsPath(decodeDestination(stripLocalfilePrefix(href) ?? ''))
 		: toOsPath(`${vaultPath}/${decodeDestination(href)}`);
 	openPath(abs).catch((err) => toast.error(m.toast_cannot_open_file({ error: String(err) })));
-}
-
-function imageMenu(image: HTMLImageElement, view: EditorView, x: number, y: number) {
-	const ctx = contextOf(view.state);
-	const items: ContextMenuItem[] = [
-		{
-			label: m.editor_view_image(),
-			onclick: () => ctx.openLightbox(image.src, image.alt || 'Image')
-		}
-	];
-	const abs = resolveAbsPath(image.src, ctx.vaultPath());
-	if (abs) {
-		items.push(
-			{
-				label: m.editor_open_default_app(),
-				onclick: () =>
-					openPath(abs).catch((err) =>
-						toast.error(m.toast_cannot_open_file({ error: String(err) }))
-					)
-			},
-			{
-				label: m.editor_reveal_in_finder(),
-				onclick: () =>
-					revealItemInDir(abs).catch((err) =>
-						toast.error(m.toast_cannot_reveal_file({ error: String(err) }))
-					)
-			}
-		);
-	}
-	ctx.openContextMenu(x, y, items);
 }
 
 function handleClick(event: MouseEvent, view: EditorView): boolean {
@@ -119,16 +90,6 @@ export const liveClicks = ViewPlugin.fromClass(
 		eventHandlers: {
 			click(event, view) {
 				return handleClick(event as MouseEvent, view);
-			},
-			contextmenu(event, view) {
-				const mouse = event as MouseEvent;
-				const image = (mouse.target as HTMLElement | null)?.closest(
-					'.cm-lp-image'
-				) as HTMLImageElement | null;
-				if (!image) return false;
-				mouse.preventDefault();
-				imageMenu(image, view, mouse.clientX, mouse.clientY);
-				return true;
 			}
 		}
 	}

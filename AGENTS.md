@@ -83,6 +83,10 @@ const ctx = contextOf(view.state); // vaultPath(), notePath(), attachmentFolder(
 // openContextMenu(x, y, items), code (lowlight highlighter)
 ```
 
+Input assistance is `live/complete.ts` (slash menu, `[[` note/heading and `#`
+tag completion), `live/bubble.ts` (selection toolbar) and `live/context-menu.ts`
+(right-click menu); their edits go through the commands in `live/commands.ts`.
+
 `resolve.ts` turns Markdown destinations into vault paths (note folder → vault
 root → attachment folder, `![[name]]` → attachment folder → vault-wide index):
 reuse it instead of resolving paths again. CodeMirror packages load through

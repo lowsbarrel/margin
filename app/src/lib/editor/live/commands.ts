@@ -19,7 +19,7 @@ function selectedLines(state: EditorState): Line[] {
 	return lines;
 }
 
-function toggleHeading(view: EditorView, level: number): boolean {
+export function toggleHeading(view: EditorView, level: number): boolean {
 	const changes: ChangeSpec[] = [];
 	for (const line of selectedLines(view.state)) {
 		const match = HEADING.exec(line.text);
@@ -34,7 +34,7 @@ function toggleHeading(view: EditorView, level: number): boolean {
 	return true;
 }
 
-function toggleList(view: EditorView, kind: ListKind): boolean {
+export function toggleList(view: EditorView, kind: ListKind): boolean {
 	const changes: ChangeSpec[] = [];
 	for (const line of selectedLines(view.state)) {
 		const match = MARKER.exec(line.text);
@@ -55,7 +55,23 @@ function toggleList(view: EditorView, kind: ListKind): boolean {
 	return true;
 }
 
-function toggleMark(view: EditorView, marker: string): boolean {
+const QUOTE_PREFIX = /^[ \t]*>[ \t]?/;
+
+export function toggleQuote(view: EditorView): boolean {
+	const lines = selectedLines(view.state);
+	const quoted = lines.every((line) => QUOTE_PREFIX.test(line.text));
+	const changes: ChangeSpec[] = [];
+	for (const line of lines) {
+		const match = QUOTE_PREFIX.exec(line.text);
+		if (!quoted) changes.push({ from: line.from, insert: '> ' });
+		else if (match) changes.push({ from: line.from, to: line.from + match[0].length, insert: '' });
+	}
+	if (!changes.length) return false;
+	view.dispatch({ changes, userEvent: 'input' });
+	return true;
+}
+
+export function toggleMark(view: EditorView, marker: string): boolean {
 	const { state } = view;
 	const range = state.selection.main;
 	if (range.empty) {
@@ -106,13 +122,28 @@ function toggleMark(view: EditorView, marker: string): boolean {
 	return true;
 }
 
-function insertLink(view: EditorView): boolean {
+export function insertLink(view: EditorView): boolean {
 	const range = view.state.selection.main;
 	const text = view.state.sliceDoc(range.from, range.to);
 	const insert = `[${text}]()`;
 	view.dispatch({
 		changes: { from: range.from, to: range.to, insert },
 		selection: { anchor: range.from + text.length + 3 },
+		userEvent: 'input'
+	});
+	return true;
+}
+
+const EXISTING_LINK = /^\[([^\]]*)\]\([^)]*\)$/;
+
+export function setLink(view: EditorView, url: string): boolean {
+	const range = view.state.selection.main;
+	const text = view.state.sliceDoc(range.from, range.to);
+	const existing = EXISTING_LINK.exec(text);
+	const insert = `[${existing?.[1] ?? text}](${url})`;
+	view.dispatch({
+		changes: { from: range.from, to: range.to, insert },
+		selection: { anchor: range.from + insert.length },
 		userEvent: 'input'
 	});
 	return true;
