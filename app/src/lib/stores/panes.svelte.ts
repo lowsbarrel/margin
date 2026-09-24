@@ -57,13 +57,6 @@ export function fileTitle(path: string): string {
 	return name;
 }
 
-export function toBreadcrumbs(path: string, vaultPath: string | null): string[] {
-	if (!vaultPath) return [];
-	const rel = path.slice(vaultPath.length + 1);
-	const parts = rel.split('/');
-	return parts.map((p, i) => (i === parts.length - 1 ? fileTitle(path) : p));
-}
-
 async function focusActiveTab(tab: Tab | null): Promise<void> {
 	files.setActiveFile(tab?.path ?? null);
 	editor.setDirty(false);
