@@ -1,9 +1,69 @@
 import type { Completion } from '@codemirror/autocomplete';
 import { EditorView } from '@codemirror/view';
+import type { Component } from 'svelte';
+import { mount } from 'svelte';
+import {
+	Calendar,
+	FileText,
+	Heading,
+	Heading1,
+	Heading2,
+	Heading3,
+	Image,
+	Lightbulb,
+	Link,
+	List,
+	ListOrdered,
+	ListTodo,
+	Minus,
+	Quote,
+	Sigma,
+	SquareCode,
+	Table,
+	Workflow
+} from '@lucide/svelte';
 
 export interface AssistCompletion extends Completion {
 	assistIcon: string;
 	assistDescription: string;
+}
+
+const ICONS: Record<string, Component<{ size?: number }>> = {
+	heading1: Heading1,
+	heading2: Heading2,
+	heading3: Heading3,
+	bullet: List,
+	ordered: ListOrdered,
+	task: ListTodo,
+	quote: Quote,
+	code: SquareCode,
+	table: Table,
+	callout: Lightbulb,
+	math: Sigma,
+	mermaid: Workflow,
+	divider: Minus,
+	link: Link,
+	note: FileText,
+	'📄': FileText,
+	date: Calendar,
+	'🖼': Image,
+	'§': Heading
+};
+
+const TEMPLATES = new Map<string, Element>();
+
+// One component instance per icon: completion rows are rebuilt on every keystroke, so rows clone it.
+function iconSvg(key: string): Element | null {
+	const icon = ICONS[key];
+	if (!icon) return null;
+	const cached = TEMPLATES.get(key);
+	if (cached) return cached.cloneNode(true) as Element;
+	const holder = document.createElement('div');
+	mount(icon, { target: holder, props: { size: 16 } });
+	const svg = holder.firstElementChild;
+	if (!svg) return null;
+	TEMPLATES.set(key, svg);
+	return svg.cloneNode(true) as Element;
 }
 
 export function assistCompletion(
@@ -32,7 +92,9 @@ export const assistCompletionConfig = {
 				if (!isAssist(completion) || !completion.assistIcon) return null;
 				const icon = document.createElement('span');
 				icon.className = 'cm-assist-icon';
-				icon.textContent = completion.assistIcon;
+				const svg = iconSvg(completion.assistIcon);
+				if (svg) icon.appendChild(svg);
+				else icon.textContent = completion.assistIcon;
 				return icon;
 			}
 		},

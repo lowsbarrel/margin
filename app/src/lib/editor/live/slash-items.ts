@@ -76,7 +76,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'h1',
 			title: m.slash_heading1(),
 			description: m.slash_heading1_description(),
-			icon: 'H1',
+			icon: 'heading1',
 			terms: ['title', 'big', 'large', 'h1'],
 			edit: (state, from, to) => markerEdit(state, from, to, '# ')
 		},
@@ -84,7 +84,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'h2',
 			title: m.slash_heading2(),
 			description: m.slash_heading2_description(),
-			icon: 'H2',
+			icon: 'heading2',
 			terms: ['subtitle', 'medium', 'h2'],
 			edit: (state, from, to) => markerEdit(state, from, to, '## ')
 		},
@@ -92,7 +92,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'h3',
 			title: m.slash_heading3(),
 			description: m.slash_heading3_description(),
-			icon: 'H3',
+			icon: 'heading3',
 			terms: ['subtitle', 'small', 'h3'],
 			edit: (state, from, to) => markerEdit(state, from, to, '### ')
 		},
@@ -100,7 +100,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'bullet',
 			title: m.slash_bullet(),
 			description: m.slash_bullet_description(),
-			icon: '•',
+			icon: 'bullet',
 			terms: ['unordered', 'point', 'list', 'ul'],
 			edit: (state, from, to) => markerEdit(state, from, to, '- ')
 		},
@@ -108,7 +108,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'numbered',
 			title: m.slash_numbered(),
 			description: m.slash_numbered_description(),
-			icon: '1.',
+			icon: 'ordered',
 			terms: ['numbered', 'ordered', 'list', 'ol'],
 			edit: (state, from, to) => markerEdit(state, from, to, '1. ')
 		},
@@ -116,7 +116,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'todo',
 			title: m.slash_todo(),
 			description: m.slash_todo_description(),
-			icon: '☑',
+			icon: 'task',
 			terms: ['todo', 'task', 'list', 'check', 'checkbox'],
 			edit: (state, from, to) => markerEdit(state, from, to, '- [ ] ')
 		},
@@ -124,7 +124,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'quote',
 			title: m.slash_quote(),
 			description: m.slash_quote_description(),
-			icon: '"',
+			icon: 'quote',
 			terms: ['blockquote', 'quotes'],
 			edit: (state, from, to) => markerEdit(state, from, to, '> ')
 		},
@@ -132,7 +132,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'code',
 			title: m.slash_code(),
 			description: m.slash_code_description(),
-			icon: '</>',
+			icon: 'code',
 			terms: ['codeblock', 'code', 'snippet', 'fence'],
 			edit: (state, from, to) => blockEdit(state, from, to, '```\n\n```', 4)
 		},
@@ -140,7 +140,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'table',
 			title: m.slash_table(),
 			description: m.slash_table_description(),
-			icon: '▦',
+			icon: 'table',
 			terms: ['table', 'rows', 'columns', 'grid'],
 			edit: (state, from, to) => blockEdit(state, from, to, TABLE, 2)
 		},
@@ -148,7 +148,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'callout',
 			title: m.slash_callout(),
 			description: m.slash_callout_description(),
-			icon: '💡',
+			icon: 'callout',
 			terms: ['callout', 'admonition', 'alert', 'info', 'warning', 'note'],
 			edit: (state, from, to) => blockEdit(state, from, to, '> [!note]\n> ', 12)
 		},
@@ -156,7 +156,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'math',
 			title: m.slash_math_block(),
 			description: m.slash_math_block_description(),
-			icon: '∑',
+			icon: 'math',
 			terms: ['math', 'equation', 'formula', 'latex', 'katex', 'block'],
 			edit: (state, from, to) => blockEdit(state, from, to, '$$\n\n$$', 3)
 		},
@@ -164,7 +164,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'mermaid',
 			title: m.slash_mermaid(),
 			description: m.slash_mermaid_description(),
-			icon: '🧜',
+			icon: 'mermaid',
 			terms: ['mermaid', 'diagram', 'flowchart', 'graph', 'sequence', 'chart'],
 			edit: (state, from, to) => blockEdit(state, from, to, '```mermaid\n\n```', 11)
 		},
@@ -172,7 +172,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'divider',
 			title: m.slash_divider(),
 			description: m.slash_divider_description(),
-			icon: '—',
+			icon: 'divider',
 			terms: ['horizontal rule', 'hr', 'divider', 'separator'],
 			edit: (state, from, to) => blockEdit(state, from, to, '---', 3)
 		},
@@ -180,7 +180,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'link',
 			title: m.slash_link(),
 			description: m.slash_link_description(),
-			icon: '🔗',
+			icon: 'link',
 			terms: ['link', 'url', 'href'],
 			edit: (state, from, to) => inlineEdit(state, from, to, '[]()', 1)
 		},
@@ -188,7 +188,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'embed',
 			title: m.slash_embed_note(),
 			description: m.slash_embed_note_description(),
-			icon: '📄',
+			icon: 'note',
 			terms: ['embed', 'transclude', 'include', 'note', 'reference'],
 			edit: (state, from, to) => inlineEdit(state, from, to, '![[]]', 3)
 		},
@@ -196,7 +196,7 @@ export function buildSlashItems(): SlashItem[] {
 			id: 'date',
 			title: m.slash_date(),
 			description: m.slash_date_description(),
-			icon: '📅',
+			icon: 'date',
 			terms: ['date', 'today', 'time'],
 			edit: (state, from, to) => inlineEdit(state, from, to, today(), today().length)
 		}
