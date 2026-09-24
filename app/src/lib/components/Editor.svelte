@@ -5,12 +5,14 @@
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { drag } from '$lib/stores/drag.svelte';
 	import { resolveAttachmentFolder } from '$lib/editor/attachments';
+	import { isModalOpen } from '$lib/utils/modal';
 	import { findVaultFile, vaultFileExists, watchVaultIndex } from '$lib/editor/live/vault-index';
 	import type { LiveEditorHandle } from '$lib/editor/live/editor-factory';
 	import type { ContextMenuItem } from './ContextMenu.svelte';
 	import type { LightboxImage } from './ImageLightbox.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import ContextMenu from './ContextMenu.svelte';
+	import FindReplace from './FindReplace.svelte';
 	import ImageLightbox from './ImageLightbox.svelte';
 	import { SaveController } from './editor/save-controller';
 	import { TitleEditor } from './editor/title-editor.svelte';
@@ -49,6 +51,8 @@
 
 	let container: HTMLDivElement;
 	let live = $state<LiveEditorHandle | null>(null);
+	let showFindReplace = $state(false);
+	let findReplaceMode = $state(false);
 	let lightbox = $state<{ images: LightboxImage[]; index: number } | null>(null);
 	let contextMenu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
 	let currentPath = $state(untrack(() => filePath));
@@ -107,6 +111,26 @@
 		if (!alive) return;
 		editorStore.setDirty(true);
 		save.schedule(text);
+	}
+
+	function closeFind(): void {
+		showFindReplace = false;
+		live?.focus();
+	}
+
+	function handleFindHotkey(event: KeyboardEvent): void {
+		if (!active || isModalOpen()) return;
+		if (event.key === 'Escape' && showFindReplace) {
+			event.preventDefault();
+			closeFind();
+			return;
+		}
+		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+		const key = event.key.toLowerCase();
+		if (key !== 'f' && key !== 'h') return;
+		event.preventDefault();
+		findReplaceMode = key === 'h';
+		showFindReplace = true;
 	}
 
 	function reportCursorSnapshot(): void {
@@ -203,6 +227,7 @@
 
 		window.addEventListener('margin:flush', flushSave);
 		window.addEventListener('margin:flush', reportCursorSnapshot);
+		window.addEventListener('keydown', handleFindHotkey, true);
 	});
 
 	onDestroy(() => {
@@ -212,6 +237,7 @@
 		stopIndex?.();
 		window.removeEventListener('margin:flush', flushSave);
 		window.removeEventListener('margin:flush', reportCursorSnapshot);
+		window.removeEventListener('keydown', handleFindHotkey, true);
 		editorStore.releaseView(live?.view ?? null);
 		live?.destroy();
 		live = null;
@@ -219,6 +245,14 @@
 </script>
 
 <div class="editor-container relative flex-1 overflow-y-auto bg-background" data-drop-kind="editor">
+	{#if showFindReplace && live}
+		<FindReplace
+			view={live.view}
+			showReplace={findReplaceMode}
+			ontogglereplace={() => (findReplaceMode = !findReplaceMode)}
+			onclose={closeFind}
+		/>
+	{/if}
 	<div
 		class="title-input mx-auto max-w-187.5 cursor-text px-10 pt-12 font-sans text-3xl leading-[1.2] font-bold tracking-tight wrap-break-word text-foreground outline-none empty:before:pointer-events-none empty:before:text-subtle-foreground empty:before:content-[attr(data-placeholder)]"
 		contenteditable="true"

@@ -11,6 +11,7 @@ import {
 import { blockWidgets } from './blocks';
 import { liveClicks } from './click';
 import { liveKeymap } from './commands';
+import { liveFind } from './find';
 import { livePaste } from './paste';
 import { livePreview } from './preview';
 import { markdownSyntax } from './syntax';
@@ -32,5 +33,6 @@ export const baseExtensions: readonly Extension[] = [
 	rectangularSelection(),
 	crosshairCursor(),
 	livePaste,
-	liveKeymap
+	liveKeymap,
+	liveFind
 ];

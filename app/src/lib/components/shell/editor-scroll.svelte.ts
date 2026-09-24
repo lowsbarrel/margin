@@ -7,17 +7,22 @@ function scrollToText(view: EditorView, searchText: string): void {
 	const text = view.state.doc.toString();
 	const at = text.indexOf(searchText);
 	if (at < 0) return;
-	const to = at + searchText.length;
-	view.dispatch({ selection: { anchor: at, head: to } });
-	try {
-		const coords = view.coordsAtPos(at);
-		const scrollContainer = view.dom.closest('.editor-container');
-		if (scrollContainer && coords) {
+	view.dispatch({ selection: { anchor: at, head: at + searchText.length } });
+	const scrollContainer = view.dom.closest('.editor-container');
+	if (!scrollContainer) return;
+	// A frame later: setting the selection reveals raw Markdown on the matched lines, which changes the line heights the centring depends on.
+	requestAnimationFrame(() => {
+		try {
+			const coords = view.coordsAtPos(at);
+			if (!coords) return;
 			const rect = scrollContainer.getBoundingClientRect();
 			const relativeTop = coords.top - rect.top + scrollContainer.scrollTop;
-			scrollContainer.scrollTo({ top: relativeTop - rect.height / 2, behavior: 'smooth' });
-		}
-	} catch {}
+			scrollContainer.scrollTo({
+				top: Math.max(0, relativeTop - rect.height / 2),
+				behavior: 'smooth'
+			});
+		} catch {}
+	});
 }
 
 export function scrollEditorToText(searchText: string): void {
