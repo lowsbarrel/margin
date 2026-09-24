@@ -13,6 +13,23 @@
 
 	let { title, onclose, children, width = '560px' }: Props = $props();
 
+	let body = $state<HTMLDivElement | null>(null);
+	let scrollbarWidth = $state(0);
+
+	$effect(() => {
+		const el = body;
+		if (!el) return;
+		const measure = () => {
+			const next = el.offsetWidth - el.clientWidth;
+			if (next !== scrollbarWidth) scrollbarWidth = next;
+		};
+		measure();
+		/* The gutter is always reserved (overflow-y-scroll) and always given back here, so the column never moves. */
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
 	function handleOpenChange(next: boolean) {
 		if (!next) onclose();
 	}
@@ -37,8 +54,8 @@
 				<X size={16} />
 			</Dialog.Close>
 		</Dialog.Header>
-		<div class="dialog-scroll min-h-0 flex-1 overflow-y-auto">
-			<div class="flex flex-col gap-3 p-6">
+		<div bind:this={body} class="dialog-scroll min-h-0 flex-1 overflow-y-scroll">
+			<div class="flex flex-col gap-3 p-6" style="padding-right: calc(1.5rem - {scrollbarWidth}px)">
 				{@render children()}
 			</div>
 		</div>
