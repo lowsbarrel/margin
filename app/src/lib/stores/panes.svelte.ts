@@ -16,8 +16,10 @@ import { activeTabOf, createEmptyPane, getTabType, nextTabId } from '$lib/stores
 import { closedTabs } from '$lib/stores/closed-tabs.svelte';
 import { closeOneTab, closeTabsExcept, closeUnpinnedTabs } from '$lib/stores/pane-close';
 import {
+	clampInsertIndex,
 	moveTabIntoPane,
 	removeFlexAt,
+	reorderTab,
 	splitAtPane,
 	splitTabToNewPane
 } from '$lib/stores/pane-layout';
@@ -53,13 +55,6 @@ export function fileTitle(path: string): string {
 	if (name.endsWith('.md')) return name.slice(0, -3);
 	if (name.endsWith('.canvas')) return name.slice(0, -7);
 	return name;
-}
-
-export function toBreadcrumbs(path: string, vaultPath: string | null): string[] {
-	if (!vaultPath) return [];
-	const rel = path.slice(vaultPath.length + 1);
-	const parts = rel.split('/');
-	return parts.map((p, i) => (i === parts.length - 1 ? fileTitle(path) : p));
 }
 
 async function focusActiveTab(tab: Tab | null): Promise<void> {
@@ -244,10 +239,13 @@ export const panes = {
 		await this.switchTab(paneIndex, fallbackIndex);
 	},
 
-	async openFile(path: string): Promise<boolean> {
+	async openFile(
+		path: string,
+		paneIndex = _activePaneIndex,
+		insertIndex?: number
+	): Promise<boolean> {
 		if (!vault.vaultPath) return false;
 		const gen = ++_fileSelectGeneration;
-		const paneIndex = _activePaneIndex;
 		const tabType = getTabType(path);
 
 		const existingIndex = _panes[paneIndex].tabs.findIndex((t) => t.path === path);
@@ -272,8 +270,11 @@ export const panes = {
 		if (gen !== _fileSelectGeneration) return false;
 
 		const newTab = tabFromContent(nextTabId(), path, tabType, loaded);
-		_panes[paneIndex].tabs = [..._panes[paneIndex].tabs, newTab];
-		_panes[paneIndex].activeTabIndex = _panes[paneIndex].tabs.length - 1;
+		const paneTabs = _panes[paneIndex].tabs;
+		const at =
+			insertIndex === undefined ? paneTabs.length : clampInsertIndex(paneTabs, false, insertIndex);
+		_panes[paneIndex].tabs = [...paneTabs.slice(0, at), newTab, ...paneTabs.slice(at)];
+		_panes[paneIndex].activeTabIndex = at;
 
 		await focusActiveTab(newTab);
 		return true;
@@ -287,9 +288,21 @@ export const panes = {
 		await this.openFile(path);
 	},
 
-	async moveTabToPane(srcPaneIndex: number, srcTabIndex: number, destPaneIndex: number) {
+	async moveTabToPane(
+		srcPaneIndex: number,
+		srcTabIndex: number,
+		destPaneIndex: number,
+		insertIndex?: number
+	) {
 		if (srcPaneIndex === destPaneIndex) return;
-		const moved = moveTabIntoPane(_panes, _paneFlexes, srcPaneIndex, srcTabIndex, destPaneIndex);
+		const moved = moveTabIntoPane(
+			_panes,
+			_paneFlexes,
+			srcPaneIndex,
+			srcTabIndex,
+			destPaneIndex,
+			insertIndex
+		);
 		if (!moved) return;
 		await unwatchFile();
 		_panes = moved.panes;
@@ -297,6 +310,10 @@ export const panes = {
 		_activePaneIndex = moved.activePaneIndex;
 		const destTab = activeTabOf(_panes[_activePaneIndex]);
 		if (destTab) await focusActiveTab(destTab);
+	},
+
+	moveTabWithinPane(paneIndex: number, from: number, gap: number): void {
+		reorderTab(_panes, paneIndex, from, gap);
 	},
 
 	async moveTabToNewPane(

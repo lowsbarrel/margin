@@ -261,7 +261,7 @@
 								>
 							</div>
 							<div
-								class="flex items-center gap-0.5 opacity-0 transition-opacity group-hover:opacity-100"
+								class="flex items-center gap-0.5 opacity-0 transition-opacity group-focus-within:opacity-100 group-hover:opacity-100"
 								role="presentation"
 								onclick={(e) => e.stopPropagation()}
 								onkeydown={(e) => e.stopPropagation()}

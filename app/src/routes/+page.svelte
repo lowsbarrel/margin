@@ -26,7 +26,7 @@
 		handleWikiLink,
 		handleLogout
 	} from '$lib/utils/page-actions';
-	import { executeDrop, startDividerDrag } from '$lib/utils/tab-drag';
+	import { executeDrop, executeStripDrop, startDividerDrag } from '$lib/utils/tab-drag';
 	import { runManualSync } from '$lib/sync/s3sync';
 	import {
 		shellLayout,
@@ -67,6 +67,10 @@
 		reopenClosedTab: () => panes.reopenClosedTab(),
 		toggleSidebar: () => (shellLayout.sidebarOpen = !shellLayout.sidebarOpen),
 		newNote: () => handleNewNote(),
+		closeTab: () => {
+			const pane = panes.activePane;
+			if (pane.activeTabIndex >= 0) panes.closeTab(panes.activePaneIndex, pane.activeTabIndex);
+		},
 		toggleViewMode
 	};
 
@@ -136,24 +140,32 @@
 			>
 				{#each panes.list as pane, paneIndex (pane.id)}
 					{#if paneIndex > 0}
-						<div
-							class="z-1 shrink-0 grow-0 basis-px cursor-col-resize bg-border transition-shadow duration-120 ease-out hover:ring-1 hover:ring-brand {dividerResizing
-								? 'ring-1 ring-brand'
-								: ''}"
-							onmousedown={(e) =>
-								startDividerDrag(e, paneIndex - 1, panesContainerEl!, (v) => (dividerResizing = v))}
-						></div>
+						<div class="relative z-1 shrink-0 grow-0 basis-px bg-border">
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div
+								class="absolute inset-y-0 -right-[2.5px] -left-[2.5px] cursor-col-resize transition-colors duration-120 ease-out {dividerResizing
+									? 'bg-brand/50'
+									: 'hover:bg-brand/25'}"
+								onmousedown={(e) =>
+									startDividerDrag(
+										e,
+										paneIndex - 1,
+										panesContainerEl!,
+										(v) => (dividerResizing = v)
+									)}
+							></div>
+						</div>
 					{/if}
 					<!-- svelte-ignore a11y_no_static_element_interactions -->
 					<div
 						class="relative flex min-w-0 flex-col overflow-hidden bg-background"
-						class:pane-active={paneIndex === panes.activePaneIndex}
 						style="flex: {panes.flexes[paneIndex]}"
 						onmousedown={() => panes.focusPane(paneIndex)}
 					>
 						<PaneView
 							{pane}
 							{paneIndex}
+							focused={paneIndex === panes.activePaneIndex}
 							onrename={handleRename}
 							onwikilink={handleWikiLink}
 							ontabcontextmenu={handleTabContextMenu}
@@ -215,9 +227,9 @@
 			onclose={() => (showTrash = false)}
 			onrestored={async (path) => {
 				if (!vault.vaultPath) return;
-				await files.refresh();
-				await handleFileSelect(path);
+				await files.revealFile(path, vault.vaultPath);
 			}}
+			onopen={handleFileSelect}
 		/>
 	{/if}
 
@@ -257,7 +269,9 @@
 	}}
 	onmouseup={async () => {
 		if (drag.active) {
-			if (dropTarget) {
+			if (drag.stripTarget) {
+				await executeStripDrop(drag.stripTarget);
+			} else if (dropTarget) {
 				await executeDrop(dropTarget);
 			} else if (drag.item?.kind === 'file' && !drag.item.isDir) {
 				drag.requestInsertAtCoords(drag.item.path, drag.x, drag.y);

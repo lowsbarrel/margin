@@ -37,10 +37,6 @@ export class CanvasCamera {
 		this.restore(0, 0, 1);
 	}
 
-	setZoom(zoom: number) {
-		this.zoom = clampZoom(zoom);
-	}
-
 	beginPan(clientX: number, clientY: number) {
 		this.panning = true;
 		this.grabFrom = { x: clientX, y: clientY };

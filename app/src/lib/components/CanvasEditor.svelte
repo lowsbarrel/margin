@@ -2,7 +2,8 @@
 	import { onMount, onDestroy, tick } from 'svelte';
 	import { readFileBytes } from '$lib/fs/bridge';
 	import * as m from '$lib/paraglide/messages.js';
-	import type { Point, Tool } from '$lib/canvas/types';
+	import type { Point, ShapeKind, Tool } from '$lib/canvas/types';
+	import { INK_COLOR, inkCss, isShapeTool } from '$lib/canvas/types';
 	import { deserialize } from '$lib/canvas/serialization';
 	import { SnapCache } from '$lib/canvas/snapping';
 	import CanvasToolbar from './CanvasToolbar.svelte';
@@ -44,13 +45,15 @@
 		snapCache,
 		tool: () => tool,
 		penColor: () => penColor,
+		setTool,
 		menuOpen: () => ctxMenu !== null,
 		closeMenu: () => (ctxMenu = null),
 		beginText
 	});
 
 	let tool = $state<Tool>('pen');
-	let penColor = $state('#ffffff');
+	let lastShape = $state<ShapeKind>('rect');
+	let penColor = $state(INK_COLOR);
 	let ctxMenu = $state<{ x: number; y: number } | null>(null);
 
 	let editingText = $state<Point | null>(null);
@@ -111,24 +114,17 @@
 		ctxMenu = { x: e.clientX, y: e.clientY };
 	}
 
+	function setTool(next: Tool) {
+		tool = next;
+		if (isShapeTool(next)) lastShape = next;
+	}
+
 	function handleClearAll() {
 		scene.clear();
 		snapCache.invalidate();
 		surface.scheduleRender();
 		persist.schedule();
 		ctxMenu = null;
-	}
-
-	function setZoom(newZoom: number) {
-		camera.setZoom(newZoom);
-		surface.scheduleRender();
-		persist.schedule();
-	}
-
-	function resetView() {
-		camera.reset();
-		surface.scheduleRender();
-		persist.schedule();
 	}
 
 	let resizeObserver: ResizeObserver;
@@ -180,25 +176,28 @@
 	></canvas>
 
 	<CanvasToolbar
-		bind:tool
+		{tool}
+		shape={isShapeTool(tool) ? tool : lastShape}
 		bind:penColor
-		currentSize={sizes.current(tool)}
+		size={sizes.current(tool)}
+		ontool={setTool}
+		onshape={setTool}
 		onSizeChange={(v) => sizes.set(tool, v)}
-		zoom={camera.zoom}
-		onZoomIn={() => setZoom(Math.min(5, camera.zoom * 1.2))}
-		onZoomOut={() => setZoom(Math.max(0.1, camera.zoom / 1.2))}
-		onResetView={resetView}
 	/>
+
+	<button
+		class="absolute right-4 bottom-4 z-10 rounded-full px-2.5 py-1 text-xs text-subtle-foreground tabular-nums [transition:background_var(--transition-fast),color_var(--transition-fast)] hover:bg-surface-3 hover:text-foreground"
+		onclick={() => surface.resetView()}
+		title={m.canvas_reset_view()}
+	>
+		{Math.round(camera.zoom * 100)}%
+	</button>
 
 	{#if ctxMenu}
 		<CanvasContextMenu
 			x={ctxMenu.x}
 			y={ctxMenu.y}
-			bind:tool
-			bind:penColor
-			currentSize={sizes.current(tool)}
-			onSizeChange={(v) => sizes.set(tool, v)}
-			onClearAll={handleClearAll}
+			onClear={handleClearAll}
 			onClose={() => (ctxMenu = null)}
 		/>
 	{/if}
@@ -210,7 +209,7 @@
 			style:left={`${editingTextLocal.x}px`}
 			style:top={`${editingTextLocal.y}px`}
 			style:font-size={`${sizes.text * camera.zoom}px`}
-			style:color={penColor}
+			style:color={penColor === INK_COLOR ? inkCss : penColor}
 			bind:value={textInputValue}
 			onkeydown={(e) => {
 				if (e.key === 'Enter') commitText();
@@ -231,7 +230,11 @@
 			style:top={`${surface.cursorY}px`}
 			style:width={`${sizes.current(tool) * camera.zoom}px`}
 			style:height={`${sizes.current(tool) * camera.zoom}px`}
-			style:border-color={tool === 'eraser' ? 'rgba(255,255,255,0.5)' : penColor}
+			style:border-color={tool === 'eraser'
+				? 'var(--color-text-tertiary)'
+				: penColor === INK_COLOR
+					? inkCss
+					: penColor}
 		></div>
 	{/if}
 </div>

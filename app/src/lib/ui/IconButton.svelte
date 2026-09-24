@@ -36,6 +36,7 @@
 	)}
 	{onclick}
 	{title}
+	aria-label={title}
 	{disabled}
 >
 	<Icon size={iconSize} />

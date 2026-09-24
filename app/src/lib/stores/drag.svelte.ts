@@ -1,6 +1,6 @@
 export type DragItem =
 	| { kind: 'file'; path: string; label: string; isDir: boolean }
-	| { kind: 'tab'; paneIndex: number; tabIndex: number; label: string };
+	| { kind: 'tab'; paneIndex: number; tabIndex: number; label: string; pinned: boolean };
 
 interface DragState {
 	item: DragItem;
@@ -14,8 +14,14 @@ export interface PendingInsert {
 	y: number;
 }
 
+export interface StripTarget {
+	paneIndex: number;
+	index: number;
+}
+
 let state = $state<DragState | null>(null);
 let insertState = $state<PendingInsert | null>(null);
+let stripState = $state<StripTarget | null>(null);
 
 let _nativeDragActive = false;
 
@@ -38,6 +44,15 @@ export const drag = {
 	get pendingInsert() {
 		return insertState;
 	},
+	get stripTarget() {
+		return stripState;
+	},
+	setStripTarget(paneIndex: number, index: number) {
+		stripState = { paneIndex, index };
+	},
+	clearStripTarget() {
+		stripState = null;
+	},
 	start(item: DragItem, x: number, y: number) {
 		state = { item, x, y };
 	},
@@ -49,6 +64,7 @@ export const drag = {
 	},
 	end() {
 		state = null;
+		stripState = null;
 	},
 	requestInsertAtCoords(path: string, x: number, y: number) {
 		insertState = { path, x, y };

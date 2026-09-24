@@ -63,8 +63,9 @@
 
 	async function runItem(item: ContextMenuItem) {
 		if (item.disabled) return;
+		const whileMounted = item.onclick();
 		onclose();
-		await item.onclick();
+		await whileMounted;
 	}
 </script>
 

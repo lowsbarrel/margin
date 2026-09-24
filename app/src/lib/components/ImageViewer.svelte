@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { tick } from 'svelte';
-	import { ZoomIn, ZoomOut, Expand } from '@lucide/svelte';
+	import { ZoomIn, ZoomOut, Expand, Maximize } from '@lucide/svelte';
 	import { formatBytes } from '$lib/utils/bytes';
 	import { fileNameFromSrc } from '$lib/utils/mime';
 	import * as m from '$lib/paraglide/messages.js';
@@ -253,7 +253,7 @@
 				title={m.viewer_actual_size()}
 				aria-label={m.viewer_actual_size()}
 			>
-				100%
+				<Maximize size={14} />
 			</button>
 		</div>
 	</div>

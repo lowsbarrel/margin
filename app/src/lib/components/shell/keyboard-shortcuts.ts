@@ -7,6 +7,7 @@ export interface ShortcutActions {
 	reopenClosedTab: () => void;
 	toggleSidebar: () => void;
 	newNote: () => void;
+	closeTab: () => void;
 	toggleViewMode: () => void;
 }
 
@@ -51,6 +52,13 @@ export function handleGlobalKeydown(e: KeyboardEvent, actions: ShortcutActions):
 	if (!e.shiftKey && key === 'n') {
 		e.preventDefault();
 		if (!isModalOpen()) actions.newNote();
+		return;
+	}
+
+	if (!e.shiftKey && key === 'w') {
+		e.preventDefault();
+		if (!isModalOpen()) actions.closeTab();
+		return;
 	}
 
 	if (e.shiftKey && key === 'e') {
