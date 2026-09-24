@@ -1,4 +1,4 @@
-<img width="1800" height="1125" alt="Margin with a note open in the editor and the file tree on the left" src="media/screenshot.png" />
+<img width="2400" height="1350" alt="Margin on macOS, with a note open in the editor and the file tree on the left" src="media/hero.jpg" />
 
 <br />
 <p align="center">
@@ -34,9 +34,9 @@ Table of Contents:
 
 - **Plain Markdown files** - Notes live as `.md` files in a folder you choose. No database, no proprietary format, no lock-in.
 
-- **Rich editor** - Write in a WYSIWYG editor with tables (add, move and align rows and columns), task lists, callouts, code blocks, KaTeX math, Mermaid diagrams, `[[wiki links]]` and a `/` block menu.
+- **Live preview editor** - Markdown renders as you type and turns back into source on the line you are editing, like Obsidian. The file on disk is exactly what you typed, and paste inserts exactly what you copied. Tables (add, move and align rows and columns), task lists, callouts, code blocks, KaTeX math, Mermaid diagrams, embeds, footnotes, `[[wiki links]]` and a `/` block menu.
 
-- **Raw Markdown mode** - Switch any note to its exact source text with <kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>, edited in CodeMirror with syntax highlighting.
+- **Raw Markdown mode** - Turn the preview off for any note with <kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> to see every character of the source with syntax highlighting.
 
 - **Spotlight** - One palette for everything: note names, full-text search, `#tags`, and replace across the vault.
 
@@ -75,7 +75,7 @@ The first launch walks you through a short tour, which you can skip, and then cr
 2. **Name the vault.** Several vaults can live side by side, each with its own folder.
 3. **Save the passphrase.** Margin generates 12 words that derive your vault's encryption key. Write them down: there is no reset, and without them your synced vault cannot be read.
 
-Then start writing. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> creates a note, `/` opens the block menu, `[[` links another note, and `:::info` starts a callout.
+Then start writing. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> creates a note, `/` opens the block menu, `[[` links another note, and `> [!info]` starts a callout.
 
 ### Keyboard shortcuts
 
@@ -83,14 +83,17 @@ Then start writing. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> creates a note, `/` opens t
 
 |Shortcut|Action|
 |---|---|
-|`Mod`+`K` or `Mod`+`P`|Open Spotlight|
+|`Mod`+`P`|Open Spotlight (also `Mod`+`K` outside the editor)|
 |`Mod`+`Shift`+`F`|Search the whole vault|
 |`Mod`+`N`|New note|
 |`Mod`+`\`|Show or hide the sidebar|
 |`Mod`+`` ` ``|Show or hide the terminal|
-|`Mod`+`Shift`+`E`|Switch between rich text and raw Markdown|
+|`Mod`+`Shift`+`E`|Switch between live preview and raw Markdown|
+|`Mod`+`W`|Close the tab|
 |`Mod`+`Shift`+`T`|Reopen the last closed tab|
 |`Mod`+`F` / `Mod`+`H`|Find / find and replace in the note|
+|`Mod`+`K`|Insert a link in the note|
+|`Mod`+`Shift`+`V`|Paste as plain text|
 |`F2` or triple-click|Rename the selected file or folder|
 
 In Spotlight, start with `#` to browse tags and with `?` to ask a question.
