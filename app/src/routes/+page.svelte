@@ -215,9 +215,9 @@
 			onclose={() => (showTrash = false)}
 			onrestored={async (path) => {
 				if (!vault.vaultPath) return;
-				await files.refresh();
-				await handleFileSelect(path);
+				await files.revealFile(path, vault.vaultPath);
 			}}
+			onopen={handleFileSelect}
 		/>
 	{/if}
 
