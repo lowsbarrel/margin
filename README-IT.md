@@ -1,4 +1,4 @@
-<img width="1800" height="1125" alt="Margin con una nota aperta nell'editor e l'albero dei file a sinistra" src="media/screenshot.png" />
+<img width="2400" height="1350" alt="Margin su macOS, con una nota aperta nell'editor e l'albero dei file a sinistra" src="media/hero.jpg" />
 
 <br />
 <p align="center">

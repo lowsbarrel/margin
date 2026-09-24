@@ -1,4 +1,4 @@
-<img width="1800" height="1125" alt="Margin with a note open in the editor and the file tree on the left" src="media/screenshot.png" />
+<img width="2400" height="1350" alt="Margin on macOS, with a note open in the editor and the file tree on the left" src="media/hero.jpg" />
 
 <br />
 <p align="center">
