@@ -11,8 +11,11 @@ import {
 } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
 import { blockWidgets } from './blocks';
+import { liveBubble } from './bubble';
 import { liveCallouts } from './callouts';
 import { liveClicks } from './click';
+import { liveAssist } from './complete';
+import { liveContextMenu } from './context-menu';
 import { liveKeymap } from './commands';
 import { liveEmbeds } from './embeds';
 import { liveFind } from './find';
@@ -28,6 +31,7 @@ import './live-blocks.css';
 
 // Live-preview features live here and are switched off wholesale in raw Markdown mode.
 export const previewExtensions: readonly Extension[] = [
+	liveBubble,
 	livePreview,
 	blockWidgets,
 	liveClicks,
@@ -41,6 +45,8 @@ export const previewExtensions: readonly Extension[] = [
 
 // Editor behaviour that stays on in both modes.
 export const baseExtensions: readonly Extension[] = [
+	liveAssist,
+	liveContextMenu,
 	markdownSyntax,
 	liveTheme,
 	placeholder(m.editor_note_placeholder()),

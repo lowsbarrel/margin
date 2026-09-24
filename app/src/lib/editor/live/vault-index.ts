@@ -39,6 +39,10 @@ export function watchVaultIndex(vaultPath: string | null, onRefresh: () => void)
 	return () => unlisten?.();
 }
 
+export function listVaultFiles(): string[] {
+	return [...paths];
+}
+
 export function vaultFileExists(relPath: string): boolean {
 	return paths.has(relPath);
 }

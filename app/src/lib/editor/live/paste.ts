@@ -4,6 +4,8 @@ import type { EditorState } from '@codemirror/state';
 import { ViewPlugin, type EditorView } from '@codemirror/view';
 import { insertPastedFiles } from './attachments';
 import { captureSelection, insertText } from './insert';
+import { toast } from '$lib/stores/toast.svelte';
+import * as m from '$lib/paraglide/messages.js';
 
 const CODE_NODES: Record<string, true> = { FencedCode: true, CodeBlock: true, InlineCode: true };
 const CODE_VIEW_MARKERS =
@@ -74,22 +76,56 @@ async function htmlToMarkdown(html: string): Promise<string> {
 	return service.turndown(html);
 }
 
-async function readClipboardImages(): Promise<File[]> {
+async function clipboardImages(items: ClipboardItems): Promise<File[]> {
 	const files: File[] = [];
-	try {
-		const items = await navigator.clipboard.read();
-		for (const item of items) {
-			for (const type of item.types) {
-				if (!type.startsWith('image/')) continue;
-				const blob = await item.getType(type);
-				const ext = type.split('/')[1]?.split('+')[0] || 'png';
-				files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
-			}
-		}
-	} catch (err) {
-		console.error('Clipboard image read failed:', err);
+	for (const item of items) {
+		const type = item.types.find((entry) => entry.startsWith('image/'));
+		if (!type) continue;
+		const blob = await item.getType(type);
+		const ext = type.split('/')[1]?.split('+')[0] || 'png';
+		files.push(new File([blob], `pasted-${Date.now()}.${ext}`, { type }));
 	}
 	return files;
+}
+
+async function readClipboardImages(): Promise<File[]> {
+	try {
+		return await clipboardImages(await navigator.clipboard.read());
+	} catch (err) {
+		console.error('Clipboard image read failed:', err);
+		return [];
+	}
+}
+
+async function clipboardHtml(items: ClipboardItems): Promise<string | null> {
+	for (const item of items) {
+		if (!item.types.includes('text/html')) continue;
+		return (await item.getType('text/html')).text();
+	}
+	return null;
+}
+
+export async function pasteFromClipboard(view: EditorView, plain: boolean): Promise<void> {
+	const cursor = captureSelection(view);
+	try {
+		if (!plain) {
+			const items = await navigator.clipboard.read();
+			const html = await clipboardHtml(items);
+			if (html && !isCodeEditorHtml(html)) {
+				insertText(view, cursor, await htmlToMarkdown(html));
+				return;
+			}
+			const files = await clipboardImages(items);
+			if (files.length > 0) {
+				await insertPastedFiles(view, files, cursor);
+				return;
+			}
+		}
+		const text = await navigator.clipboard.readText();
+		if (text) insertText(view, cursor, text);
+	} catch (err) {
+		toast.error(m.toast_clipboard_paste_failed({ error: String(err) }));
+	}
 }
 
 export function armPlainPaste(view: EditorView): void {
