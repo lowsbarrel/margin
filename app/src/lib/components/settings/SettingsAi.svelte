@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Button, Field, Input, Section } from '$lib/ui';
+	import { Button, Field, Input, Section, Select } from '$lib/ui';
 	import { Sparkles, Download } from '@lucide/svelte';
 	import { llmListModels, type ApiFormat, type Effort } from '$lib/ai/bridge';
 	import { cn } from '$lib/utils';
@@ -37,15 +37,14 @@
 		modelsError = '';
 	}
 
-	function handleFormatChange(event: Event) {
-		const next = (event.target as HTMLSelectElement).value as ApiFormat;
+	function handleFormatChange(value: string) {
+		const next = value as ApiFormat;
 		apiFormat = next;
 		baseUrl = DEFAULT_BASE[next];
 		clearModels();
 	}
 
-	function handleEffortChange(event: Event) {
-		const value = (event.target as HTMLSelectElement).value;
+	function handleEffortChange(value: string) {
 		effort = value === '' ? null : (value as Effort);
 	}
 
@@ -70,15 +69,10 @@
 
 <Section title={m.settings_ai_title()} icon={Sparkles} collapsible defaultOpen={false}>
 	<Field label={m.settings_ai_format()} forId="aiFormat">
-		<select
-			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
-			id="aiFormat"
-			value={apiFormat}
-			onchange={handleFormatChange}
-		>
+		<Select id="aiFormat" value={apiFormat} onchange={handleFormatChange}>
 			<option value="openai">{m.settings_ai_format_openai()}</option>
 			<option value="anthropic">{m.settings_ai_format_anthropic()}</option>
-		</select>
+		</Select>
 	</Field>
 
 	<Field label={m.settings_ai_base_url()} forId="aiBaseUrl">
@@ -113,17 +107,12 @@
 	</Field>
 
 	<Field label={m.settings_ai_effort()} forId="aiEffort" hint={m.settings_ai_effort_hint()}>
-		<select
-			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
-			id="aiEffort"
-			value={effort ?? ''}
-			onchange={handleEffortChange}
-		>
+		<Select id="aiEffort" value={effort ?? ''} onchange={handleEffortChange}>
 			<option value="">{m.settings_ai_effort_default()}</option>
 			<option value="low">{m.settings_ai_effort_low()}</option>
 			<option value="medium">{m.settings_ai_effort_medium()}</option>
 			<option value="high">{m.settings_ai_effort_high()}</option>
-		</select>
+		</Select>
 	</Field>
 
 	<div class="flex flex-wrap items-center gap-2">
