@@ -196,7 +196,7 @@ async function tagSource(context: CompletionContext): Promise<CompletionResult |
 		)
 			.slice(0, 30)
 			.map((tag) =>
-				assistCompletion(`#${tag}`, '', '', {
+				assistCompletion(`#${tag}`, '', 'hash', {
 					apply: (view, completion, from, to) => {
 						view.dispatch({
 							changes: { from, to, insert: tag },

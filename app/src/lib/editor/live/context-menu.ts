@@ -18,17 +18,17 @@ import {
 	insertTableColumn,
 	insertTableRow,
 	toggleList,
-	toggleMark,
 	toggleQuote
 } from './commands';
+import { toggleMark } from './marks';
 import { locateCell, tableAt } from './table-model';
 
 const FORMATS: { label: () => string; run: (view: EditorView) => boolean }[] = [
-	{ label: () => m.bubble_bold(), run: (view) => toggleMark(view, '**') },
-	{ label: () => m.bubble_italic(), run: (view) => toggleMark(view, '*') },
-	{ label: () => m.bubble_strike(), run: (view) => toggleMark(view, '~~') },
-	{ label: () => m.bubble_highlight(), run: (view) => toggleMark(view, '==') },
-	{ label: () => m.bubble_code(), run: (view) => toggleMark(view, '`') },
+	{ label: () => m.bubble_bold(), run: (view) => toggleMark(view, 'bold') },
+	{ label: () => m.bubble_italic(), run: (view) => toggleMark(view, 'italic') },
+	{ label: () => m.bubble_strike(), run: (view) => toggleMark(view, 'strike') },
+	{ label: () => m.bubble_highlight(), run: (view) => toggleMark(view, 'highlight') },
+	{ label: () => m.bubble_code(), run: (view) => toggleMark(view, 'code') },
 	{ label: () => m.bubble_block_quote(), run: (view) => toggleQuote(view) },
 	{ label: () => m.bubble_block_bullet(), run: (view) => toggleList(view, 'bullet') },
 	{ label: () => m.bubble_block_task(), run: (view) => toggleList(view, 'task') }
