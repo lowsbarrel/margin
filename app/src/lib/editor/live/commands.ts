@@ -1,7 +1,9 @@
 import { defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { markdownKeymap } from '@codemirror/lang-markdown';
+import { syntaxTree } from '@codemirror/language';
 import type { ChangeSpec, EditorState, Line } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
+import type { SyntaxNode } from '@lezer/common';
 import { alignColumn, deleteColumn, deleteRow, insertColumn, insertRow } from './table-ops';
 import { emptyRow, serializeTable, tableAt, type Align, type TableModel } from './table-model';
 
@@ -85,6 +87,120 @@ export function toggleQuote(view: EditorView): boolean {
 	}
 	if (!changes.length) return false;
 	view.dispatch({ changes, userEvent: 'input' });
+	return true;
+}
+
+export type BlockType =
+	| 'text'
+	| 'heading1'
+	| 'heading2'
+	| 'heading3'
+	| 'heading4'
+	| 'heading5'
+	| 'heading6'
+	| 'bullet'
+	| 'ordered'
+	| 'task'
+	| 'quote'
+	| 'code';
+
+const BLOCK_PREFIX: Partial<Record<BlockType, string>> = {
+	text: '',
+	heading1: '# ',
+	heading2: '## ',
+	heading3: '### ',
+	heading4: '#### ',
+	heading5: '##### ',
+	heading6: '###### ',
+	bullet: '- ',
+	ordered: '1. ',
+	task: '- [ ] ',
+	quote: '> '
+};
+const NESTED: Record<string, true> = { bullet: true, ordered: true, task: true };
+const FENCE_LINE = /^[ \t]*(?:```|~~~)/;
+
+interface Fence {
+	from: number;
+	to: number;
+}
+
+export function fencedRange(state: EditorState): Fence | null {
+	let node: SyntaxNode | null = syntaxTree(state).resolveInner(state.selection.main.head, -1);
+	while (node) {
+		if (node.name === 'FencedCode') return { from: node.from, to: node.to };
+		node = node.parent;
+	}
+	return null;
+}
+
+function stripBlock(text: string): string {
+	let rest = text;
+	for (const pattern of [HEADING, QUOTE_PREFIX]) {
+		const match = pattern.exec(rest);
+		if (match) rest = rest.slice(match[0].length);
+	}
+	const marker = MARKER.exec(rest);
+	return marker ? marker[1] + rest.slice(marker[0].length) : rest;
+}
+
+function blockLine(type: BlockType, text: string): string {
+	const body = stripBlock(text);
+	const prefix = BLOCK_PREFIX[type] ?? '';
+	if (!prefix) return body;
+	const indent = NESTED[type] ? (/^[ \t]*/.exec(body)?.[0] ?? '') : '';
+	return indent + prefix + body.slice(indent.length);
+}
+
+function fencePlan(state: EditorState, type: BlockType, lines: Line[]) {
+	const fence = fencedRange(state);
+	if (fence) return unwrapPlan(state, fence);
+	if (type !== 'code')
+		return { before: null, after: null, selection: undefined, openFrom: -1, closeFrom: -1 };
+	const first = lines[0];
+	const last = lines[lines.length - 1];
+	return {
+		before: { from: first.from, insert: '```\n' },
+		after: { from: last.to, insert: '\n```' },
+		selection: { anchor: first.from, head: last.to + 8 },
+		openFrom: -1,
+		closeFrom: -1
+	};
+}
+
+function unwrapPlan(state: EditorState, fence: Fence) {
+	const open = state.doc.lineAt(fence.from);
+	const close = state.doc.lineAt(Math.max(open.from + 1, fence.to - 1));
+	const closed = close.number > open.number && FENCE_LINE.test(close.text);
+	const openLength = Math.min(open.to + 1, state.doc.length) - open.from;
+	return {
+		before: { from: open.from, to: open.from + openLength },
+		after: closed ? { from: close.from - 1, to: close.to } : null,
+		openFrom: open.from,
+		closeFrom: closed ? close.from : -1,
+		selection: {
+			anchor: open.from,
+			head: Math.max(open.from, (closed ? close.from - 1 : fence.to) - openLength)
+		}
+	};
+}
+
+export function setBlock(view: EditorView, type: BlockType): boolean {
+	const state = view.state;
+	const lines = selectedLines(state);
+	const plan = fencePlan(state, type, lines);
+	const changes: ChangeSpec[] = [];
+	if (plan.before) changes.push(plan.before);
+	if (type !== 'code') {
+		for (const line of lines) {
+			if (line.from === plan.openFrom || line.from === plan.closeFrom) continue;
+			const next = blockLine(type, line.text);
+			if (next !== line.text) changes.push({ from: line.from, to: line.to, insert: next });
+		}
+	}
+	if (plan.after) changes.push(plan.after);
+	if (!changes.length) return false;
+	view.dispatch({ changes, selection: plan.selection, userEvent: 'input' });
 	return true;
 }
 
