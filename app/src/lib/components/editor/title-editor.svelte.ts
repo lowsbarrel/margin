@@ -12,6 +12,7 @@ export interface TitleEditorHost {
 	setPath(path: string): void;
 	isAlive(): boolean;
 	focusEditor(): void;
+	openSlashMenu(): void;
 	element(): HTMLElement | undefined;
 	onrename(): ((oldPath: string, newPath: string) => void | Promise<void>) | undefined;
 }
@@ -71,6 +72,11 @@ export class TitleEditor {
 	}
 
 	keydown(event: KeyboardEvent): void {
+		if (event.key === '/') {
+			event.preventDefault();
+			this.host.openSlashMenu();
+			return;
+		}
 		if (event.key !== 'Enter' && event.key !== 'ArrowDown') return;
 		event.preventDefault();
 		this.host.focusEditor();

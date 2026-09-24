@@ -4,6 +4,7 @@ import {
 	closeCompletion,
 	completionStatus,
 	pickedCompletion,
+	startCompletion,
 	type Completion,
 	type CompletionContext,
 	type CompletionResult,
@@ -211,6 +212,32 @@ async function tagSource(context: CompletionContext): Promise<CompletionResult |
 }
 
 const sources: readonly CompletionSource[] = [slashSource, wikiSource, tagSource];
+
+function firstBodyLine(state: EditorState): number {
+	const first = syntaxTree(state).topNode.firstChild;
+	if (first?.name !== FRONTMATTER) return 1;
+	return state.doc.lineAt(first.to).number + 1;
+}
+
+export function openSlashMenu(view: EditorView): void {
+	const { doc } = view.state;
+	const number = firstBodyLine(view.state);
+	const change =
+		number > doc.lines
+			? { from: doc.length, insert: '\n/' }
+			: doc.line(number).length === 0
+				? { from: doc.line(number).from, insert: '/' }
+				: { from: doc.line(number).from, insert: '/\n' };
+	const anchor = change.from + change.insert.indexOf('/') + 1;
+	view.dispatch({
+		changes: change,
+		selection: { anchor },
+		userEvent: 'input.type',
+		scrollIntoView: true
+	});
+	view.focus();
+	startCompletion(view);
+}
 
 // Escape must close the menu before any other feature claims the key.
 const escapeClosesMenu = ViewPlugin.fromClass(

@@ -3,6 +3,7 @@ import { EditorView } from '@codemirror/view';
 import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import { liveContext, type LiveContext } from './context';
 import { createHighlighter, type Highlighter } from './code-highlight';
+import { openSlashMenu } from './complete';
 import { baseExtensions, previewExtensions } from './extensions';
 import { refreshDecorations } from './decorate';
 import { sourceHighlighting } from './theme';
@@ -35,6 +36,7 @@ export interface LiveEditorHandle {
 	adopt(text: string): void;
 	refresh(): void;
 	focus(): void;
+	openSlashMenu(): void;
 	destroy(): void;
 }
 
@@ -145,6 +147,7 @@ export async function createLiveEditor(host: LiveEditorHost): Promise<LiveEditor
 			view.dispatch({ effects: refreshDecorations.of(null) });
 		},
 		focus: () => view.focus(),
+		openSlashMenu: () => openSlashMenu(view),
 		destroy: () => view.destroy()
 	};
 }

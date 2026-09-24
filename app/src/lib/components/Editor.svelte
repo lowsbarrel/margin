@@ -86,6 +86,7 @@
 			setPath: (path) => (currentPath = path),
 			isAlive: () => alive,
 			focusEditor: () => live?.focus(),
+			openSlashMenu: () => live?.openSlashMenu(),
 			element: () => titleEl,
 			onrename: () => onrename
 		},
