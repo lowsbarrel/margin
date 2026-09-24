@@ -97,9 +97,9 @@
 
 		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<div
-			class="absolute top-0 right-0 z-10 h-full w-1 cursor-col-resize transition-colors {resizing
-				? 'bg-brand'
-				: 'hover:bg-brand'}"
+			class="absolute top-0 right-0 z-10 h-full w-[6px] cursor-col-resize transition-colors {resizing
+				? 'bg-brand/50'
+				: 'hover:bg-brand/25'}"
 			onmousedown={onResizeStart}
 		></div>
 	</aside>

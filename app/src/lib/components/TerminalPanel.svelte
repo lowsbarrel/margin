@@ -34,9 +34,9 @@
 >
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<div
-		class="absolute -top-1 z-10 h-2 w-full cursor-row-resize transition-colors duration-120 ease-out {resizing
-			? 'bg-brand/40'
-			: 'hover:bg-brand/20'}"
+		class="absolute -top-[3px] z-10 h-[6px] w-full cursor-row-resize transition-colors duration-120 ease-out {resizing
+			? 'bg-brand/50'
+			: 'hover:bg-brand/25'}"
 		onmousedown={startResize}
 	></div>
 
