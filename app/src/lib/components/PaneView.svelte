@@ -20,6 +20,7 @@
 	let {
 		pane,
 		paneIndex,
+		focused,
 		onrename,
 		onwikilink,
 		ontabcontextmenu,
@@ -30,6 +31,7 @@
 	}: {
 		pane: Pane;
 		paneIndex: number;
+		focused: boolean;
 		onrename: (from: string, to: string, isDir?: boolean) => void;
 		onwikilink: (title: string) => void;
 		ontabcontextmenu: (e: MouseEvent, paneIndex: number, tabIndex: number) => void;
@@ -45,8 +47,12 @@
 			: null
 	);
 
+	const TAB_BASE =
+		'relative flex h-10 min-w-30 shrink cursor-pointer items-center gap-1.5 border-r border-border px-2.5 text-xs font-medium tracking-normal whitespace-nowrap transition-colors select-none';
 	const ACTIVE_TAB =
 		"bg-background text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-brand after:content-['']";
+	const ACTIVE_TAB_UNFOCUSED =
+		"bg-background text-foreground after:absolute after:inset-x-0 after:bottom-0 after:h-0.5 after:bg-muted-foreground after:content-['']";
 	const INACTIVE_TAB = 'text-subtle-foreground hover:bg-surface-3 hover:text-muted-foreground';
 
 	const DROP_ZONE_BASE = 'pointer-events-auto flex items-center justify-center transition-colors';
@@ -69,6 +75,22 @@
 	}
 
 	let stripEl: HTMLDivElement | undefined;
+	let tabsEl: HTMLDivElement | undefined;
+
+	$effect(() => {
+		const index = pane.activeTabIndex;
+		if (index < 0 || index >= pane.tabs.length) return;
+		(tabsEl?.children[index] as HTMLElement | undefined)?.scrollIntoView({
+			block: 'nearest',
+			inline: 'nearest'
+		});
+	});
+
+	function handleStripWheel(e: WheelEvent) {
+		if (!tabsEl || Math.abs(e.deltaY) <= Math.abs(e.deltaX)) return;
+		e.preventDefault();
+		tabsEl.scrollLeft += e.deltaY;
+	}
 
 	let zoneMode = $derived(paneZoneMode(drag.item, paneIndex, pane.tabs.length));
 	let stripRawGap = $derived(
@@ -101,21 +123,32 @@
 	onmouseleave={handleStripLeave}
 >
 	<div
+		bind:this={tabsEl}
 		class="flex flex-1 scrollbar-none overflow-x-auto overflow-y-hidden [&::-webkit-scrollbar]:hidden"
+		role="tablist"
+		onwheel={handleStripWheel}
 	>
 		{#each pane.tabs as tab, i (tab.id)}
 			<div
-				class="relative flex h-10 min-w-9 shrink cursor-pointer items-center gap-1.5 border-r border-border px-2.5 text-xs font-medium tracking-normal whitespace-nowrap transition-colors select-none {i ===
-				pane.activeTabIndex
-					? ACTIVE_TAB
+				class="{TAB_BASE} {i === pane.activeTabIndex
+					? focused
+						? ACTIVE_TAB
+						: ACTIVE_TAB_UNFOCUSED
 					: INACTIVE_TAB}"
 				data-tab=""
 				role="tab"
 				tabindex={0}
 				aria-selected={i === pane.activeTabIndex}
+				aria-label={fileTitle(tab.path)}
+				title={fileTitle(tab.path)}
 				onmousedown={(e) => {
 					e.stopPropagation();
 					handleTabMouseDown(e, paneIndex, i);
+				}}
+				onauxclick={(e) => {
+					if (e.button !== 1) return;
+					e.preventDefault();
+					panes.closeTab(paneIndex, i);
 				}}
 				oncontextmenu={(e) => ontabcontextmenu(e, paneIndex, i)}
 				onkeydown={(e) => {

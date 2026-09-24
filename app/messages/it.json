@@ -256,6 +256,7 @@
 	"onboarding_back": "Indietro",
 	"onboarding_next": "Avanti",
 	"onboarding_get_started": "Crea il vault",
+	"onboarding_back_to_vaults": "Torna ai vault",
 	"onboarding_step_of": "Passo {current} di {total}",
 	"onboarding_files_title": "Le tue note sono file normali",
 	"onboarding_files_body": "Margin salva ogni nota come un normale file Markdown in una cartella che scegli tu. Nessun database, nessun vincolo: qualsiasi editor può aprirli e i file restano leggibili anche senza Margin.",

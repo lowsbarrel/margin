@@ -15,9 +15,10 @@
 
 	interface Props {
 		onDone: () => void;
+		replay?: boolean;
 	}
 
-	let { onDone }: Props = $props();
+	let { onDone, replay = false }: Props = $props();
 
 	const steps = $derived([
 		{
@@ -144,7 +145,11 @@
 				>
 			{/if}
 			<Button variant="primary" size="sm" icon={isLast ? undefined : ArrowRight} onclick={next}>
-				{isLast ? m.onboarding_get_started() : m.onboarding_next()}
+				{isLast
+					? replay
+						? m.onboarding_back_to_vaults()
+						: m.onboarding_get_started()
+					: m.onboarding_next()}
 			</Button>
 		</div>
 	</div>
