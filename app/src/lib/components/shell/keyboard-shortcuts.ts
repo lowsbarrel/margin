@@ -12,7 +12,7 @@ export interface ShortcutActions {
 }
 
 export function handleGlobalKeydown(e: KeyboardEvent, actions: ShortcutActions): void {
-	if (!(e.metaKey || e.ctrlKey)) return;
+	if (!(e.metaKey || e.ctrlKey) || e.defaultPrevented) return;
 	const key = e.key.toLowerCase();
 	const inControl = isFormControlFocused();
 
