@@ -30,6 +30,7 @@
 	let secretKey = $state('');
 	/* Carried through saves so a folder chosen before attachments became automatic still resolves. */
 	let attachmentFolder = $state('');
+	let savedSnapshot = $state<string | null>(null);
 	let autoSync = $state(false);
 	let conflictStrategy = $state<ConflictStrategy>('local_wins');
 	let llmFormat = $state<ApiFormat>('openai');
@@ -40,35 +41,38 @@
 
 	$effect(() => {
 		if (vault.vaultPath && vault.encryptionKey) {
-			loadSettings(vault.vaultPath, vault.encryptionKey).then((settings) => {
-				if (settings?.s3) {
-					endpoint = settings.s3.endpoint;
-					bucket = settings.s3.bucket;
-					region = settings.s3.region;
-					accessKey = settings.s3.access_key;
-					secretKey = settings.s3.secret_key;
-				}
-				attachmentFolder = settings?.attachment_folder ?? '';
-				autoSync = settings?.auto_sync ?? false;
-				conflictStrategy = (settings?.conflict_strategy as ConflictStrategy) ?? 'local_wins';
-				if (settings?.llm) {
-					llmFormat = settings.llm.api_format;
-					llmBaseUrl = settings.llm.base_url ?? '';
-					llmApiKey = settings.llm.api_key ?? '';
-					llmModel = settings.llm.model;
-					llmEffort = settings.llm.effort ?? null;
-				}
-				if (settings?.llm) {
-					llmConfigure(settings.llm)
-						.then(() => ask.markConfigured(true))
-						.catch((err) => {
-							console.warn('Failed to configure AI:', err);
-							ask.markConfigured(false);
-						});
-				} else {
-					ask.markConfigured(false);
-				}
-			});
+			loadSettings(vault.vaultPath, vault.encryptionKey)
+				.then((settings) => {
+					if (settings?.s3) {
+						endpoint = settings.s3.endpoint;
+						bucket = settings.s3.bucket;
+						region = settings.s3.region;
+						accessKey = settings.s3.access_key;
+						secretKey = settings.s3.secret_key;
+					}
+					attachmentFolder = settings?.attachment_folder ?? '';
+					autoSync = settings?.auto_sync ?? false;
+					conflictStrategy = (settings?.conflict_strategy as ConflictStrategy) ?? 'local_wins';
+					if (settings?.llm) {
+						llmFormat = settings.llm.api_format;
+						llmBaseUrl = settings.llm.base_url ?? '';
+						llmApiKey = settings.llm.api_key ?? '';
+						llmModel = settings.llm.model;
+						llmEffort = settings.llm.effort ?? null;
+					}
+					if (settings?.llm) {
+						llmConfigure(settings.llm)
+							.then(() => ask.markConfigured(true))
+							.catch((err) => {
+								console.warn('Failed to configure AI:', err);
+								ask.markConfigured(false);
+							});
+					} else {
+						ask.markConfigured(false);
+					}
+					savedSnapshot = snapshot();
+				})
+				.catch(() => (savedSnapshot = snapshot()));
 		}
 	});
 
@@ -103,6 +107,10 @@
 		};
 	}
 
+	function snapshot(): string {
+		return JSON.stringify(getAppSettings());
+	}
+
 	function handleImported(settings: AppSettings) {
 		if (settings.s3) {
 			endpoint = settings.s3.endpoint;
@@ -119,10 +127,11 @@
 		llmApiKey = settings.llm?.api_key ?? '';
 		llmModel = settings.llm?.model ?? '';
 		llmEffort = settings.llm?.effort ?? null;
+		savedSnapshot = snapshot();
 	}
 
 	async function handleClose() {
-		await handleSave();
+		if (savedSnapshot !== null && savedSnapshot !== snapshot()) await handleSave();
 		onclose();
 	}
 
@@ -144,6 +153,7 @@
 			}
 
 			toast.success(m.toast_settings_saved());
+			savedSnapshot = snapshot();
 		} catch (err) {
 			toast.error(m.toast_save_failed({ error: String(err) }));
 		}

@@ -13,6 +13,23 @@
 
 	let { title, onclose, children, width = '560px' }: Props = $props();
 
+	let body = $state<HTMLDivElement | null>(null);
+	let scrollbarWidth = $state(0);
+
+	$effect(() => {
+		const el = body;
+		if (!el) return;
+		const measure = () => {
+			const next = el.offsetWidth - el.clientWidth;
+			if (next !== scrollbarWidth) scrollbarWidth = next;
+		};
+		measure();
+		/* The gutter is always reserved (overflow-y-scroll) and always given back here, so the column never moves. */
+		const observer = new ResizeObserver(measure);
+		observer.observe(el);
+		return () => observer.disconnect();
+	});
+
 	function handleOpenChange(next: boolean) {
 		if (!next) onclose();
 	}
@@ -22,10 +39,10 @@
 	<Dialog.Content
 		showCloseButton={false}
 		style="width: {width}"
-		class="flex max-h-[calc(100vh-80px)] max-w-[calc(100vw-32px)] animate-in flex-col gap-0 overflow-y-auto rounded-lg border border-border bg-background p-0 shadow-(--shadow-lg) ring-0 fade-in-0 slide-in-from-bottom-2 sm:max-w-[calc(100vw-32px)]"
+		class="flex max-h-[calc(100vh-80px)] max-w-[calc(100vw-32px)] animate-in flex-col gap-0 overflow-hidden rounded-lg border border-border bg-background p-0 shadow-(--shadow-lg) ring-0 fade-in-0 slide-in-from-bottom-2 sm:max-w-[calc(100vw-32px)]"
 	>
 		<Dialog.Header
-			class="sticky top-0 z-2 flex shrink-0 flex-row items-center justify-between gap-0 rounded-t-lg border-b border-border bg-background px-6 py-4"
+			class="flex shrink-0 flex-row items-center justify-between gap-0 border-b border-border bg-background px-6 py-4"
 		>
 			<Dialog.Title class="text-base leading-5.5 font-semibold tracking-tight text-foreground">
 				{title}
@@ -37,8 +54,33 @@
 				<X size={16} />
 			</Dialog.Close>
 		</Dialog.Header>
-		<div class="flex shrink-0 flex-col gap-3 p-6">
-			{@render children()}
+		<div bind:this={body} class="dialog-scroll min-h-0 flex-1 overflow-y-scroll">
+			<div class="flex flex-col gap-3 p-6" style="padding-right: calc(1.5rem - {scrollbarWidth}px)">
+				{@render children()}
+			</div>
 		</div>
 	</Dialog.Content>
 </Dialog.Root>
+
+<style>
+	/* Styling ::-webkit-scrollbar kills WKWebView overlay scrollbars, so the pill stays quiet until hover. */
+	.dialog-scroll::-webkit-scrollbar {
+		width: 10px;
+	}
+
+	.dialog-scroll::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.dialog-scroll::-webkit-scrollbar-thumb {
+		background: var(--color-border-secondary);
+		border-radius: var(--radius-full);
+		border: 3px solid transparent;
+		background-clip: content-box;
+	}
+
+	.dialog-scroll:hover::-webkit-scrollbar-thumb {
+		background: var(--color-border-strong);
+		background-clip: content-box;
+	}
+</style>

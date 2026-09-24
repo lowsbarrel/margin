@@ -4,7 +4,7 @@
 	import { files } from '$lib/stores/files.svelte';
 	import { s3Configure, s3TestConnection, type S3Config } from '$lib/s3/bridge';
 	import { syncToS3, type ConflictStrategy } from '$lib/sync/s3sync';
-	import { Button, Input, Field, Section } from '$lib/ui';
+	import { Button, Input, Field, Section, Select } from '$lib/ui';
 	import { Cloud, TestTube, Upload, RefreshCw } from '@lucide/svelte';
 	import { cn } from '$lib/utils';
 	import * as m from '$lib/paraglide/messages.js';
@@ -149,14 +149,10 @@
 	{/if}
 
 	<Field label={m.settings_conflict_resolution()} forId="conflictStrategy">
-		<select
-			class="w-full cursor-pointer rounded-sm border border-border bg-surface-2 px-3 py-2 font-sans text-sm text-foreground transition-colors duration-150 ease-out focus:border-subtle-foreground focus:outline-none"
-			id="conflictStrategy"
-			bind:value={conflictStrategy}
-		>
+		<Select id="conflictStrategy" bind:value={conflictStrategy}>
 			<option value="local_wins">{m.settings_conflict_local_wins()}</option>
 			<option value="keep_newer">{m.settings_conflict_keep_newer()}</option>
-		</select>
+		</Select>
 	</Field>
 	{#if conflictStrategy === 'keep_newer'}
 		<p class={HINT}>{m.settings_conflict_hint_newer()}</p>
