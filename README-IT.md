@@ -34,9 +34,9 @@ Indice:
 
 - **File Markdown semplici** - Le note sono file `.md` in una cartella che scegli tu. Nessun database, nessun formato proprietario, nessun vincolo.
 
-- **Editor completo** - Scrivi in un editor WYSIWYG con tabelle (aggiungi, sposta e allinea righe e colonne), liste di attività, callout, blocchi di codice, formule KaTeX, diagrammi Mermaid, `[[wiki link]]` e un menu dei blocchi con `/`.
+- **Editor con anteprima dal vivo** - Il Markdown si formatta mentre scrivi e torna sorgente sulla riga che stai modificando, come in Obsidian. Il file su disco è esattamente ciò che hai scritto, e incollare inserisce esattamente ciò che hai copiato. Tabelle (aggiungi, sposta e allinea righe e colonne), liste di attività, callout, blocchi di codice, formule KaTeX, diagrammi Mermaid, incorporamenti, note a piè di pagina, `[[wiki link]]` e un menu dei blocchi con `/`.
 
-- **Modalità Markdown grezzo** - Passa al testo sorgente esatto di qualsiasi nota con <kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd>, modificato in CodeMirror con evidenziazione della sintassi.
+- **Modalità Markdown grezzo** - Disattiva l'anteprima di qualsiasi nota con <kbd>Cmd/Ctrl</kbd>+<kbd>Shift</kbd>+<kbd>E</kbd> per vedere ogni carattere del sorgente con l'evidenziazione della sintassi.
 
 - **Spotlight** - Una sola palette per tutto: nomi delle note, ricerca a testo pieno, `#tag` e sostituzione in tutto il vault.
 
@@ -75,7 +75,7 @@ Al primo avvio un breve tour, che puoi saltare, ti accompagna nella creazione di
 2. **Dai un nome al vault.** Puoi tenere più vault, ognuno con la sua cartella.
 3. **Conserva la passphrase.** Margin genera 12 parole da cui deriva la chiave di cifratura del vault. Scrivile da qualche parte: non esiste un reset, e senza di esse il vault sincronizzato non si può leggere.
 
-Poi inizia a scrivere. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> crea una nota, `/` apre il menu dei blocchi, `[[` collega un'altra nota e `:::info` inizia un callout.
+Poi inizia a scrivere. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> crea una nota, `/` apre il menu dei blocchi, `[[` collega un'altra nota e `> [!info]` inizia un callout.
 
 ### Scorciatoie da tastiera
 
@@ -83,14 +83,17 @@ Poi inizia a scrivere. <kbd>Cmd/Ctrl</kbd>+<kbd>N</kbd> crea una nota, `/` apre 
 
 |Scorciatoia|Azione|
 |---|---|
-|`Mod`+`K` oppure `Mod`+`P`|Apri Spotlight|
+|`Mod`+`P`|Apri Spotlight (anche `Mod`+`K` fuori dall'editor)|
 |`Mod`+`Shift`+`F`|Cerca in tutto il vault|
 |`Mod`+`N`|Nuova nota|
 |`Mod`+`\`|Mostra o nascondi la barra laterale|
 |`Mod`+`` ` ``|Mostra o nascondi il terminale|
-|`Mod`+`Shift`+`E`|Passa da testo formattato a Markdown grezzo e viceversa|
+|`Mod`+`Shift`+`E`|Passa dall'anteprima dal vivo al Markdown grezzo e viceversa|
+|`Mod`+`W`|Chiudi la scheda|
 |`Mod`+`Shift`+`T`|Riapri l'ultima scheda chiusa|
 |`Mod`+`F` / `Mod`+`H`|Trova / trova e sostituisci nella nota|
+|`Mod`+`K`|Inserisci un link nella nota|
+|`Mod`+`Shift`+`V`|Incolla come testo semplice|
 |`F2` oppure triplo clic|Rinomina il file o la cartella selezionati|
 
 In Spotlight, inizia con `#` per sfogliare i tag e con `?` per fare una domanda.
