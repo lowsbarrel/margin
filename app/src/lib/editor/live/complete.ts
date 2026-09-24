@@ -19,6 +19,7 @@ import { vault } from '$lib/stores/vault.svelte';
 import { isImageFile } from '$lib/utils/mime';
 import { assistCompletion, assistCompletionConfig, assistTheme } from './complete-theme';
 import { contextOf } from './context';
+import { ESCAPE_COMPLETION, onEscape } from './escape';
 import { headingsOfNote } from './note-headings';
 import { fuzzyMatch, filterSlashItems, type SlashItem } from './slash-items';
 import { FRONTMATTER } from './syntax';
@@ -211,21 +212,21 @@ async function tagSource(context: CompletionContext): Promise<CompletionResult |
 
 const sources: readonly CompletionSource[] = [slashSource, wikiSource, tagSource];
 
-// The app swallows Escape in a capture-phase listener, so CodeMirror's own keymap never sees it.
+// Escape must close the menu before any other feature claims the key.
 const escapeClosesMenu = ViewPlugin.fromClass(
 	class {
-		handler = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape' || completionStatus(this.view.state) === null) return;
-			closeCompletion(this.view);
-			event.preventDefault();
-		};
+		release: () => void;
 
 		constructor(readonly view: EditorView) {
-			view.dom.addEventListener('keydown', this.handler);
+			this.release = onEscape(view, ESCAPE_COMPLETION, () => {
+				if (completionStatus(view.state) === null) return false;
+				closeCompletion(view);
+				return true;
+			});
 		}
 
 		destroy() {
-			this.view.dom.removeEventListener('keydown', this.handler);
+			this.release();
 		}
 	}
 );

@@ -8,6 +8,7 @@
 	import { resolveAttachmentFolder } from '$lib/editor/attachments';
 	import { isModalOpen } from '$lib/utils/modal';
 	import { findVaultFile, vaultFileExists, watchVaultIndex } from '$lib/editor/live/vault-index';
+	import { ESCAPE_FIND, onEscape } from '$lib/editor/live/escape';
 	import type { LiveEditorHandle } from '$lib/editor/live/editor-factory';
 	import type { ContextMenuItem } from './ContextMenu.svelte';
 	import type { LightboxImage } from './ImageLightbox.svelte';
@@ -65,6 +66,7 @@
 	let wasActive = untrack(() => active);
 	let alive = true;
 	let stopIndex: (() => void) | null = null;
+	let releaseEscape: (() => void) | null = null;
 
 	const folder = $derived(resolveAttachmentFolder(attachmentFolder));
 
@@ -124,11 +126,6 @@
 
 	function handleFindHotkey(event: KeyboardEvent): void {
 		if (!active || isModalOpen()) return;
-		if (event.key === 'Escape' && showFindReplace) {
-			event.preventDefault();
-			closeFind();
-			return;
-		}
 		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
 		const key = event.key.toLowerCase();
 		if (key !== 'f' && key !== 'h') return;
@@ -232,6 +229,11 @@
 			editorStore.setView(editor.view);
 			if (initialCursorPos != null) editor.setSelectionOffset(initialCursorPos);
 			stopIndex = watchVaultIndex(vault.vaultPath, () => live?.refresh());
+			releaseEscape = onEscape(editor.view, ESCAPE_FIND, () => {
+				if (!showFindReplace) return false;
+				closeFind();
+				return true;
+			});
 		})();
 
 		window.addEventListener('margin:flush', flushSave);
@@ -244,6 +246,7 @@
 		alive = false;
 		title.dispose();
 		stopIndex?.();
+		releaseEscape?.();
 		window.removeEventListener('margin:flush', flushSave);
 		window.removeEventListener('margin:flush', reportCursorSnapshot);
 		window.removeEventListener('keydown', handleFindHotkey, true);

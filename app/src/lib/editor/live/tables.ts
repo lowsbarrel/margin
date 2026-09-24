@@ -2,6 +2,7 @@ import type { EditorState, Extension, Range } from '@codemirror/state';
 import { StateField } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, keymap, type DecorationSet } from '@codemirror/view';
 import { eachLine, line, refreshDecorations, touched, touchedLines } from './decorate';
+import { ESCAPE_TABLE, onEscape } from './escape';
 import { locateCell, readTables, tableAt, type TableModel } from './table-model';
 import { appendRow } from './table-ops';
 import { TableWidget } from './table-widget';
@@ -92,24 +93,21 @@ function leaveTable(view: EditorView): boolean {
 	return true;
 }
 
-// The app swallows Escape in a window capture listener, so a keymap binding never sees it.
+// Escape leaves the table only when no higher-priority feature is answering it.
 class TableEscape {
-	readonly onKey: (event: KeyboardEvent) => void;
+	readonly release: () => void;
 
-	constructor(readonly view: EditorView) {
-		this.onKey = (event) => {
-			if (event.key !== 'Escape' || event.metaKey || event.ctrlKey || event.altKey) return;
-			if (!this.view.hasFocus) return;
-			const at = locate(this.view);
-			if (!at) return;
-			event.preventDefault();
-			leaveTable(this.view);
-		};
-		window.addEventListener('keydown', this.onKey, true);
+	constructor(view: EditorView) {
+		this.release = onEscape(view, ESCAPE_TABLE, () => {
+			const at = locate(view);
+			if (!at) return false;
+			leaveTable(view);
+			return true;
+		});
 	}
 
 	destroy(): void {
-		window.removeEventListener('keydown', this.onKey, true);
+		this.release();
 	}
 }
 

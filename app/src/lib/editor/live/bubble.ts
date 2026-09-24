@@ -6,6 +6,7 @@ import { ViewPlugin, type EditorView, type ViewUpdate } from '@codemirror/view';
 import { getLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages.js';
 import { setLink, toggleHeading, toggleList, toggleMark, toggleQuote } from './commands';
+import { ESCAPE_BUBBLE, onEscape } from './escape';
 import { HIGHLIGHT } from './syntax';
 import './assist.css';
 
@@ -127,12 +128,7 @@ export const liveBubble = ViewPlugin.fromClass(
 			this.dragging = false;
 			this.schedule();
 		};
-		onKey = (event: KeyboardEvent) => {
-			if (event.key !== 'Escape' || !this.bubble.classList.contains('is-visible')) return;
-			this.suppressed = true;
-			this.hide();
-			event.preventDefault();
-		};
+		releaseEscape: () => void;
 		// The editor scrolls in an outer container, so CodeMirror's own scroll events never fire.
 		onScroll = () => this.schedule();
 
@@ -177,7 +173,12 @@ export const liveBubble = ViewPlugin.fromClass(
 			document.body.appendChild(this.bubble);
 			window.addEventListener('mouseup', this.onRelease);
 			window.addEventListener('scroll', this.onScroll, true);
-			view.dom.addEventListener('keydown', this.onKey);
+			this.releaseEscape = onEscape(view, ESCAPE_BUBBLE, () => {
+				if (!this.bubble.classList.contains('is-visible')) return false;
+				this.suppressed = true;
+				this.hide();
+				return true;
+			});
 		}
 
 		setupLinkRow(): void {
@@ -343,7 +344,7 @@ export const liveBubble = ViewPlugin.fromClass(
 			if (this.frame) cancelAnimationFrame(this.frame);
 			window.removeEventListener('mouseup', this.onRelease);
 			window.removeEventListener('scroll', this.onScroll, true);
-			this.view.dom.removeEventListener('keydown', this.onKey);
+			this.releaseEscape();
 			this.bubble.remove();
 		}
 	},

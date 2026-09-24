@@ -4,6 +4,7 @@ import { displayText, tableAt, type Align, type TableModel } from './table-model
 import { openColumnMenu, openRowMenu } from './table-menu';
 import { appendRow, insertColumn, moveColumnTo, moveRowTo } from './table-ops';
 import { renderCell } from './table-inline';
+import { dragSelection } from './insert';
 
 const ALIGN_CSS: Record<Align, string> = {
 	left: 'left',
@@ -123,6 +124,7 @@ function buildTable(view: EditorView, table: TableModel): HTMLElement {
 			if ((event.target as HTMLElement).closest('.cm-lp-table-handle, .cm-lp-table-add')) return;
 			event.preventDefault();
 			placeCaret(view, table, row, col);
+			dragSelection(view, cell.from);
 		});
 		return el;
 	};
@@ -211,8 +213,9 @@ export class TableWidget extends WidgetType {
 		return other.source === this.source;
 	}
 
-	ignoreEvent(): boolean {
-		return true;
+	ignoreEvent(event: Event): boolean {
+		// The editor context menu carries the table operations, so right-clicks must reach CodeMirror.
+		return event.type !== 'contextmenu';
 	}
 
 	toDOM(view: EditorView): HTMLElement {

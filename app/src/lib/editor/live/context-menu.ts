@@ -11,7 +11,17 @@ import { openHref, resolveAbsPath, targetAt, type LinkTarget } from './click';
 import type { LiveContext } from './context';
 import { contextOf } from './context';
 import { pasteFromClipboard } from './paste';
-import { toggleList, toggleMark, toggleQuote } from './commands';
+import {
+	alignTableColumn,
+	deleteTableColumn,
+	deleteTableRow,
+	insertTableColumn,
+	insertTableRow,
+	toggleList,
+	toggleMark,
+	toggleQuote
+} from './commands';
+import { locateCell, tableAt } from './table-model';
 
 const FORMATS: { label: () => string; run: (view: EditorView) => boolean }[] = [
 	{ label: () => m.bubble_bold(), run: (view) => toggleMark(view, '**') },
@@ -107,6 +117,66 @@ function linkItems(target: LinkTarget, ctx: LiveContext): ContextMenuItem[] {
 	return items;
 }
 
+function tableItems(view: EditorView, event: MouseEvent, pos: number | null): ContextMenuItem[] {
+	if (pos == null) return [];
+	const table = tableAt(view.state, pos);
+	if (!table) return [];
+	const cell = (event.target as HTMLElement | null)?.closest(
+		'.cm-lp-table-cell'
+	) as HTMLElement | null;
+	const tr = cell?.parentElement as HTMLElement | null;
+	const fromWidget =
+		cell && tr
+			? {
+					row: Array.prototype.indexOf.call(tr.parentElement?.children ?? [], tr),
+					col: Array.prototype.indexOf.call(tr.children, cell)
+				}
+			: locateCell(table, pos);
+	const row = fromWidget?.row ?? 0;
+	const col = fromWidget?.col ?? 0;
+	const at = table.from;
+	return [
+		{
+			label: m.editor_table_insert_row_above(),
+			onclick: () => void insertTableRow(view, row, 'above', at)
+		},
+		{
+			label: m.editor_table_insert_row_below(),
+			onclick: () => void insertTableRow(view, row, 'below', at)
+		},
+		{
+			label: m.editor_table_insert_column_left(),
+			onclick: () => void insertTableColumn(view, col, 'left', at)
+		},
+		{
+			label: m.editor_table_insert_column_right(),
+			onclick: () => void insertTableColumn(view, col, 'right', at)
+		},
+		{
+			label: m.editor_table_delete_row(),
+			destructive: true,
+			onclick: () => void deleteTableRow(view, row, at)
+		},
+		{
+			label: m.editor_table_delete_column(),
+			destructive: true,
+			onclick: () => void deleteTableColumn(view, col, at)
+		},
+		{
+			label: m.editor_table_align_left(),
+			onclick: () => void alignTableColumn(view, col, 'left', at)
+		},
+		{
+			label: m.editor_table_align_center(),
+			onclick: () => void alignTableColumn(view, col, 'center', at)
+		},
+		{
+			label: m.editor_table_align_right(),
+			onclick: () => void alignTableColumn(view, col, 'right', at)
+		}
+	];
+}
+
 function buildItems(view: EditorView, event: MouseEvent): ContextMenuItem[] {
 	const ctx = contextOf(view.state);
 	const items: ContextMenuItem[] = [];
@@ -116,6 +186,7 @@ function buildItems(view: EditorView, event: MouseEvent): ContextMenuItem[] {
 	const pos = view.posAtCoords({ x: event.clientX, y: event.clientY });
 	if (image) items.push(...imageItems(image, view, ctx));
 	else {
+		items.push(...tableItems(view, event, pos));
 		const target = pos == null ? null : targetAt(view, pos);
 		if (target) items.push(...linkItems(target, ctx));
 		if (!view.state.selection.main.empty) {
