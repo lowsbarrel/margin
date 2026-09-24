@@ -221,7 +221,7 @@
 	onkeydown={handleKeydown}
 >
 	<div
-		class="flex max-h-130 w-[min(640px,calc(100vw-32px))] animate-in flex-col self-start overflow-hidden rounded-xl border border-border bg-background shadow-(--shadow-lg) duration-120 ease-out fade-in-0 slide-in-from-top-[6px]"
+		class="flex max-h-[520px] w-[min(640px,calc(100vw-32px))] animate-in flex-col self-start overflow-hidden rounded-xl border border-border bg-background shadow-(--shadow-lg) duration-120 ease-out fade-in-0 slide-in-from-top-[6px]"
 		role="dialog"
 		aria-modal="true"
 		tabindex="-1"

@@ -204,7 +204,7 @@
 
 	{#if editingText && editingTextLocal}
 		<input
-			class="absolute z-20 min-w-25 rounded-xs border border-dashed border-foreground bg-transparent px-1 py-0.5 font-sans caret-foreground outline-none"
+			class="absolute z-20 min-w-[100px] rounded-xs border border-dashed border-foreground bg-transparent px-1 py-0.5 font-sans caret-foreground outline-none"
 			bind:this={textInputEl}
 			style:left={`${editingTextLocal.x}px`}
 			style:top={`${editingTextLocal.y}px`}

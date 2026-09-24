@@ -8,7 +8,7 @@
 	<div class="pointer-events-none fixed right-4 bottom-11 z-200 flex flex-col gap-2">
 		{#each toast.items as item (item.id)}
 			<div
-				class="toast-in pointer-events-auto flex max-w-95 items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-(--shadow-lg)"
+				class="toast-in pointer-events-auto flex max-w-[380px] items-center gap-2.5 rounded-md border border-border bg-background px-3 py-2.5 text-foreground shadow-(--shadow-lg)"
 				role="alert"
 			>
 				<span
