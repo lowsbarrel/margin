@@ -81,6 +81,7 @@
 			if (!drop.isRepeatClick(row.path)) void files.toggleFolder(row.path);
 		} else {
 			files.selectSingle(row.path, false);
+			files.setSelectedFolder(null);
 			onfileselect(row.path);
 		}
 	}

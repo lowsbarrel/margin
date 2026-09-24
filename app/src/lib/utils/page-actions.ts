@@ -118,7 +118,9 @@ export async function reconcileMovedOut(
 
 export function newEntryFolder(): string | null {
 	const selected = files.selectedEntry;
-	if (selected?.isDir) return selected.path;
+	if (selected)
+		return selected.isDir ? selected.path : selected.path.slice(0, selected.path.lastIndexOf('/'));
+	if (files.selectedFolder) return files.selectedFolder;
 	const active = files.activeFile;
 	if (active) return active.slice(0, active.lastIndexOf('/'));
 	return vault.vaultPath;

@@ -18,6 +18,7 @@ export function createTreeKeyboard(options: {
 			files.setSelectedFolder(row.path);
 			void files.toggleFolder(row.path);
 		} else {
+			files.setSelectedFolder(null);
 			onfileselect(row.path);
 		}
 	}
