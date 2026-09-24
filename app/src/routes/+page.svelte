@@ -143,7 +143,7 @@
 						<div class="relative z-1 shrink-0 grow-0 basis-px bg-border">
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
 							<div
-								class="absolute inset-y-0 -right-[2.5px] -left-[2.5px] cursor-col-resize transition-colors duration-120 ease-out {dividerResizing
+								class="absolute inset-y-0 right-[-2.5px] left-[-2.5px] cursor-col-resize transition-colors duration-120 ease-out {dividerResizing
 									? 'bg-brand/50'
 									: 'hover:bg-brand/25'}"
 								onmousedown={(e) =>
