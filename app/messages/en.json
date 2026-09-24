@@ -206,6 +206,7 @@
 	"editor_open_file": "Open \"{name}\"",
 	"login_auto_opening": "Opening vault…",
 	"editor_untitled": "Untitled",
+	"editor_note_placeholder": "Start writing…",
 	"canvas_zoom_in": "Zoom in",
 	"canvas_zoom_out": "Zoom out",
 	"canvas_reset_view": "Reset view",

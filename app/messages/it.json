@@ -206,6 +206,7 @@
 	"editor_open_file": "Apri \"{name}\"",
 	"login_auto_opening": "Apertura vault…",
 	"editor_untitled": "Senza titolo",
+	"editor_note_placeholder": "Inizia a scrivere…",
 	"canvas_zoom_in": "Ingrandisci",
 	"canvas_zoom_out": "Riduci",
 	"canvas_reset_view": "Reimposta vista",

@@ -20,8 +20,13 @@ export function hide(from: number, to: number): Range<Decoration> {
 	return Decoration.replace({}).range(from, to);
 }
 
-export function mark(from: number, to: number, className: string): Range<Decoration> {
-	return Decoration.mark({ class: className }).range(from, to);
+export function mark(
+	from: number,
+	to: number,
+	className: string,
+	attributes?: Record<string, string>
+): Range<Decoration> {
+	return Decoration.mark({ class: className, attributes }).range(from, to);
 }
 
 export function line(from: number, className: string): Range<Decoration> {

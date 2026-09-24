@@ -1,0 +1,102 @@
+.cm-editor .cm-lp-code {
+	font-family: var(--font-mono);
+	font-size: 0.875em;
+	line-height: 1.55;
+	background: var(--color-bg-secondary);
+	padding: 0 16px;
+}
+
+.cm-editor .cm-lp-code-first {
+	position: relative;
+	padding-top: 8px;
+	border-radius: var(--radius-sm) var(--radius-sm) 0 0;
+}
+
+.cm-editor .cm-lp-code-last {
+	border-radius: 0 0 var(--radius-sm) var(--radius-sm);
+}
+
+.cm-editor .cm-lp-code-tools {
+	position: absolute;
+	top: 0;
+	right: 0;
+	width: 0;
+	height: 0;
+}
+
+.cm-editor .cm-lp-code-head {
+	position: absolute;
+	top: 6px;
+	right: 16px;
+	display: flex;
+	align-items: center;
+	gap: 6px;
+	white-space: nowrap;
+}
+
+.cm-editor .cm-lp-code-lang {
+	color: var(--color-text-tertiary);
+	font-size: 0.8em;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	user-select: none;
+}
+
+.cm-editor .cm-lp-code-copy {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 20px;
+	height: 20px;
+	padding: 0;
+	border: none;
+	border-radius: var(--radius-xs);
+	background: transparent;
+	color: var(--color-text-tertiary);
+	cursor: pointer;
+	opacity: 0;
+	pointer-events: none;
+	transition:
+		opacity var(--transition-fast),
+		background var(--transition-fast),
+		color var(--transition-fast);
+}
+
+.cm-editor .cm-lp-code:hover .cm-lp-code-copy,
+.cm-editor .cm-lp-code-copy:focus-visible {
+	opacity: 1;
+	pointer-events: auto;
+}
+
+.cm-editor .cm-lp-code-copy:hover {
+	background: var(--color-bg-hover);
+	color: var(--color-text-primary);
+}
+
+.cm-editor .cm-lp-code-copy.cm-lp-copied {
+	opacity: 1;
+	pointer-events: auto;
+	color: var(--color-text-positive);
+}
+
+.cm-editor .cm-lp-code-copy svg {
+	width: 14px;
+	height: 14px;
+	fill: none;
+	stroke: currentColor;
+	stroke-width: 1.5;
+	stroke-linecap: round;
+	stroke-linejoin: round;
+}
+
+.cm-editor .cm-lp-icon-done {
+	display: none;
+}
+
+.cm-editor .cm-lp-copied .cm-lp-icon-done {
+	display: block;
+}
+
+.cm-editor .cm-lp-copied .cm-lp-icon-copy {
+	display: none;
+}

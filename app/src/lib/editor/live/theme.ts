@@ -20,13 +20,17 @@ export const liveTheme = EditorView.theme({
 		lineHeight: '1.6'
 	},
 	'.cm-content': {
-		padding: '12px 2.5rem 20vh',
-		maxWidth: '750px',
+		padding: '12px 2.5rem 50vh',
+		// 46.875rem is the inline title's column (`max-w-187.5`); a px value would drift from it.
+		maxWidth: '46.875rem',
 		margin: '0 auto',
 		width: '100%',
-		caretColor: 'var(--color-text-primary)'
+		cursor: 'text',
+		caretColor: 'var(--color-text-primary)',
+		userSelect: 'text'
 	},
 	'.cm-line': { padding: '0' },
+	'.cm-placeholder': { color: 'var(--color-text-tertiary)' },
 	'.cm-gutters': { display: 'none' },
 	'.cm-activeLine': { backgroundColor: 'transparent' },
 	'.cm-cursor, .cm-dropCursor': { borderLeftColor: 'var(--color-text-primary)' },

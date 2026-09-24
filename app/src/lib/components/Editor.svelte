@@ -16,6 +16,7 @@
 	import { TitleEditor } from './editor/title-editor.svelte';
 	import { acceptPendingInsert, registerEditorDropTarget } from './editor/drop-target';
 	import '$lib/editor/live/live-preview.css';
+	import '$lib/editor/live/code-block.css';
 
 	interface Props {
 		filePath: string;
