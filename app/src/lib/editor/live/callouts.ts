@@ -86,7 +86,7 @@ function obsidianCallouts(state: EditorState): Callout[] {
 				last,
 				fold,
 				markerFrom: header.from + open,
-				markerTo: header.from + end,
+				markerTo: header.to,
 				title: header.text.slice(end).trim(),
 				bodyTo: last.to,
 				close: null,
@@ -124,7 +124,7 @@ function colonCallouts(state: EditorState): Callout[] {
 			last: before,
 			fold: null,
 			markerFrom: node.from,
-			markerTo: header.from + end,
+			markerTo: header.to,
 			title: header.text.slice(end).trim(),
 			bodyTo: before.to,
 			close: closeLine,
@@ -240,7 +240,7 @@ function buildCallouts(state: EditorState): DecorationSet {
 			Decoration.replace({
 				widget: new CalloutHeadWidget(
 					callout.kind,
-					callout.title ? '' : CALLOUT_LABELS[callout.kind](),
+					callout.title || CALLOUT_LABELS[callout.kind](),
 					callout.fold !== null,
 					collapsed,
 					callout.header.from

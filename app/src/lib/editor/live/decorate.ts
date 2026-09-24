@@ -1,8 +1,9 @@
 import type { EditorState, Line, Range } from '@codemirror/state';
 import { StateEffect } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
-import type { LiveContext } from './context';
+import { staticPreview, type LiveContext } from './context';
 import { noteDir, type ResolveSources } from './resolve';
+import { vaultIndexReady } from './vault-index';
 
 export const refreshDecorations = StateEffect.define<null>();
 
@@ -12,7 +13,8 @@ export function sourcesOf(ctx: LiveContext): ResolveSources {
 		noteDir: () => noteDir(ctx.notePath(), ctx.vaultPath()),
 		attachmentFolder: () => ctx.attachmentFolder(),
 		exists: (relPath) => ctx.exists(relPath),
-		findByName: (name) => ctx.findByName(name)
+		findByName: (name) => ctx.findByName(name),
+		hasIndex: () => vaultIndexReady()
 	};
 }
 
@@ -35,6 +37,7 @@ export function line(from: number, className: string): Range<Decoration> {
 
 export function touchedLines(state: EditorState): Set<number> {
 	const lines = new Set<number>();
+	if (state.facet(staticPreview)) return lines;
 	for (const range of state.selection.ranges) {
 		const first = state.doc.lineAt(range.from).number;
 		const last = state.doc.lineAt(range.to).number;
@@ -78,4 +81,11 @@ export function eachLine(
 	const start = doc.lineAt(Math.max(0, Math.min(from, doc.length)));
 	const end = doc.lineAt(Math.max(start.from, Math.min(Math.max(to - 1, from), doc.length)));
 	for (let number = start.number; number <= end.number; number++) fn(doc.line(number));
+}
+
+// A hidden multi-line block keeps its line boxes, so every line in the range has to collapse.
+export function collapsedLines(state: EditorState, from: number, to: number): Range<Decoration>[] {
+	const ranges: Range<Decoration>[] = [];
+	eachLine(state, from, to, (at) => ranges.push(line(at.from, 'cm-lp-block-line')));
+	return ranges;
 }

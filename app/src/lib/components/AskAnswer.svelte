@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { findVaultFile, vaultFileExists } from '$lib/editor/live/vault-index';
+	import { staticPreview } from '$lib/editor/live/context';
 	import type { LiveEditorHandle } from '$lib/editor/live/editor-factory';
 
 	interface Props {
@@ -52,6 +53,7 @@
 			}
 			editor.view.dispatch({
 				effects: StateEffect.appendConfig.of([
+					staticPreview.of(true),
 					EditorState.readOnly.of(true),
 					EditorView.editable.of(false),
 					EditorView.theme({

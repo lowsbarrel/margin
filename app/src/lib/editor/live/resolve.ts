@@ -14,6 +14,7 @@ export interface ResolveSources {
 	attachmentFolder(): string;
 	exists(relPath: string): boolean;
 	findByName(name: string): string | null;
+	hasIndex?(): boolean;
 }
 
 export interface ResolvedAsset {
@@ -84,15 +85,17 @@ function fromAbs(abs: string, host: ResolveSources): ResolvedAsset | null {
 function pick(candidates: string[], host: ResolveSources): ResolvedAsset | null {
 	const vault = host.vaultPath();
 	if (!vault) return null;
-	let first: string | null = null;
+	const unique: string[] = [];
 	for (const rel of candidates) {
 		if (!rel) continue;
 		const normalized = normalizeRel(rel);
-		if (!normalized || normalized.startsWith('..')) continue;
-		first ??= normalized;
+		if (!normalized || normalized.startsWith('..') || unique.includes(normalized)) continue;
 		if (host.exists(normalized)) return fromAbs(`${vault}/${normalized}`, host);
+		unique.push(normalized);
 	}
-	return first === null ? null : fromAbs(`${vault}/${first}`, host);
+	// An ambiguous relative path waits for the file index rather than requesting the first candidate.
+	if (unique.length !== 1 && host.hasIndex && !host.hasIndex()) return null;
+	return unique.length ? fromAbs(`${vault}/${unique[0]}`, host) : null;
 }
 
 export function resolveAsset(src: string, host: ResolveSources): ResolvedAsset | null {

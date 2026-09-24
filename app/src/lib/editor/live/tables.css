@@ -5,7 +5,8 @@
 
 .cm-editor .cm-lp-table-scroll {
 	overflow-x: auto;
-	padding: 16px 22px 22px;
+	margin: -17px 0 0 -17px;
+	padding: 17px 20px 20px 17px;
 }
 
 .cm-editor .cm-lp-table-inner {

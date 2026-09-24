@@ -3,12 +3,18 @@ import { onVaultFsChanged, walkDirectory } from '$lib/fs/bridge';
 const paths = new Set<string>();
 const byName = new Map<string, string>();
 let vault: string | null = null;
+let ready = false;
 
 export function resetVaultIndex(vaultPath: string | null): void {
 	if (vault === vaultPath) return;
 	vault = vaultPath;
 	paths.clear();
 	byName.clear();
+	ready = false;
+}
+
+export function vaultIndexReady(): boolean {
+	return ready;
 }
 
 export async function refreshVaultIndex(vaultPath: string | null): Promise<void> {
@@ -23,6 +29,7 @@ export async function refreshVaultIndex(vaultPath: string | null): Promise<void>
 			const name = rel.slice(rel.lastIndexOf('/') + 1).toLowerCase();
 			if (!byName.has(name)) byName.set(name, rel);
 		}
+		ready = true;
 	} catch (err) {
 		console.warn('Vault index refresh failed:', err);
 	}

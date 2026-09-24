@@ -10,7 +10,7 @@ import {
 	type DecorationSet
 } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
-import { hide, line, refreshDecorations, touched, touchedLines } from './decorate';
+import { collapsedLines, hide, refreshDecorations, touched, touchedLines } from './decorate';
 
 interface MermaidBlock {
 	from: number;
@@ -132,7 +132,7 @@ class MermaidWidget extends WidgetType {
 function diagramDecorations(state: EditorState, touchedSet: Set<number>): DecorationSet {
 	const ranges = mermaidBlocks(state, touchedSet).flatMap((block) => [
 		hide(block.from, block.to),
-		line(block.line.from, 'cm-lp-block-line'),
+		...collapsedLines(state, block.from, block.to),
 		Decoration.widget({
 			block: true,
 			widget: new MermaidWidget(block.code, themeName()),

@@ -6,7 +6,7 @@ import * as m from '$lib/paraglide/messages.js';
 import { blockWidgets } from './blocks';
 import { liveCallouts } from './callouts';
 import { liveClicks } from './click';
-import { contextOf, liveContext, type LiveContext } from './context';
+import { contextOf, liveContext, staticPreview, type LiveContext } from './context';
 import {
 	embedChain,
 	embedDepth,
@@ -84,6 +84,7 @@ export function cardExtensions(
 ): Extension[] {
 	return [
 		liveContext.of(ctx),
+		staticPreview.of(true),
 		embedDepth.of(depth),
 		embedChain.of(chain),
 		markdownSyntax,
@@ -161,14 +162,6 @@ export class NoteEmbedCardWidget extends WidgetType {
 		const body = document.createElement('div');
 		body.className = 'cm-lp-embed-body';
 		card.appendChild(body);
-		card.addEventListener('mousedown', (event) => {
-			const target = event.target as HTMLElement | null;
-			if (target?.closest('.cm-editor') || target?.closest('.cm-lp-embed-header')) return;
-			event.preventDefault();
-			event.stopPropagation();
-			view.dispatch({ selection: { anchor: this.target.from } });
-			view.focus();
-		});
 		void this.load(body, ctx);
 		return card;
 	}

@@ -11,7 +11,7 @@ import {
 	type ViewUpdate
 } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
-import { hide, line, mark, refreshDecorations, touched, touchedLines } from './decorate';
+import { collapsedLines, hide, mark, refreshDecorations, touched, touchedLines } from './decorate';
 import { paintMath } from './math-render';
 import { BLOCK_MATH, BLOCK_MATH_MARK, INLINE_MATH } from './syntax';
 
@@ -128,7 +128,7 @@ function blockMathDecorations(state: EditorState, touchedSet: Set<number>): Deco
 			continue;
 		}
 		ranges.push(hide(block.from, block.to));
-		ranges.push(line(block.line.from, 'cm-lp-block-line'));
+		ranges.push(...collapsedLines(state, block.from, block.to));
 		ranges.push(
 			Decoration.widget({ block: true, widget: new MathBlockWidget(block.text), side: 1 }).range(
 				block.to

@@ -18,6 +18,11 @@ export const liveContext = Facet.define<LiveContext, LiveContext>({
 	combine: (values) => values[0]
 });
 
+// Read-only views (embed cards, Ask answers) have an idle selection at 0; they never reveal syntax.
+export const staticPreview = Facet.define<boolean, boolean>({
+	combine: (values) => values.some(Boolean)
+});
+
 export function contextOf(state: EditorState): LiveContext {
 	return state.facet(liveContext);
 }

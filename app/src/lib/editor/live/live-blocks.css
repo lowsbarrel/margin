@@ -63,7 +63,6 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.35em;
-	margin-right: 0.35em;
 }
 
 .cm-editor .cm-lp-callout-svg {
@@ -103,6 +102,7 @@
 }
 
 .cm-editor .cm-lp-block-line {
+	font-size: 0;
 	line-height: 0;
 	overflow: hidden;
 }
@@ -114,14 +114,19 @@
 .cm-editor .cm-lp-math-block {
 	display: flex;
 	justify-content: center;
-	padding: 0.7em 0;
-	margin: 0.4em 0;
+	padding: 0.4em 0;
+	margin: 0.1em 0;
 	overflow-x: auto;
 	font-size: 1.05em;
 }
 
 .cm-editor .cm-lp-math-content {
 	min-width: 0;
+}
+
+/* KaTeX gives display math a 1em block margin; the widget already spaces itself. */
+.cm-editor .cm-lp-math-content .katex-display {
+	margin: 0;
 }
 
 .cm-editor .cm-lp-math-empty {
