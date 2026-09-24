@@ -30,7 +30,7 @@
 	$effect(() => () => clearTimeout(resetTimer));
 </script>
 
-<div class={className} aria-label="file-plus" role="img" onmouseenter={handleMouseEnter}>
+<div class={className} aria-hidden="true" onmouseenter={handleMouseEnter}>
 	<svg
 		xmlns="http://www.w3.org/2000/svg"
 		width={size}

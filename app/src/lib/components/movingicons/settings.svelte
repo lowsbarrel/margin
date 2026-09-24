@@ -29,8 +29,7 @@
 
 <div
 	class={className}
-	aria-label="settings"
-	role="img"
+	aria-hidden="true"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >

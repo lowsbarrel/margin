@@ -29,8 +29,7 @@
 
 <div
 	class={className}
-	aria-label="refresh-cw"
-	role="img"
+	aria-hidden="true"
 	onmouseenter={handleMouseEnter}
 	onmouseleave={handleMouseLeave}
 >
