@@ -222,7 +222,7 @@
 	"editor_select_all": "Select all",
 	"login_auto_opening": "Opening vault…",
 	"editor_untitled": "Untitled",
-	"editor_note_placeholder": "Start writing…",
+	"editor_note_placeholder": "Start writing, or type / for blocks",
 	"canvas_reset_view": "Reset view (⌘0)",
 	"find_placeholder": "Find…",
 	"find_case_sensitive": "Case sensitive",
