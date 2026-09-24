@@ -3,6 +3,7 @@ mod crypto;
 mod fs;
 mod history;
 mod index;
+mod menu;
 mod s3;
 mod session;
 mod settings;
@@ -50,6 +51,7 @@ pub fn run() {
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
         .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| menu::handle(app, event.id().as_ref()))
         .manage(LlmState::default())
         .manage(LlmCancelState::default())
         .manage(S3State(Mutex::new(None)))
@@ -140,6 +142,10 @@ pub fn run() {
         .setup(|app| {
             use tauri::WebviewUrl;
             use tauri::WebviewWindowBuilder;
+
+            #[cfg(target_os = "macos")]
+            app.set_menu(menu::build(app.handle())?)?;
+
             let _win = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
                 .title("Margin")
                 .inner_size(800.0, 600.0)
