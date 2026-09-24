@@ -31,6 +31,11 @@
 	const ITEM =
 		'rounded-sm py-1.75 pl-2.5 text-muted-foreground data-highlighted:bg-surface-1 data-highlighted:text-foreground';
 
+	/* `Select.Value` reads the item registry, which is empty until the list has been opened once. */
+	const selected = $derived(
+		options.find((option) => option.value === value)?.label ?? placeholder ?? ''
+	);
+
 	function handleValueChange(next: unknown) {
 		value = String(next ?? '');
 		onchange?.(value);
@@ -38,9 +43,7 @@
 </script>
 
 <Select.Root type="single" {value} {disabled} onValueChange={handleValueChange}>
-	<Select.Trigger {id} class={cn(TRIGGER)}>
-		<Select.Value {placeholder} />
-	</Select.Trigger>
+	<Select.Trigger {id} class={cn(TRIGGER)}>{selected}</Select.Trigger>
 	<Select.Content class={CONTENT}>
 		{#each options as option (option.value)}
 			<Select.Item value={option.value} label={option.label} class={ITEM}
