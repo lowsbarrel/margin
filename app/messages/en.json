@@ -141,6 +141,7 @@
 	"canvas_line": "Line (L)",
 	"canvas_arrow": "Arrow (A)",
 	"canvas_color": "Color",
+	"canvas_color_ink": "Ink",
 	"canvas_clear_all": "Clear all",
 	"canvas_width_thin": "Thin",
 	"canvas_width_medium": "Medium",

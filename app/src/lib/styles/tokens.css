@@ -137,6 +137,7 @@
 	--sem-border-divider: var(--neutral-10);
 	--sem-border-strong: var(--opacity-black-16);
 	--sem-canvas-grid: 0 0% 25% / 12%;
+	--sem-canvas-ink: var(--neutral-95);
 
 	--sem-syntax-keyword: var(--purple-70);
 	--sem-syntax-string: var(--green-70);
@@ -178,6 +179,7 @@
 	--sem-border-divider: var(--neutral-80);
 	--sem-border-strong: var(--opacity-white-16);
 	--sem-canvas-grid: 0 0% 100% / 14%;
+	--sem-canvas-ink: var(--neutral-5);
 
 	--sem-syntax-keyword: 286 60% 67%;
 	--sem-syntax-string: 95 38% 62%;
@@ -233,6 +235,7 @@
 	--color-border-strong: hsl(var(--sem-border-strong));
 	--color-border-focus: hsl(var(--sem-bg-brand));
 	--color-canvas-grid: hsl(var(--sem-canvas-grid));
+	--color-canvas-ink: hsl(var(--sem-canvas-ink));
 
 	--color-brand-8: hsl(var(--sem-bg-brand) / 8%);
 	--color-brand-12: hsl(var(--sem-bg-brand) / 12%);

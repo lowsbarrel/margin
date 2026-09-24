@@ -3,7 +3,7 @@
 	import { readFileBytes } from '$lib/fs/bridge';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { Point, ShapeKind, Tool } from '$lib/canvas/types';
-	import { DEFAULT_PEN_COLOR, isShapeTool } from '$lib/canvas/types';
+	import { INK_COLOR, inkCss, isShapeTool } from '$lib/canvas/types';
 	import { deserialize } from '$lib/canvas/serialization';
 	import { SnapCache } from '$lib/canvas/snapping';
 	import CanvasToolbar from './CanvasToolbar.svelte';
@@ -53,7 +53,7 @@
 
 	let tool = $state<Tool>('pen');
 	let lastShape = $state<ShapeKind>('rect');
-	let penColor = $state(DEFAULT_PEN_COLOR);
+	let penColor = $state(INK_COLOR);
 	let ctxMenu = $state<{ x: number; y: number } | null>(null);
 
 	let editingText = $state<Point | null>(null);
@@ -209,7 +209,7 @@
 			style:left={`${editingTextLocal.x}px`}
 			style:top={`${editingTextLocal.y}px`}
 			style:font-size={`${sizes.text * camera.zoom}px`}
-			style:color={penColor}
+			style:color={penColor === INK_COLOR ? inkCss : penColor}
 			bind:value={textInputValue}
 			onkeydown={(e) => {
 				if (e.key === 'Enter') commitText();
@@ -230,7 +230,11 @@
 			style:top={`${surface.cursorY}px`}
 			style:width={`${sizes.current(tool) * camera.zoom}px`}
 			style:height={`${sizes.current(tool) * camera.zoom}px`}
-			style:border-color={tool === 'eraser' ? 'var(--color-text-tertiary)' : penColor}
+			style:border-color={tool === 'eraser'
+				? 'var(--color-text-tertiary)'
+				: penColor === INK_COLOR
+					? inkCss
+					: penColor}
 		></div>
 	{/if}
 </div>

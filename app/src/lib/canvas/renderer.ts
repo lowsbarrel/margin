@@ -1,18 +1,43 @@
 import type { Point, Stroke, Shape, TextLabel } from './types';
+import { INK_COLOR } from './types';
 
-let gridColorCache: { isDark: boolean; value: string } | null = null;
+let tokenCache: { isDark: boolean; grid: string; ink: string } | null = null;
 
-function gridColor(isDark: boolean): string {
-	if (gridColorCache?.isDark !== isDark) {
-		const token = getComputedStyle(document.documentElement)
-			.getPropertyValue('--color-canvas-grid')
-			.trim();
-		gridColorCache = {
-			isDark,
-			value: token || (isDark ? 'hsl(0 0% 100% / 12%)' : 'hsl(0 0% 25% / 10%)')
-		};
-	}
-	return gridColorCache.value;
+function themeTokens(isDark: boolean) {
+	if (tokenCache && tokenCache.isDark === isDark) return tokenCache;
+	const style = getComputedStyle(document.documentElement);
+	const grid = style.getPropertyValue('--color-canvas-grid').trim();
+	const ink = style.getPropertyValue('--color-canvas-ink').trim();
+	tokenCache = {
+		isDark,
+		grid: grid || (isDark ? 'hsl(0 0% 100% / 14%)' : 'hsl(0 0% 25% / 12%)'),
+		ink: ink || (isDark ? 'hsl(0 0% 96%)' : 'hsl(0 0% 12%)')
+	};
+	return tokenCache;
+}
+
+const NEAR_WHITE_LUMINANCE = 0.85;
+
+function isNearWhite(color: string): boolean {
+	const hex = color.trim().replace('#', '');
+	const full =
+		hex.length === 3
+			? hex
+					.split('')
+					.map((c) => c + c)
+					.join('')
+			: hex;
+	if (!/^[0-9a-f]{6}$/i.test(full)) return false;
+	const r = parseInt(full.slice(0, 2), 16) / 255;
+	const g = parseInt(full.slice(2, 4), 16) / 255;
+	const b = parseInt(full.slice(4, 6), 16) / 255;
+	return 0.2126 * r + 0.7152 * g + 0.0722 * b > NEAR_WHITE_LUMINANCE;
+}
+
+// Drawings made before ink existed are full of near-white strokes: paint them as ink so they stay legible in both themes.
+export function resolveColor(color: string, isDark: boolean): string {
+	if (color === INK_COLOR || isNearWhite(color)) return themeTokens(isDark).ink;
+	return color;
 }
 
 export function drawGrid(
@@ -32,7 +57,7 @@ export function drawGrid(
 	const endY = camY + h / zoom;
 	const radius = 1 / zoom;
 
-	ctx.fillStyle = gridColor(isDark);
+	ctx.fillStyle = themeTokens(isDark).grid;
 	ctx.beginPath();
 	for (let x = startX; x <= endX; x += step) {
 		for (let y = startY; y <= endY; y += step) {
@@ -43,7 +68,7 @@ export function drawGrid(
 	ctx.fill();
 }
 
-export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke) {
+export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke, isDark: boolean) {
 	if (s.points.length < 2) return;
 	c.lineCap = 'round';
 	c.lineJoin = 'round';
@@ -53,7 +78,7 @@ export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke) {
 		c.strokeStyle = 'rgba(0,0,0,1)';
 	} else {
 		c.globalCompositeOperation = 'source-over';
-		c.strokeStyle = s.color;
+		c.strokeStyle = resolveColor(s.color, isDark);
 	}
 	c.lineWidth = s.size;
 	c.beginPath();
@@ -65,8 +90,8 @@ export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke) {
 	c.globalCompositeOperation = 'source-over';
 }
 
-export function drawShapeOn(c: CanvasRenderingContext2D, s: Shape) {
-	c.strokeStyle = s.color;
+export function drawShapeOn(c: CanvasRenderingContext2D, s: Shape, isDark: boolean) {
+	c.strokeStyle = resolveColor(s.color, isDark);
 	c.lineWidth = s.size;
 	c.lineCap = 'round';
 	c.lineJoin = 'round';
@@ -111,9 +136,9 @@ export function drawShapeOn(c: CanvasRenderingContext2D, s: Shape) {
 	}
 }
 
-export function drawTextOn(c: CanvasRenderingContext2D, t: TextLabel) {
+export function drawTextOn(c: CanvasRenderingContext2D, t: TextLabel, isDark: boolean) {
 	c.font = `${t.fontSize}px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
-	c.fillStyle = t.color;
+	c.fillStyle = resolveColor(t.color, isDark);
 	c.textBaseline = 'top';
 	c.fillText(t.text, t.x, t.y);
 }
@@ -174,13 +199,13 @@ export function render(
 	offCtx.scale(zoom, zoom);
 	offCtx.translate(-camX, -camY);
 
-	for (const s of opts.strokes) drawStrokeOn(offCtx, s);
-	if (opts.currentStroke) drawStrokeOn(offCtx, opts.currentStroke);
+	for (const s of opts.strokes) drawStrokeOn(offCtx, s, isDark);
+	if (opts.currentStroke) drawStrokeOn(offCtx, opts.currentStroke, isDark);
 
-	for (const s of opts.shapes) drawShapeOn(offCtx, s);
-	if (opts.currentShape) drawShapeOn(offCtx, opts.currentShape);
+	for (const s of opts.shapes) drawShapeOn(offCtx, s, isDark);
+	if (opts.currentShape) drawShapeOn(offCtx, opts.currentShape, isDark);
 
-	for (const t of opts.textLabels) drawTextOn(offCtx, t);
+	for (const t of opts.textLabels) drawTextOn(offCtx, t, isDark);
 	offCtx.restore();
 
 	ctx.drawImage(offscreenRef.canvas, 0, 0, w, h, 0, 0, w / dpr, h / dpr);

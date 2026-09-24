@@ -43,9 +43,19 @@ export interface CanvasData {
 	zoom: number;
 }
 
-export const DEFAULT_PEN_COLOR = '#3b82f6';
+export const INK_COLOR = 'ink';
 
-export const colorPresets = ['#ef4444', '#f59e0b', '#22c55e', '#3b82f6', '#a855f7', '#6b7280'];
+export const inkCss = 'var(--color-canvas-ink)';
+
+export const colorPresets = [
+	INK_COLOR,
+	'#ef4444',
+	'#f59e0b',
+	'#22c55e',
+	'#3b82f6',
+	'#a855f7',
+	'#6b7280'
+];
 
 export const shapeKinds: ShapeKind[] = ['rect', 'ellipse', 'line', 'arrow'];
 

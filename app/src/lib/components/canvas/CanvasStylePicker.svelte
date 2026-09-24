@@ -1,7 +1,7 @@
 <script lang="ts">
 	import * as m from '$lib/paraglide/messages.js';
 	import type { StrokeWidth, Tool } from '$lib/canvas/types';
-	import { colorPresets, nearestWidth, widthOptions } from '$lib/canvas/types';
+	import { colorPresets, INK_COLOR, inkCss, nearestWidth, widthOptions } from '$lib/canvas/types';
 	import { swatchClass, toolButtonClass } from './control-classes';
 
 	interface Props {
@@ -30,10 +30,10 @@
 	{#each colorPresets as c (c)}
 		<button
 			class={swatchClass(color === c)}
-			style:background={c}
+			style:background={c === INK_COLOR ? inkCss : c}
 			onclick={() => oncolor(c)}
-			title={c}
-			aria-label={c}
+			title={c === INK_COLOR ? m.canvas_color_ink() : c}
+			aria-label={c === INK_COLOR ? m.canvas_color_ink() : c}
 		></button>
 	{/each}
 </div>

@@ -2,7 +2,7 @@
 	import { Eraser, Hand, Pencil, Type } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import type { ShapeKind, Tool } from '$lib/canvas/types';
-	import { isShapeTool } from '$lib/canvas/types';
+	import { INK_COLOR, inkCss, isShapeTool } from '$lib/canvas/types';
 	import CanvasPopover from './canvas/CanvasPopover.svelte';
 	import CanvasShapePicker from './canvas/CanvasShapePicker.svelte';
 	import CanvasStylePicker from './canvas/CanvasStylePicker.svelte';
@@ -111,7 +111,7 @@
 		>
 			<span
 				class="size-4.5 rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
-				style:background={penColor}
+				style:background={penColor === INK_COLOR ? inkCss : penColor}
 			></span>
 		</button>
 		{#if open === 'style'}

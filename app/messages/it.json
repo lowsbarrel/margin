@@ -141,6 +141,7 @@
 	"canvas_line": "Linea (L)",
 	"canvas_arrow": "Freccia (A)",
 	"canvas_color": "Colore",
+	"canvas_color_ink": "Inchiostro",
 	"canvas_clear_all": "Cancella tutto",
 	"canvas_width_thin": "Sottile",
 	"canvas_width_medium": "Media",
