@@ -28,10 +28,16 @@ function find(cx: InlineContext, from: number, char: number, to: number): number
 	return -1;
 }
 
-function scanName(cx: InlineContext, from: number): number {
-	let pos = from;
-	while (pos < cx.end && /[A-Za-z0-9_./-]/.test(cx.slice(pos, pos + 1))) pos++;
-	return pos;
+// Obsidian's tag alphabet: letters, digits, `_`, `-` and `/`, and the name needs a non-digit.
+const TAG_NAME = /^[\p{L}\p{N}_/-]+/u;
+const TAG_LETTER = /[\p{L}_]/u;
+
+function scanTag(cx: InlineContext, from: number, to: number): number {
+	const match = TAG_NAME.exec(cx.slice(from, to));
+	if (!match) return from;
+	let end = from + match[0].length;
+	while (cx.slice(end - 1, end) === '/') end--;
+	return TAG_LETTER.test(match[0]) ? end : from;
 }
 
 const wikiLink: InlineParser = {
@@ -111,9 +117,7 @@ const tag: MarkdownConfig = {
 			parse(cx, next, pos) {
 				if (next !== 35) return -1;
 				if (pos > 0 && !/[\s(>[\]]/.test(cx.slice(pos - 1, pos))) return -1;
-				if (!/[A-Za-z]/.test(cx.slice(pos + 1, pos + 2))) return -1;
-				let end = scanName(cx, pos + 1);
-				while (cx.slice(end - 1, end) === '/') end--;
+				const end = scanTag(cx, pos + 1, lineEnd(cx, pos + 1));
 				if (end === pos + 1) return -1;
 				return cx.addElement(cx.elt(TAG, pos, end));
 			}

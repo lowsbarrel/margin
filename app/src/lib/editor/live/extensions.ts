@@ -6,8 +6,10 @@ import {
 	drawSelection,
 	dropCursor,
 	highlightSpecialChars,
+	placeholder,
 	rectangularSelection
 } from '@codemirror/view';
+import * as m from '$lib/paraglide/messages.js';
 import { blockWidgets } from './blocks';
 import { liveClicks } from './click';
 import { liveKeymap } from './commands';
@@ -24,6 +26,7 @@ export const previewExtensions: readonly Extension[] = [livePreview, blockWidget
 export const baseExtensions: readonly Extension[] = [
 	markdownSyntax,
 	liveTheme,
+	placeholder(m.editor_note_placeholder()),
 	EditorView.lineWrapping,
 	EditorState.tabSize.of(4),
 	history(),

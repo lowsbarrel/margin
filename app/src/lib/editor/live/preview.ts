@@ -4,6 +4,7 @@ import type { SyntaxNode } from '@lezer/common';
 import {
 	Decoration,
 	ViewPlugin,
+	WidgetType,
 	type DecorationSet,
 	type EditorView,
 	type ViewUpdate
@@ -21,7 +22,7 @@ import {
 	touched,
 	touchedLines
 } from './decorate';
-import { BulletWidget, TaskWidget } from './widgets';
+import { ListMarkWidget, TaskWidget } from './widgets';
 import {
 	EMBED,
 	EMBED_MARK,
@@ -69,6 +70,51 @@ function hideSpaceAfter(state: EditorState, to: number): number {
 	return state.doc.sliceString(to, to + 1) === ' ' ? 1 : 0;
 }
 
+const EXTERNAL_URL = /^(https?:|mailto:)/;
+
+const FRONTMATTER_ENTRY = /^(\s*)([^:\s][^:]*):(.*)$/;
+
+function frontmatterDecorations(
+	state: EditorState,
+	end: number,
+	ranges: Range<Decoration>[]
+): void {
+	const doc = state.doc;
+	const last = doc.lineAt(Math.max(0, end - 1)).number;
+	eachLine(state, 0, end, (at) => {
+		const first = at.number === 1 ? ' cm-lp-fm-first' : '';
+		const closing = at.number === last ? ' cm-lp-fm-last' : '';
+		ranges.push(line(at.from, `cm-lp-frontmatter${first}${closing}`));
+		if (at.number === 1 || at.number === last) return;
+		const entry = FRONTMATTER_ENTRY.exec(at.text);
+		if (!entry) return;
+		const key = at.from + entry[1].length;
+		ranges.push(mark(key, key + entry[2].length, 'cm-lp-fm-key'));
+		if (entry[3]) ranges.push(mark(key + entry[2].length + 1, at.to, 'cm-lp-fm-value'));
+	});
+}
+
+class ExternalLinkWidget extends WidgetType {
+	eq(): boolean {
+		return true;
+	}
+
+	toDOM(): HTMLElement {
+		const span = document.createElement('span');
+		span.className = 'cm-lp-external';
+		const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+		svg.setAttribute('viewBox', '0 0 16 16');
+		svg.setAttribute('aria-hidden', 'true');
+		for (const d of ['M6.5 3h6.5v6.5', 'M13 3 4.5 11.5']) {
+			const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+			path.setAttribute('d', d);
+			svg.append(path);
+		}
+		span.append(svg);
+		return span;
+	}
+}
+
 // Three marks means the wiki link carries a `|alias`, so the target is replaced by the alias.
 function markCount(node: SyntaxNode | null): number {
 	let count = 0;
@@ -85,9 +131,7 @@ function build(state: EditorState): DecorationSet {
 	const doc = state.doc;
 	const ranges: Range<Decoration>[] = [];
 
-	if (frontmatter > 0) {
-		eachLine(state, 0, frontmatter, (at) => ranges.push(line(at.from, 'cm-lp-frontmatter')));
-	}
+	if (frontmatter > 0) frontmatterDecorations(state, frontmatter, ranges);
 
 	for (const asset of assetsOf(state)) {
 		if (touched(state, touchedSet, asset.from, asset.to)) continue;
@@ -124,7 +168,13 @@ function build(state: EditorState): DecorationSet {
 
 			// A link without a URL is a footnote or a reference label; leave its brackets in place.
 			if (name === 'Link') {
-				if (node.getChild('URL')) ranges.push(mark(ref.from, ref.to, 'cm-lp-link'));
+				const url = node.getChild('URL');
+				if (!url) return;
+				const href = doc.sliceString(url.from, url.to);
+				ranges.push(mark(ref.from, ref.to, 'cm-lp-link', { title: href }));
+				if (EXTERNAL_URL.test(href) && !touched(state, touchedSet, ref.from, ref.to)) {
+					ranges.push(Decoration.widget({ widget: new ExternalLinkWidget() }).range(ref.to));
+				}
 				return;
 			}
 
@@ -188,21 +238,23 @@ function build(state: EditorState): DecorationSet {
 
 			if (name === 'ListMark') {
 				const item = node.parent;
-				const list = item?.parent?.name ?? '';
+				const ordered = item?.parent?.name === 'OrderedList';
 				const task = item?.getChild('Task');
-				if (list === 'OrderedList') {
-					ranges.push(mark(ref.from, ref.to, 'cm-lp-mark'));
-					return;
-				}
 				if (touched(state, touchedSet, ref.from, ref.to)) {
 					ranges.push(mark(ref.from, ref.to, 'cm-lp-mark'));
 					return;
 				}
-				ranges.push(
-					hide(ref.from, Math.min(ref.to + hideSpaceAfter(state, ref.to), doc.lineAt(ref.from).to))
-				);
-				if (!task)
-					ranges.push(Decoration.replace({ widget: new BulletWidget() }).range(ref.from, ref.to));
+				const to = Math.min(ref.to + hideSpaceAfter(state, ref.to), doc.lineAt(ref.from).to);
+				ranges.push(hide(ref.from, to));
+				const text = ordered ? doc.sliceString(ref.from, ref.to) : '•';
+				if (ordered || !task) {
+					ranges.push(
+						Decoration.replace({ widget: new ListMarkWidget(text, ordered) }).range(
+							ref.from,
+							ref.to
+						)
+					);
+				}
 				return;
 			}
 
@@ -217,8 +269,12 @@ function build(state: EditorState): DecorationSet {
 					ranges.push(mark(marker.from, marker.to, 'cm-lp-dim'));
 					return;
 				}
+				const end = Math.min(
+					marker.to + hideSpaceAfter(state, marker.to),
+					doc.lineAt(marker.from).to
+				);
 				ranges.push(
-					Decoration.replace({ widget: new TaskWidget(checked) }).range(marker.from, marker.to)
+					Decoration.replace({ widget: new TaskWidget(checked) }).range(marker.from, end)
 				);
 				return;
 			}
