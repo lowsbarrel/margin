@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
+	import { noteFocus } from '$lib/stores/note-focus';
 	import { vault } from '$lib/stores/vault.svelte';
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { drag } from '$lib/stores/drag.svelte';
@@ -49,6 +50,7 @@
 	}: Props = $props();
 
 	let container: HTMLDivElement;
+	let titleEl: HTMLDivElement;
 	let live = $state<LiveEditorHandle | null>(null);
 	let lightbox = $state<{ images: LightboxImage[]; index: number } | null>(null);
 	let contextMenu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
@@ -78,6 +80,7 @@
 			setPath: (path) => (currentPath = path),
 			isAlive: () => alive,
 			focusEditor: () => live?.focus(),
+			element: () => titleEl,
 			onrename: () => onrename
 		},
 		untrack(() => initialTitle)
@@ -114,6 +117,11 @@
 		const offset = live?.selectionOffset();
 		if (offset != null) onsnapshotcursor?.(offset);
 	}
+
+	$effect(() => {
+		if (!active || !noteFocus.take(currentPath)) return;
+		title.focusTitle();
+	});
 
 	$effect(() => {
 		const view = live?.view ?? null;
@@ -223,6 +231,7 @@
 	<div
 		class="title-input mx-auto max-w-187.5 cursor-text px-10 pt-12 font-sans text-3xl leading-[1.2] font-bold tracking-tight wrap-break-word text-foreground outline-none empty:before:pointer-events-none empty:before:text-subtle-foreground empty:before:content-[attr(data-placeholder)]"
 		contenteditable="true"
+		bind:this={titleEl}
 		bind:textContent={title.text}
 		oninput={(e) => title.input(e.currentTarget.textContent?.trim() ?? '')}
 		onkeydown={(e) => title.keydown(e)}
