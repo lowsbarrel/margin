@@ -88,6 +88,13 @@ root → attachment folder, `![[name]]` → attachment folder → vault-wide ind
 reuse it instead of resolving paths again. CodeMirror packages load through
 dynamic `import()` from `components/Editor.svelte`.
 
+Rich blocks (`callouts.ts`, `math.ts`, `mermaid.ts`, `embeds.ts`,
+`footnotes.ts`, styled by `live-blocks.css`): Obsidian `> [!type]` and legacy
+`:::type` callouts, KaTeX `$…$`/`$$…$$`, mermaid fences, `![[Note]]`/`![[file]]`
+embeds and footnotes. A replace decoration that spans a line break must come
+from a state field — a view plugin throws. A note embed mounts a second
+read-only view of the same extensions, bounded by `embedDepth`/`embedChain`.
+
 ## The vault on disk
 
 App state lives in `<vault>/.margin/`: `vault.id`, `settings.enc`,
