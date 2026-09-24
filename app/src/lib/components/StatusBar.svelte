@@ -3,6 +3,7 @@
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
+	import { toast } from '$lib/stores/toast.svelte';
 	import { IconButton } from '$lib/ui';
 	import {
 		CloudOff,
@@ -12,6 +13,7 @@
 		Moon,
 		Link2,
 		FileCode,
+		FileDown,
 		SquareTerminal,
 		Trash2
 	} from '@lucide/svelte';
@@ -71,6 +73,23 @@
 					? 'bg-surface-2 text-destructive'
 					: 'bg-surface-2 text-muted-foreground'
 	);
+
+	let exporting = $state(false);
+
+	async function handleExportPdf() {
+		const view = editor.view;
+		if (!view || exporting) return;
+		exporting = true;
+		try {
+			const { exportPdf } = await import('$lib/utils/pdf-export');
+			await exportPdf(view, m.statusbar_export_pdf_success());
+		} catch (err) {
+			console.error('PDF export failed:', err);
+			toast.error(m.toast_pdf_export_failed({ error: String(err) }));
+		} finally {
+			exporting = false;
+		}
+	}
 </script>
 
 <footer
@@ -132,6 +151,15 @@
 				title={m.statusbar_sync_now()}
 				extraClass={editor.syncStatus === 'syncing' ? 'spin' : ''}
 				disabled={editor.syncStatus === 'syncing'}
+			/>
+		{/if}
+
+		{#if editor.view}
+			<IconButton
+				icon={exporting ? Loader : FileDown}
+				size="sm"
+				onclick={handleExportPdf}
+				title={m.statusbar_export_pdf()}
 			/>
 		{/if}
 
