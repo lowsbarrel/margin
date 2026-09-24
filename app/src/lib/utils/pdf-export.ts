@@ -11,6 +11,8 @@ import type { EditorView } from '@codemirror/view';
 
 let pdfMermaidSeq = 0;
 
+const JPEG_QUALITY = 0.92;
+
 export interface PdfTarget {
 	markdown: string;
 	title: string;
@@ -169,7 +171,16 @@ export async function renderPdf(target: PdfTarget): Promise<RenderedPdf> {
 			ctx.drawImage(canvas, 0, sliceY, canvas.width, sliceHeight, 0, 0, canvas.width, sliceHeight);
 			const sliceImgHeight = (sliceHeight * imgWidth) / canvas.width;
 			if (page > 0) pdf.addPage();
-			pdf.addImage(pageCanvas.toDataURL('image/png'), 'PNG', 0, 0, imgWidth, sliceImgHeight);
+			pdf.addImage(
+				pageCanvas.toDataURL('image/jpeg', JPEG_QUALITY),
+				'JPEG',
+				0,
+				0,
+				imgWidth,
+				sliceImgHeight,
+				undefined,
+				'FAST'
+			);
 		}
 
 		return { blob: pdf.output('blob'), pages: pdf.getNumberOfPages(), container };
