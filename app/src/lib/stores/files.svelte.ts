@@ -249,6 +249,10 @@ export const files = {
 		}
 	},
 
+	get hiddenPaths() {
+		return hiddenPaths;
+	},
+
 	setHiddenPaths(paths: string[]) {
 		const next = [...paths].sort();
 		if (next.length === hiddenPaths.length && next.every((p, i) => p === hiddenPaths[i])) return;

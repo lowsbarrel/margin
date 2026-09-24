@@ -1,13 +1,13 @@
 <script lang="ts">
 	import type { Pane } from '$lib/stores/panes.svelte';
-	import { panes, fileTitle, toBreadcrumbs } from '$lib/stores/panes.svelte';
-	import { vault } from '$lib/stores/vault.svelte';
+	import { panes, fileTitle } from '$lib/stores/panes.svelte';
 	import { drag } from '$lib/stores/drag.svelte';
 	import Editor from '$lib/components/Editor.svelte';
 	import ImageViewer from '$lib/components/ImageViewer.svelte';
 	import UnknownFileView from '$lib/components/UnknownFileView.svelte';
 	import CanvasEditor from '$lib/components/CanvasEditor.svelte';
-	import { X, ChevronRight, Pin } from '@lucide/svelte';
+	import PaneBreadcrumbs from '$lib/components/pane/PaneBreadcrumbs.svelte';
+	import { X, Pin } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import {
 		handleTabMouseDown,
@@ -43,10 +43,6 @@
 		pane.activeTabIndex >= 0 && pane.activeTabIndex < pane.tabs.length
 			? pane.tabs[pane.activeTabIndex]
 			: null
-	);
-
-	let paneCrumbs = $derived(
-		paneActiveTab ? toBreadcrumbs(paneActiveTab.path, vault.vaultPath) : []
 	);
 
 	const ACTIVE_TAB =
@@ -168,21 +164,8 @@
 	{/if}
 </div>
 
-{#if paneActiveTab && paneCrumbs.length > 0}
-	<div
-		class="flex min-h-7.5 items-center gap-1 overflow-x-auto border-b border-border bg-background px-4 py-1.5 text-xs whitespace-nowrap text-subtle-foreground"
-	>
-		{#each paneCrumbs as crumb, i (paneCrumbs.slice(0, i + 1).join('/'))}
-			{#if i > 0}
-				<ChevronRight size={12} />
-			{/if}
-			<span
-				class={i === paneCrumbs.length - 1
-					? 'font-medium text-muted-foreground'
-					: 'text-subtle-foreground'}>{crumb}</span
-			>
-		{/each}
-	</div>
+{#if paneActiveTab}
+	<PaneBreadcrumbs {paneIndex} path={paneActiveTab.path} />
 {/if}
 
 <main class="relative flex flex-1 flex-col overflow-hidden bg-background">
