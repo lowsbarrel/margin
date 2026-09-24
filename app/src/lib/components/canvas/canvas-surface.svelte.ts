@@ -18,10 +18,22 @@ export interface CanvasSurfaceDeps {
 	persist: CanvasPersist;
 	tool: () => Tool;
 	penColor: () => string;
+	setTool: (tool: Tool) => void;
 	menuOpen: () => boolean;
 	closeMenu: () => void;
 	beginText: (point: Point) => void;
 }
+
+const TOOL_KEYS: Record<string, Tool> = {
+	h: 'hand',
+	p: 'pen',
+	e: 'eraser',
+	r: 'rect',
+	o: 'ellipse',
+	l: 'line',
+	a: 'arrow',
+	t: 'text'
+};
 
 export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 	let ctx: CanvasRenderingContext2D;
@@ -36,6 +48,7 @@ export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 
 	let cursorX = $state(0);
 	let cursorY = $state(0);
+	let isDark = $state(theme.current === 'dark');
 
 	const offscreen: { canvas: HTMLCanvasElement | null; ctx: CanvasRenderingContext2D | null } = {
 		canvas: null,
@@ -51,7 +64,7 @@ export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 			camX: deps.camera.x,
 			camY: deps.camera.y,
 			zoom: deps.camera.zoom,
-			isDark: theme.current === 'dark',
+			isDark,
 			strokes: deps.scene.strokes,
 			shapes: deps.scene.shapes,
 			textLabels: deps.scene.labels,
@@ -74,6 +87,24 @@ export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 		needsRender = true;
 		if (frame === 0) frame = requestAnimationFrame(frameStep);
 	}
+
+	function resetView() {
+		deps.camera.reset();
+		scheduleRender();
+		deps.persist.schedule();
+	}
+
+	function zoomBy(factor: number) {
+		const rect = deps.canvas().getBoundingClientRect();
+		deps.camera.zoomAt(rect, rect.left + rect.width / 2, rect.top + rect.height / 2, factor);
+		scheduleRender();
+		deps.persist.schedule();
+	}
+
+	$effect(() => {
+		isDark = theme.current === 'dark';
+		scheduleRender();
+	});
 
 	function resize() {
 		const canvasEl = deps.canvas();
@@ -252,13 +283,28 @@ export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 			spaceHeld = true;
 			if (!isDrawing) deps.wrapper().style.cursor = 'grab';
 		}
-		if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-			e.preventDefault();
-			const undone = deps.scene.undo();
-			if (undone === 'shape' || undone === 'label') deps.snapCache.invalidate();
-			scheduleRender();
-			deps.persist.schedule();
+		if (e.ctrlKey || e.metaKey) {
+			if (e.key === '=' || e.key === '+') {
+				e.preventDefault();
+				zoomBy(1.2);
+			} else if (e.key === '-' || e.key === '_') {
+				e.preventDefault();
+				zoomBy(1 / 1.2);
+			} else if (e.key === '0') {
+				e.preventDefault();
+				resetView();
+			} else if (e.key === 'z' && !e.shiftKey) {
+				e.preventDefault();
+				const undone = deps.scene.undo();
+				if (undone === 'shape' || undone === 'label') deps.snapCache.invalidate();
+				scheduleRender();
+				deps.persist.schedule();
+			}
+			return;
 		}
+		if (e.altKey || e.repeat) return;
+		const next = TOOL_KEYS[e.key.toLowerCase()];
+		if (next) deps.setTool(next);
 	}
 
 	function keyUp(e: KeyboardEvent) {
@@ -289,6 +335,7 @@ export function createCanvasSurface(deps: CanvasSurfaceDeps) {
 		keyUp,
 		resize,
 		scheduleRender,
+		resetView,
 		stop,
 		get cursorX() {
 			return cursorX;

@@ -1,5 +1,20 @@
 import type { Point, Stroke, Shape, TextLabel } from './types';
 
+let gridColorCache: { isDark: boolean; value: string } | null = null;
+
+function gridColor(isDark: boolean): string {
+	if (gridColorCache?.isDark !== isDark) {
+		const token = getComputedStyle(document.documentElement)
+			.getPropertyValue('--color-canvas-grid')
+			.trim();
+		gridColorCache = {
+			isDark,
+			value: token || (isDark ? 'hsl(0 0% 100% / 12%)' : 'hsl(0 0% 25% / 10%)')
+		};
+	}
+	return gridColorCache.value;
+}
+
 export function drawGrid(
 	ctx: CanvasRenderingContext2D,
 	w: number,
@@ -15,19 +30,17 @@ export function drawGrid(
 	const startY = Math.floor(camY / step) * step;
 	const endX = camX + w / zoom;
 	const endY = camY + h / zoom;
+	const radius = 1 / zoom;
 
-	ctx.strokeStyle = isDark ? 'rgba(255,255,255,0.06)' : 'rgba(0,0,0,0.08)';
-	ctx.lineWidth = 1 / zoom;
+	ctx.fillStyle = gridColor(isDark);
 	ctx.beginPath();
 	for (let x = startX; x <= endX; x += step) {
-		ctx.moveTo(x, startY);
-		ctx.lineTo(x, endY);
+		for (let y = startY; y <= endY; y += step) {
+			ctx.moveTo(x + radius, y);
+			ctx.arc(x, y, radius, 0, Math.PI * 2);
+		}
 	}
-	for (let y = startY; y <= endY; y += step) {
-		ctx.moveTo(startX, y);
-		ctx.lineTo(endX, y);
-	}
-	ctx.stroke();
+	ctx.fill();
 }
 
 export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke) {

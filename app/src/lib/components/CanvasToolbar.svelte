@@ -1,157 +1,129 @@
 <script lang="ts">
-	import {
-		Pencil,
-		Eraser,
-		Square,
-		Circle,
-		Minus,
-		ArrowUpRight,
-		ZoomIn,
-		ZoomOut,
-		RotateCcw,
-		Hand,
-		Type
-	} from '@lucide/svelte';
+	import { Eraser, Hand, Pencil, Type } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
-	import type { Tool } from '$lib/canvas/types';
-	import { colorPresets } from '$lib/canvas/types';
-	import { swatchClass, toolButtonClass } from './canvas/control-classes';
+	import type { ShapeKind, Tool } from '$lib/canvas/types';
+	import { isShapeTool } from '$lib/canvas/types';
+	import CanvasPopover from './canvas/CanvasPopover.svelte';
+	import CanvasShapePicker from './canvas/CanvasShapePicker.svelte';
+	import CanvasStylePicker from './canvas/CanvasStylePicker.svelte';
+	import { colorButtonClass, toolButtonClass } from './canvas/control-classes';
+	import { shapeIcons, shapeLabels } from './canvas/shape-ui';
 
 	interface Props {
 		tool: Tool;
+		shape: ShapeKind;
 		penColor: string;
-		currentSize: number;
-		onSizeChange: (v: number) => void;
-		zoom: number;
-		onZoomIn: () => void;
-		onZoomOut: () => void;
-		onResetView: () => void;
+		size: number;
+		ontool: (tool: Tool) => void;
+		onshape: (shape: ShapeKind) => void;
+		onSizeChange: (size: number) => void;
 	}
 
 	let {
-		tool = $bindable(),
+		tool,
+		shape,
 		penColor = $bindable(),
-		currentSize,
-		onSizeChange,
-		zoom,
-		onZoomIn,
-		onZoomOut,
-		onResetView
+		size,
+		ontool,
+		onshape,
+		onSizeChange
 	}: Props = $props();
+
+	let open = $state<'shape' | 'style' | null>(null);
+
+	const ShapeIcon = $derived(shapeIcons[shape]);
+
+	function toggle(which: 'shape' | 'style') {
+		open = open === which ? null : which;
+	}
+
+	function pickShape(kind: ShapeKind) {
+		onshape(kind);
+		open = null;
+	}
 </script>
 
-{#snippet sep()}
-	<span class="mx-1 h-5 w-px shrink-0 bg-border"></span>
-{/snippet}
+<svelte:window onkeydown={(e) => e.key === 'Escape' && (open = null)} />
 
 <div
-	class="absolute bottom-4 left-1/2 z-10 flex max-w-[calc(100%-32px)] -translate-x-1/2 flex-wrap items-center justify-center gap-1.5 rounded-sm border border-border bg-background px-2.5 py-1.5 shadow-(--shadow-lg) select-none"
+	class="absolute bottom-4 left-1/2 z-10 flex -translate-x-1/2 items-center gap-0.5 rounded-full border border-border bg-background px-1.5 py-1 shadow-(--shadow-lg) select-none"
 >
-	<div class="flex shrink-0 items-center gap-0.5">
+	<button
+		class={toolButtonClass(tool === 'hand')}
+		onclick={() => ontool('hand')}
+		title={m.canvas_hand()}
+		aria-pressed={tool === 'hand'}
+	>
+		<Hand size={16} />
+	</button>
+	<button
+		class={toolButtonClass(tool === 'pen')}
+		onclick={() => ontool('pen')}
+		title={m.canvas_pen()}
+		aria-pressed={tool === 'pen'}
+	>
+		<Pencil size={16} />
+	</button>
+	<button
+		class={toolButtonClass(tool === 'eraser')}
+		onclick={() => ontool('eraser')}
+		title={m.canvas_eraser()}
+		aria-pressed={tool === 'eraser'}
+	>
+		<Eraser size={16} />
+	</button>
+
+	<div class="relative">
 		<button
-			class={toolButtonClass(tool === 'hand')}
-			onclick={() => (tool = 'hand')}
-			title={m.canvas_hand()}
+			class={toolButtonClass(isShapeTool(tool))}
+			onclick={() => toggle('shape')}
+			title={shapeLabels[shape]()}
+			aria-expanded={open === 'shape'}
+			aria-pressed={isShapeTool(tool)}
 		>
-			<Hand size={16} />
+			<ShapeIcon size={16} />
 		</button>
-		<button
-			class={toolButtonClass(tool === 'pen')}
-			onclick={() => (tool = 'pen')}
-			title={m.canvas_pen()}
-		>
-			<Pencil size={16} />
-		</button>
-		<button
-			class={toolButtonClass(tool === 'eraser')}
-			onclick={() => (tool = 'eraser')}
-			title={m.canvas_eraser()}
-		>
-			<Eraser size={16} />
-		</button>
-		{@render sep()}
-		<button
-			class={toolButtonClass(tool === 'rect')}
-			onclick={() => (tool = 'rect')}
-			title={m.canvas_rect()}
-		>
-			<Square size={16} />
-		</button>
-		<button
-			class={toolButtonClass(tool === 'ellipse')}
-			onclick={() => (tool = 'ellipse')}
-			title={m.canvas_ellipse()}
-		>
-			<Circle size={16} />
-		</button>
-		<button
-			class={toolButtonClass(tool === 'line')}
-			onclick={() => (tool = 'line')}
-			title={m.canvas_line()}
-		>
-			<Minus size={16} />
-		</button>
-		<button
-			class={toolButtonClass(tool === 'arrow')}
-			onclick={() => (tool = 'arrow')}
-			title={m.canvas_arrow()}
-		>
-			<ArrowUpRight size={16} />
-		</button>
-		<button
-			class={toolButtonClass(tool === 'text')}
-			onclick={() => (tool = 'text')}
-			title={m.canvas_text()}
-		>
-			<Type size={16} />
-		</button>
+		{#if open === 'shape'}
+			<CanvasPopover onclose={() => (open = null)}>
+				<CanvasShapePicker {shape} onselect={pickShape} />
+			</CanvasPopover>
+		{/if}
 	</div>
 
-	{@render sep()}
+	<button
+		class={toolButtonClass(tool === 'text')}
+		onclick={() => ontool('text')}
+		title={m.canvas_text()}
+		aria-pressed={tool === 'text'}
+	>
+		<Type size={16} />
+	</button>
 
-	<div class="flex shrink-0 items-center gap-0.75">
-		{#each colorPresets as c (c)}
-			<button
-				class={swatchClass(penColor === c)}
-				style:background={c}
-				onclick={() => (penColor = c)}
-				title={c}
-			></button>
-		{/each}
-	</div>
+	<span class="mx-1 h-5 w-px shrink-0 bg-border"></span>
 
-	{@render sep()}
-
-	<div class="flex shrink-0 items-center gap-1.5">
-		<label
-			class="min-w-8 shrink-0 text-right text-xs text-subtle-foreground"
-			for="canvas-size-slider">{currentSize}px</label
+	<div class="relative">
+		<button
+			class={colorButtonClass(open === 'style')}
+			onclick={() => toggle('style')}
+			title={m.canvas_color()}
+			aria-label={m.canvas_color()}
+			aria-expanded={open === 'style'}
 		>
-		<input
-			id="canvas-size-slider"
-			type="range"
-			min={tool === 'text' ? 8 : 1}
-			max={tool === 'eraser' ? 60 : tool === 'text' ? 72 : 30}
-			value={currentSize}
-			oninput={(e) => onSizeChange(Number(e.currentTarget.value))}
-			class="w-20 min-w-15 cursor-pointer accent-foreground"
-		/>
-	</div>
-
-	{@render sep()}
-
-	<div class="flex shrink-0 items-center gap-0.5">
-		<button class={toolButtonClass(false)} onclick={onZoomIn} title={m.canvas_zoom_in()}>
-			<ZoomIn size={14} />
+			<span
+				class="size-4.5 rounded-full shadow-[inset_0_0_0_1px_var(--color-border-strong)]"
+				style:background={penColor}
+			></span>
 		</button>
-		<span class="min-w-9 shrink-0 text-center text-xs text-subtle-foreground"
-			>{Math.round(zoom * 100)}%</span
-		>
-		<button class={toolButtonClass(false)} onclick={onZoomOut} title={m.canvas_zoom_out()}>
-			<ZoomOut size={14} />
-		</button>
-		<button class={toolButtonClass(false)} onclick={onResetView} title={m.canvas_reset_view()}>
-			<RotateCcw size={14} />
-		</button>
+		{#if open === 'style'}
+			<CanvasPopover onclose={() => (open = null)}>
+				<CanvasStylePicker
+					{tool}
+					color={penColor}
+					{size}
+					oncolor={(c) => (penColor = c)}
+					onsize={onSizeChange}
+				/>
+			</CanvasPopover>
+		{/if}
 	</div>
 </div>
