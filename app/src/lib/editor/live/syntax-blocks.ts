@@ -41,6 +41,10 @@ const blockMath: BlockParser = {
 		}
 		cx.addElement(cx.elt(BLOCK_MATH, from, cx.prevLineEnd(), marks));
 		return true;
+	},
+	endLeaf(cx, line) {
+		const text = line.text.slice(line.pos);
+		return FENCE.test(text) || ONELINE.test(text);
 	}
 };
 
@@ -54,6 +58,9 @@ const colonCallout: BlockParser = {
 		cx.nextLine();
 		cx.addElement(cx.elt(COLON_CALLOUT, from, to, [cx.elt(COLON_CALLOUT_MARK, from, to)]));
 		return true;
+	},
+	endLeaf(cx, line) {
+		return COLONS.test(line.text.slice(line.pos));
 	}
 };
 

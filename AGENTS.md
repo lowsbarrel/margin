@@ -93,6 +93,13 @@ hover row/column handles; Tab/Enter move between cells, and Escape leaves the
 table through a window listener because `+layout.svelte` swallows Escape in a
 capture-phase handler.
 
+Rich blocks (`callouts.ts`, `math.ts`, `mermaid.ts`, `embeds.ts`,
+`footnotes.ts`, styled by `live-blocks.css`): Obsidian `> [!type]` and legacy
+`:::type` callouts, KaTeX `$…$`/`$$…$$`, mermaid fences, `![[Note]]`/`![[file]]`
+embeds and footnotes. A replace decoration that spans a line break must come
+from a state field — a view plugin throws. A note embed mounts a second
+read-only view of the same extensions, bounded by `embedDepth`/`embedChain`.
+
 ## The vault on disk
 
 App state lives in `<vault>/.margin/`: `vault.id`, `settings.enc`,

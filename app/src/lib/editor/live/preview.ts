@@ -22,6 +22,7 @@ import {
 	touched,
 	touchedLines
 } from './decorate';
+import { mermaidOff } from './mermaid';
 import { ListMarkWidget, TaskWidget } from './widgets';
 import {
 	EMBED,
@@ -151,6 +152,7 @@ function build(state: EditorState): DecorationSet {
 				return;
 			}
 			if (name === 'FencedCode' || name === 'CodeBlock') {
+				if (mermaidOff(state, node, touchedSet)) return false;
 				codeBlockDecorations(state, ctx, touchedSet, node, ranges);
 				return false;
 			}
