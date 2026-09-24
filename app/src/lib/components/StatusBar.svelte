@@ -3,7 +3,6 @@
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
-	import { toast } from '$lib/stores/toast.svelte';
 	import { IconButton } from '$lib/ui';
 	import {
 		CloudOff,
@@ -11,7 +10,6 @@
 		Check,
 		CircleAlert,
 		Moon,
-		FileDown,
 		Link2,
 		FileCode,
 		SquareTerminal,
@@ -63,7 +61,6 @@
 		onterminal,
 		terminalActive = false
 	}: Props = $props();
-	let exporting = $state(false);
 
 	let syncChipClass = $derived(
 		editor.syncStatus === 'synced'
@@ -74,22 +71,6 @@
 					? 'bg-surface-2 text-destructive'
 					: 'bg-surface-2 text-muted-foreground'
 	);
-
-	async function handleExportPdf() {
-		const tiptap = editor.tiptap;
-		if (!tiptap || exporting) return;
-
-		exporting = true;
-		try {
-			const { exportPdf } = await import('$lib/utils/pdf-export');
-			await exportPdf(tiptap, m.statusbar_export_pdf_success());
-		} catch (err) {
-			console.error('PDF export failed:', err);
-			toast.error(m.toast_pdf_export_failed({ error: String(err) }));
-		} finally {
-			exporting = false;
-		}
-	}
 </script>
 
 <footer
@@ -105,7 +86,7 @@
 				active={sidebarOpen}
 			/>
 		{/if}
-		{#if editor.tiptap}
+		{#if editor.view}
 			{#if onsidebartoggle}
 				<span class="text-hairline">·</span>
 			{/if}
@@ -154,16 +135,7 @@
 			/>
 		{/if}
 
-		{#if editor.tiptap}
-			<IconButton
-				icon={exporting ? Loader : FileDown}
-				size="sm"
-				onclick={handleExportPdf}
-				title={m.statusbar_export_pdf()}
-			/>
-		{/if}
-
-		{#if onbacklinks && editor.tiptap}
+		{#if editor.view && onbacklinks}
 			<IconButton
 				icon={Link2}
 				size="sm"
@@ -173,7 +145,7 @@
 			/>
 		{/if}
 
-		{#if ontoggleviewmode && editor.tiptap}
+		{#if editor.view && ontoggleviewmode}
 			<IconButton
 				icon={FileCode}
 				size="sm"
@@ -183,7 +155,7 @@
 			/>
 		{/if}
 
-		{#if onhistory && editor.tiptap}
+		{#if editor.view && onhistory}
 			<IconButton
 				icon={History}
 				size="sm"

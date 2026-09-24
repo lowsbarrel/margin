@@ -48,10 +48,45 @@ A fact is defined once and imported everywhere else.
 | A shadcn-svelte primitive                   | `src/lib/components/ui/` via `shadcn-svelte add` |
 | Cross-component state                       | `src/lib/stores/<name>.svelte.ts`                |
 | A pure helper                               | `src/lib/utils/<name>.ts`                        |
-| Editor behaviour                            | `src/lib/editor/`                                |
+| Editor behaviour                            | `src/lib/editor/live/`                           |
 | Canvas behaviour                            | `src/lib/canvas/`                                |
 
 `src/lib/utils.ts` holds only the `cn` and type helpers shadcn imports by path.
+
+## The editor
+
+The note editor is one CodeMirror 6 view (`src/lib/editor/live/`). **The document
+is the file text, byte for byte** — no load transform, no save serializer:
+`EditorState.create({ doc: fileText })` in, `state.doc.toString()` out. Markdown
+renders through decorations only, so opening a note and typing one character
+changes exactly that character.
+
+Markup is hidden with replace decorations while the selection is elsewhere, and
+shown raw on the selection's lines (Obsidian's rule). Block widgets (images,
+rules) come from a `StateField` (`live/blocks.ts`) because CodeMirror refuses
+them from a view plugin; everything else lives in `live/preview.ts`. Syntax is
+`live/syntax.ts`, a `markdown()` parser with custom Lezer configs for
+`WikiLink`, `Embed`, `Highlight`, `Tag`, `InlineMath`, `BlockMath`,
+`ColonCallout` and `Frontmatter` — names wave-2 features match on.
+
+Adding a live-preview feature: write `src/lib/editor/live/<feature>.ts`
+exporting a CodeMirror `Extension` (or a factory returning one), then add it to
+the flat `previewExtensions` list in `live/extensions.ts` (switched off wholesale
+in raw Markdown mode) or to `baseExtensions` if it must survive the mode switch.
+Read the editor's surroundings from the context facet instead of importing the
+component:
+
+```ts
+import { contextOf } from './context';
+const ctx = contextOf(view.state); // vaultPath(), notePath(), attachmentFolder(),
+// exists(relPath), findByName(name), openLightbox(src, alt), openWikiLink(title),
+// openContextMenu(x, y, items), code (lowlight highlighter)
+```
+
+`resolve.ts` turns Markdown destinations into vault paths (note folder → vault
+root → attachment folder, `![[name]]` → attachment folder → vault-wide index):
+reuse it instead of resolving paths again. CodeMirror packages load through
+dynamic `import()` from `components/Editor.svelte`.
 
 ## The vault on disk
 
@@ -84,7 +119,8 @@ sync and export skips hidden paths.
 - User-facing strings go through Paraglide. Both `en` and `it` are maintained;
   a key added to one and not the other falls back silently.
 - `{@html}` is XSS on note content. Nothing is allowlisted: notes reach the DOM
-  through ProseMirror, the AI answer through markdown-it with raw HTML off.
+  through CodeMirror decorations (raw HTML stays source text), the AI answer
+  through markdown-it with raw HTML off.
 - The configured AI endpoint is the one place note text leaves the machine
   unencrypted, and only because the user asked a question there. The agent
   loop reads its key from Rust state.
