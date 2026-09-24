@@ -26,6 +26,7 @@ export {
 
 export const markdownSyntax = markdown({
 	base: markdownLanguage,
+	addKeymap: false,
 	extensions: [
 		GFM,
 		WikiLink,

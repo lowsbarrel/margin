@@ -1,4 +1,4 @@
-import { defaultKeymap, history, historyKeymap } from '@codemirror/commands';
+import { defaultKeymap, historyKeymap } from '@codemirror/commands';
 import { markdownKeymap } from '@codemirror/lang-markdown';
 import type { ChangeSpec, EditorState, Line } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
@@ -8,6 +8,21 @@ import { emptyRow, serializeTable, tableAt, type Align, type TableModel } from '
 const HEADING = /^(#{1,6})[ \t]+/;
 const MARKER = /^([ \t]*)(?:([-*+])|(\d+[.)]))([ \t]+)(\[[ xX]\][ \t]+)?/;
 const LIST_ITEM = /^[ \t]*(?:[-*+]|\d+[.)])[ \t]/;
+const EMPTY_QUOTE = /^[ \t]*(?:>[ \t]?)+$/;
+
+function exitEmptyQuote(view: EditorView): boolean {
+	const range = view.state.selection.main;
+	if (!range.empty) return false;
+	const line = view.state.doc.lineAt(range.head);
+	if (range.head !== line.to || !EMPTY_QUOTE.test(line.text)) return false;
+	// A line right after a quote is a lazy continuation, so leaving it needs a blank line.
+	view.dispatch({
+		changes: { from: line.from, to: line.to, insert: '\n' },
+		selection: { anchor: line.from + 1 },
+		scrollIntoView: true
+	});
+	return true;
+}
 
 type ListKind = 'bullet' | 'ordered' | 'task';
 
@@ -185,12 +200,11 @@ export const liveKeymap = keymap.of([
 	{ key: 'Mod-6', run: (view) => toggleHeading(view, 6) },
 	{ key: 'Tab', run: (view) => indentList(view, false) },
 	{ key: 'Shift-Tab', run: (view) => indentList(view, true) },
+	{ key: 'Enter', run: exitEmptyQuote },
 	...markdownKeymap,
 	...defaultKeymap,
 	...historyKeymap
 ]);
-
-export const liveHistory = history();
 
 function tableCommand(
 	view: EditorView,
