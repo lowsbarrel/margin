@@ -2,6 +2,7 @@ import { syntaxTree } from '@codemirror/language';
 import type { SyntaxNode } from '@lezer/common';
 import type { EditorState } from '@codemirror/state';
 import { ViewPlugin, type EditorView } from '@codemirror/view';
+import type TurndownService from 'turndown';
 import { insertPastedFiles } from './attachments';
 import { captureSelection, insertText } from './insert';
 import { toast } from '$lib/stores/toast.svelte';
@@ -60,6 +61,28 @@ function isCodeEditorHtml(html: string): boolean {
 	});
 }
 
+const BLOCK_LEAD = /^([ \t]{0,3})(-{2,}|={2,}|#{1,6}|[-+*]|\d+[.)]|>)(?=[ \t]|$)/gm;
+
+function escapeMarkdown(text: string): string {
+	return text.replace(/\\/g, '\\\\').replace(BLOCK_LEAD, '$1\\$2');
+}
+
+function listItemRule(
+	content: string,
+	item: HTMLElement,
+	options: TurndownService.Options
+): string {
+	const indented = content.replace(/^\n+/, '').replace(/\n+$/, '\n').replace(/\n/gm, '\n    ');
+	const parent = item.parentNode as HTMLElement | null;
+	let prefix = `${options.bulletListMarker} `;
+	if (parent?.nodeName === 'OL') {
+		const start = parent.getAttribute('start');
+		const index = Array.prototype.indexOf.call(parent.children, item);
+		prefix = `${start ? Number(start) + index : index + 1}. `;
+	}
+	return prefix + indented + (item.nextSibling && !/\n$/.test(indented) ? '\n' : '');
+}
+
 async function htmlToMarkdown(html: string): Promise<string> {
 	const [{ default: TurndownService }, { gfm }] = await Promise.all([
 		import('turndown'),
@@ -70,9 +93,12 @@ async function htmlToMarkdown(html: string): Promise<string> {
 		hr: '---',
 		bulletListMarker: '-',
 		codeBlockStyle: 'fenced',
-		emDelimiter: '*'
+		emDelimiter: '*',
+		strongDelimiter: '**'
 	});
 	service.use(gfm);
+	service.addRule('listItem', { filter: 'li', replacement: listItemRule });
+	service.escape = escapeMarkdown;
 	return service.turndown(html);
 }
 
