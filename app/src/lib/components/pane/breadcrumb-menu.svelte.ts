@@ -22,6 +22,7 @@ export class BreadcrumbMenu {
 	matches = $state<TreeEntry[]>([]);
 	filter = $state('');
 	focus = $state(0);
+	keyboard = $state(false);
 	expanded = new SvelteSet<string>();
 
 	open = $derived(this.index !== null);
@@ -42,8 +43,10 @@ export class BreadcrumbMenu {
 	async list(path: string): Promise<void> {
 		this.#listPath = path;
 		this.title = path.slice(path.lastIndexOf('/') + 1);
-		this.rows = (await this.#fetch()) ?? [];
-		this.focus = 0;
+		const rows = (await this.#fetch()) ?? [];
+		this.rows = rows;
+		const preferred = rows.findIndex((row) => row.path === this.source);
+		this.focus = preferred >= 0 ? preferred : 0;
 	}
 
 	close(): void {

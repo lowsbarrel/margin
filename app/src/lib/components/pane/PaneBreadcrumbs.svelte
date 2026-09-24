@@ -54,8 +54,9 @@
 		}
 	}
 
-	async function toggle(index: number, crumb: Breadcrumb) {
+	async function toggle(index: number, crumb: Breadcrumb, event: MouseEvent) {
 		if (menu.index === index) return focusAnchor(false);
+		menu.keyboard = event.detail === 0;
 		const listPath = crumb.isDir ? crumb.path : crumb.path.slice(0, crumb.path.lastIndexOf('/'));
 		await menu.show(index, listPath, path);
 		await place();
@@ -77,26 +78,32 @@
 		}
 		if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.moveFocus(event.key === 'ArrowDown' ? 1 : -1);
 		}
 		if (event.key === 'ArrowRight') {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.right();
 		}
 		if (event.key === 'ArrowLeft') {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.left();
 		}
 		if (event.key === 'Enter') {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.activate(paneIndex);
 		}
 		if (event.key === 'Backspace') {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.backspace();
 		}
 		if (event.key.length === 1 && !event.metaKey && !event.ctrlKey && !event.altKey) {
 			event.preventDefault();
+			menu.keyboard = true;
 			return menu.type(event.key);
 		}
 	}
@@ -113,7 +120,7 @@
 			: focused
 				? `${base} bg-surface-3 text-foreground`
 				: `${base} font-normal text-muted-foreground hover:bg-surface-3 hover:text-foreground`;
-		return focused ? `${row} is-focused` : row;
+		return focused && menu.keyboard ? `${row} is-focused` : row;
 	}
 </script>
 
@@ -147,7 +154,7 @@
 					aria-haspopup="tree"
 					aria-label={m.breadcrumb_browse({ name: crumb.label })}
 					aria-expanded={menu.index === i}
-					onclick={() => toggle(i, crumb)}
+					onclick={(event) => toggle(i, crumb, event)}
 				>
 					{crumb.label}
 				</button>
@@ -195,8 +202,12 @@
 					aria-expanded={row.is_dir ? open : undefined}
 					class={rowClass(active, i === menu.focus)}
 					style="padding-left: {row.depth * 14 + 6}px;"
-					onmouseenter={() => (menu.focus = i)}
+					onmouseenter={() => {
+						menu.focus = i;
+						menu.keyboard = false;
+					}}
 					onclick={() => {
+						menu.keyboard = false;
 						menu.focus = i;
 						return menu.activate(paneIndex);
 					}}
