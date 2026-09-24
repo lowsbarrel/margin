@@ -26,7 +26,7 @@
 		handleWikiLink,
 		handleLogout
 	} from '$lib/utils/page-actions';
-	import { executeDrop, startDividerDrag } from '$lib/utils/tab-drag';
+	import { executeDrop, executeStripDrop, startDividerDrag } from '$lib/utils/tab-drag';
 	import { runManualSync } from '$lib/sync/s3sync';
 	import {
 		shellLayout,
@@ -257,7 +257,9 @@
 	}}
 	onmouseup={async () => {
 		if (drag.active) {
-			if (dropTarget) {
+			if (drag.stripTarget) {
+				await executeStripDrop(drag.stripTarget);
+			} else if (dropTarget) {
 				await executeDrop(dropTarget);
 			} else if (drag.item?.kind === 'file' && !drag.item.isDir) {
 				drag.requestInsertAtCoords(drag.item.path, drag.x, drag.y);
