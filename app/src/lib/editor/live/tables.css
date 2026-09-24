@@ -1,0 +1,194 @@
+.cm-editor .cm-lp-table-block {
+	margin: 0.5em 0;
+	line-height: 1.5;
+}
+
+.cm-editor .cm-lp-table-scroll {
+	overflow-x: auto;
+	margin: -17px 0 0 -17px;
+	padding: 17px 20px 20px 17px;
+}
+
+.cm-editor .cm-lp-table-inner {
+	position: relative;
+	display: inline-block;
+	min-width: 100%;
+}
+
+.cm-editor .cm-lp-table-grid {
+	width: 100%;
+	border-collapse: collapse;
+	font-size: 0.95em;
+}
+
+.cm-editor .cm-lp-table-cell {
+	position: relative;
+	border: 1px solid var(--color-border-secondary);
+	padding: 0.3em 0.6em;
+	vertical-align: top;
+	min-width: 3em;
+	overflow-wrap: normal;
+	word-break: normal;
+}
+
+.cm-editor .cm-lp-table-grid thead .cm-lp-table-cell {
+	background: var(--color-bg-secondary);
+	font-weight: 600;
+}
+
+.cm-editor .cm-lp-table-grid tbody tr:nth-child(even) .cm-lp-table-cell {
+	background: var(--color-bg-secondary);
+}
+
+.cm-editor .cm-lp-table-grid tbody tr:hover .cm-lp-table-cell {
+	background: var(--color-bg-hover);
+}
+
+.cm-editor .cm-lp-table-handle {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 16px;
+	height: 16px;
+	padding: 0;
+	border: none;
+	background: transparent;
+	color: var(--color-text-tertiary);
+	opacity: 0;
+	cursor: grab;
+	transition: opacity 0.12s ease;
+}
+
+.cm-editor .cm-lp-table-handle-row {
+	left: -17px;
+	top: calc(50% - 8px);
+}
+
+.cm-editor .cm-lp-table-handle-column {
+	left: calc(50% - 8px);
+	top: -17px;
+}
+
+.cm-editor .cm-lp-table-handle::before {
+	content: '';
+	width: 10px;
+	height: 10px;
+	background-image: radial-gradient(currentColor 1.1px, transparent 1.2px);
+	background-size: 5px 5px;
+}
+
+.cm-editor .cm-lp-table-handle:hover {
+	color: var(--color-text-primary);
+}
+
+.cm-editor .cm-lp-table-block:hover .cm-lp-table-handle,
+.cm-editor .cm-lp-table-scroll:focus-within .cm-lp-table-handle {
+	opacity: 1;
+}
+
+.cm-editor .cm-lp-table-add {
+	position: absolute;
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 18px;
+	padding: 0;
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-xs);
+	background: var(--color-bg-primary);
+	color: var(--color-text-tertiary);
+	font-size: 13px;
+	line-height: 1;
+	opacity: 0;
+	cursor: pointer;
+	transition: opacity 0.12s ease;
+}
+
+.cm-editor .cm-lp-table-add:hover {
+	color: var(--color-text-primary);
+	border-color: var(--color-border-strong);
+}
+
+.cm-editor .cm-lp-table-add-row {
+	left: 0;
+	bottom: -20px;
+}
+
+.cm-editor .cm-lp-table-add-col {
+	right: -20px;
+	top: 0;
+}
+
+.cm-editor .cm-lp-table-block:hover .cm-lp-table-add,
+.cm-editor .cm-lp-table-scroll:focus-within .cm-lp-table-add {
+	opacity: 1;
+}
+
+.cm-editor .cm-lp-table-drop {
+	position: absolute;
+	display: none;
+	background: var(--color-border-focus);
+	pointer-events: none;
+	z-index: 2;
+}
+
+.cm-editor .cm-lp-table-drop[data-axis='row'] {
+	left: 0;
+	right: 0;
+	height: 3px;
+}
+
+.cm-editor .cm-lp-table-drop[data-axis='column'] {
+	top: -14px;
+	bottom: -18px;
+	width: 3px;
+}
+
+.cm-editor .cm-lp-table-drop::before {
+	content: '';
+	position: absolute;
+	width: 7px;
+	height: 7px;
+	border-radius: var(--radius-full);
+	background: var(--color-border-focus);
+}
+
+.cm-editor .cm-lp-table-drop[data-axis='row']::before {
+	left: -3px;
+	top: -2px;
+}
+
+.cm-editor .cm-lp-table-drop[data-axis='column']::before {
+	top: -3px;
+	left: -2px;
+}
+
+.cm-editor .cm-lp-table-raw {
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	background: var(--color-bg-secondary);
+	border-left: 1px solid var(--color-border-secondary);
+	border-right: 1px solid var(--color-border-secondary);
+	padding-left: 0.7em;
+	padding-right: 0.7em;
+}
+
+.cm-editor .cm-lp-table-raw-first {
+	border-top: 1px solid var(--color-border-secondary);
+	border-top-left-radius: var(--radius-sm);
+	border-top-right-radius: var(--radius-sm);
+	padding-top: 0.35em;
+}
+
+.cm-editor .cm-lp-table-raw-last {
+	border-bottom: 1px solid var(--color-border-secondary);
+	border-bottom-left-radius: var(--radius-sm);
+	border-bottom-right-radius: var(--radius-sm);
+	padding-bottom: 0.35em;
+}
+
+.cm-editor .cm-lp-table-raw-delim {
+	color: var(--color-text-tertiary);
+}

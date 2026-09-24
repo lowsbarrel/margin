@@ -1,130 +1,90 @@
 <script lang="ts">
-	import { onDestroy } from 'svelte';
-	import type { Editor } from '@tiptap/core';
-	import { ChevronDown, ChevronUp, X, Replace, ReplaceAll, CaseSensitive } from '@lucide/svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { CaseSensitive, ChevronDown, ChevronUp, Replace, ReplaceAll, X } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
+	import type { EditorView } from '@codemirror/view';
 
 	interface Props {
-		editor: Editor | null;
-		showReplace?: boolean;
+		view: EditorView;
+		showReplace: boolean;
+		ontogglereplace: () => void;
 		onclose: () => void;
 	}
 
-	let { editor, showReplace = false, onclose }: Props = $props();
+	let { view, showReplace, ontogglereplace, onclose }: Props = $props();
 
+	type FindApi = typeof import('$lib/editor/live/find');
+
+	let api: FindApi | null = null;
 	let searchInput = $state<HTMLInputElement | null>(null);
-	let replaceVisible = $derived(showReplace);
 	let searchValue = $state('');
 	let replaceValue = $state('');
 	let caseSensitive = $state(false);
-	let totalMatches = $state(0);
-	let currentIndex = $state(0);
+	let stats = $state({ total: 0, index: 0 });
+	let stopWatch: (() => void) | null = null;
 
-	function syncMatchState() {
-		const storage = editor?.storage.searchReplace;
-		if (storage) {
-			totalMatches = storage.totalMatches ?? 0;
-			currentIndex = storage.currentIndex ?? 0;
-		} else {
-			totalMatches = 0;
-			currentIndex = 0;
-		}
+	function refresh() {
+		if (api) stats = api.findState(view);
 	}
 
-	$effect(() => {
-		if (searchInput) {
-			searchInput.focus();
-			searchInput.select();
-		}
-	});
-
-	$effect(() => {
-		const ed = editor;
-		if (!ed) {
-			totalMatches = 0;
-			currentIndex = 0;
-			return;
-		}
-		syncMatchState();
-		ed.on('transaction', syncMatchState);
-		return () => {
-			ed.off('transaction', syncMatchState);
-		};
-	});
-
-	let searchDebounceTimer: ReturnType<typeof setTimeout>;
-
-	function handleSearchInput() {
-		clearTimeout(searchDebounceTimer);
-		searchDebounceTimer = setTimeout(() => {
-			if (!editor) return;
-			editor.commands.setSearchTerm(searchValue);
-			syncMatchState();
-		}, 100);
+	function apply() {
+		api?.setFindQuery(view, { search: searchValue, replace: replaceValue, caseSensitive });
+		refresh();
 	}
 
-	function handleReplaceInput() {
-		if (!editor) return;
-		editor.commands.setReplaceTerm(replaceValue);
-	}
-
-	function toggleCaseSensitive() {
-		caseSensitive = !caseSensitive;
-		if (!editor) return;
-		editor.commands.setCaseSensitive(caseSensitive);
-		syncMatchState();
-	}
-
-	function findNext() {
-		if (!editor) return;
-		editor.commands.findNext();
-		syncMatchState();
-	}
-
-	function findPrev() {
-		if (!editor) return;
-		editor.commands.findPrev();
-		syncMatchState();
+	function step(backwards: boolean) {
+		if (backwards) api?.findPreviousMatch(view);
+		else api?.findNextMatch(view);
+		refresh();
 	}
 
 	function replaceCurrent() {
-		if (!editor) return;
-		editor.commands.setReplaceTerm(replaceValue);
-		editor.commands.replaceCurrent();
-		syncMatchState();
+		api?.replaceCurrentMatch(view);
+		refresh();
 	}
 
-	function replaceAll() {
-		if (!editor) return;
-		editor.commands.setReplaceTerm(replaceValue);
-		editor.commands.replaceAll();
-		syncMatchState();
+	function replaceEvery() {
+		api?.replaceEveryMatch(view);
+		refresh();
 	}
 
 	function close() {
-		clearTimeout(searchDebounceTimer);
-		if (editor) {
-			editor.commands.clearSearch();
-		}
+		stopWatch?.();
+		stopWatch = null;
+		api?.closeFind(view);
 		onclose();
 	}
 
-	onDestroy(() => {
-		clearTimeout(searchDebounceTimer);
-	});
-
-	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Escape') {
-			e.preventDefault();
+	function handleKeydown(event: KeyboardEvent) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
 			close();
-		} else if (e.key === 'Enter' && !e.shiftKey) {
-			e.preventDefault();
-			findNext();
-		} else if (e.key === 'Enter' && e.shiftKey) {
-			e.preventDefault();
-			findPrev();
+		} else if (event.key === 'Enter') {
+			event.preventDefault();
+			step(event.shiftKey);
 		}
 	}
+
+	onMount(() => {
+		let alive = true;
+		void (async () => {
+			const mod = await import('$lib/editor/live/find');
+			if (!alive) return;
+			api = mod;
+			mod.openFind(view);
+			stopWatch = mod.watchFind(view, refresh);
+			searchInput?.focus();
+			searchInput?.select();
+		})();
+		return () => {
+			alive = false;
+		};
+	});
+
+	onDestroy(() => {
+		stopWatch?.();
+		stopWatch = null;
+	});
 </script>
 
 <!-- svelte-ignore a11y_no_static_element_interactions -->
@@ -137,7 +97,7 @@
 			<input
 				bind:this={searchInput}
 				bind:value={searchValue}
-				oninput={handleSearchInput}
+				oninput={apply}
 				class="flex-1 border-none bg-transparent px-2 py-1 font-sans text-sm text-foreground caret-foreground outline-none placeholder:text-subtle-foreground"
 				placeholder={m.find_placeholder()}
 				spellcheck="false"
@@ -146,15 +106,18 @@
 				class="mr-0.5 flex size-6 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out hover:text-foreground {caseSensitive
 					? 'bg-surface-2 text-accent-foreground'
 					: ''}"
-				onclick={toggleCaseSensitive}
+				onclick={() => {
+					caseSensitive = !caseSensitive;
+					apply();
+				}}
 				title={m.find_case_sensitive()}
 			>
 				<CaseSensitive size={14} />
 			</button>
 		</div>
 		<span class="min-w-12.5 text-center text-xs whitespace-nowrap text-subtle-foreground">
-			{#if searchValue && totalMatches > 0}
-				{currentIndex + 1} / {totalMatches}
+			{#if searchValue && stats.total > 0}
+				{stats.index} / {stats.total}
 			{:else if searchValue}
 				{m.find_no_results()}
 			{/if}
@@ -162,25 +125,25 @@
 		<div class="flex gap-0.5">
 			<button
 				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-				onclick={findPrev}
+				onclick={() => step(true)}
 				title={m.find_previous()}
-				disabled={totalMatches === 0}
+				disabled={stats.total === 0}
 			>
 				<ChevronUp size={16} />
 			</button>
 			<button
 				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-				onclick={findNext}
+				onclick={() => step(false)}
 				title={m.find_next()}
-				disabled={totalMatches === 0}
+				disabled={stats.total === 0}
 			>
 				<ChevronDown size={16} />
 			</button>
 			<button
-				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {replaceVisible
+				class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30 {showReplace
 					? 'bg-surface-2 text-foreground'
 					: ''}"
-				onclick={() => (replaceVisible = !replaceVisible)}
+				onclick={ontogglereplace}
 				title={m.find_toggle_replace()}
 			>
 				<Replace size={14} />
@@ -195,12 +158,12 @@
 		</div>
 	</div>
 
-	{#if replaceVisible}
+	{#if showReplace}
 		<div class="flex items-center gap-1.5">
 			<div class="flex flex-1 items-center overflow-hidden">
 				<input
 					bind:value={replaceValue}
-					oninput={handleReplaceInput}
+					oninput={apply}
 					class="flex-1 border-none bg-transparent px-2 py-1 font-sans text-sm text-foreground caret-foreground outline-none placeholder:text-subtle-foreground"
 					placeholder={m.find_replace_placeholder()}
 					spellcheck="false"
@@ -211,15 +174,15 @@
 					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
 					onclick={replaceCurrent}
 					title={m.find_replace()}
-					disabled={totalMatches === 0}
+					disabled={stats.total === 0}
 				>
 					<Replace size={14} />
 				</button>
 				<button
 					class="flex size-6.5 items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-120 ease-out enabled:hover:bg-surface-3 enabled:hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
-					onclick={replaceAll}
+					onclick={replaceEvery}
 					title={m.find_replace_all()}
-					disabled={totalMatches === 0}
+					disabled={stats.total === 0}
 				>
 					<ReplaceAll size={14} />
 				</button>

@@ -48,10 +48,60 @@ A fact is defined once and imported everywhere else.
 | A shadcn-svelte primitive                   | `src/lib/components/ui/` via `shadcn-svelte add` |
 | Cross-component state                       | `src/lib/stores/<name>.svelte.ts`                |
 | A pure helper                               | `src/lib/utils/<name>.ts`                        |
-| Editor behaviour                            | `src/lib/editor/`                                |
+| Editor behaviour                            | `src/lib/editor/live/`                           |
 | Canvas behaviour                            | `src/lib/canvas/`                                |
 
 `src/lib/utils.ts` holds only the `cn` and type helpers shadcn imports by path.
+
+## The editor
+
+The note editor is one CodeMirror 6 view (`src/lib/editor/live/`). **The document
+is the file text, byte for byte** — no load transform, no save serializer:
+`EditorState.create({ doc: fileText })` in, `state.doc.toString()` out, so typing
+one character changes exactly that character. Markdown renders through
+decorations only: markup is hidden while the selection is elsewhere and shown raw
+on the selection's lines (Obsidian's rule). Read-only views (an embed card, an
+Ask answer) never reveal syntax — `touchedLines` returns nothing under the
+`staticPreview` facet.
+
+Adding a live-preview feature: write `src/lib/editor/live/<feature>.ts`
+exporting a CodeMirror `Extension` (or a factory returning one), then register it
+in the flat `previewExtensions` list in `live/extensions.ts` (switched off
+wholesale in raw Markdown mode) or in `baseExtensions` if it must survive the
+mode switch. Only a `StateField` may place a block widget (`live/blocks.ts`
+covers images and rules) or replace a line break; a view plugin throws. Syntax is
+`live/syntax.ts`, a `markdown()` parser with custom Lezer configs for
+`WikiLink`, `Embed`, `Highlight`, `Tag`, `InlineMath`, `BlockMath`,
+`ColonCallout` and `Frontmatter` — the names features match on.
+
+Read the view's surroundings from the context facet instead of importing the
+component:
+
+```ts
+import { contextOf } from './context';
+const ctx = contextOf(view.state); // vaultPath(), notePath(), attachmentFolder(),
+// exists(relPath), findByName(name), openLightbox(src, alt), openWikiLink(title),
+// openContextMenu(x, y, items), code (lowlight highlighter)
+```
+
+`live/preview.ts` renders inline syntax, `live/commands.ts` holds the edits,
+`live/context-menu.ts` builds the right-click menu (including the table
+operations), and CodeMirror packages load through dynamic `import()` from
+`components/Editor.svelte`. `live/resolve.ts` turns Markdown destinations into
+vault paths (note folder → vault root → attachment folder, `![[name]]` →
+attachment folder → vault-wide index) and waits for the file index instead of
+guessing a relative path; reuse it rather than resolving paths again.
+`live/escape.ts` arbitrates Escape — the app swallows the key in a capture-phase
+handler, so completion, find, bubble and tables each register with `onEscape` and
+exactly one answers.
+
+GFM tables (`live/tables.ts` + `table-*.ts`) render as a block widget with hover
+row/column handles; Tab and Enter move between cells. Rich blocks
+(`callouts.ts`, `math.ts`, `mermaid.ts`, `embeds.ts`, `footnotes.ts`, styled by
+`live-blocks.css`) cover Obsidian `> [!type]` and legacy `:::type` callouts,
+KaTeX `$…$`/`$$…$$`, mermaid fences, `![[Note]]`/`![[file]]` embeds and
+footnotes. A note embed mounts a second read-only view of the same extensions,
+bounded by `embedDepth`/`embedChain`.
 
 ## The vault on disk
 
@@ -84,7 +134,8 @@ sync and export skips hidden paths.
 - User-facing strings go through Paraglide. Both `en` and `it` are maintained;
   a key added to one and not the other falls back silently.
 - `{@html}` is XSS on note content. Nothing is allowlisted: notes reach the DOM
-  through ProseMirror, the AI answer through markdown-it with raw HTML off.
+  through CodeMirror decorations (raw HTML stays source text), the AI answer
+  through markdown-it with raw HTML off.
 - The configured AI endpoint is the one place note text leaves the machine
   unencrypted, and only because the user asked a question there. The agent
   loop reads its key from Rust state.

@@ -1,51 +1,46 @@
 import { editor } from '$lib/stores/editor.svelte';
-import type { Editor } from '@tiptap/core';
+import type { EditorView } from '@codemirror/view';
 
 let pendingText = $state<string | null>(null);
 
-export function scrollEditorToText(searchText: string): void {
-	const tiptap = editor.tiptap;
-	if (!tiptap?.state?.doc) {
-		pendingText = searchText;
-		return;
-	}
-	scrollToText(tiptap, searchText);
-}
-
-function scrollToText(tiptap: Editor, searchText: string): void {
-	const doc = tiptap.state.doc;
-	let targetPos = -1;
-	doc.descendants((node, pos) => {
-		if (targetPos >= 0) return false;
-		if (node.isText && node.text?.includes(searchText)) {
-			targetPos = pos + node.text.indexOf(searchText);
-			return false;
-		}
-	});
-	if (targetPos < 0) return;
-	tiptap.commands.setTextSelection(targetPos);
-	try {
-		const view = tiptap.view;
-		const coords = view.coordsAtPos(targetPos);
-		const scrollContainer = view.dom.closest('.editor-container');
-		if (scrollContainer && coords) {
+function scrollToText(view: EditorView, searchText: string): void {
+	const text = view.state.doc.toString();
+	const at = text.indexOf(searchText);
+	if (at < 0) return;
+	view.dispatch({ selection: { anchor: at, head: at + searchText.length } });
+	const scrollContainer = view.dom.closest('.editor-container');
+	if (!scrollContainer) return;
+	// A frame later: setting the selection reveals raw Markdown on the matched lines, which changes the line heights the centring depends on.
+	requestAnimationFrame(() => {
+		try {
+			const coords = view.coordsAtPos(at);
+			if (!coords) return;
 			const rect = scrollContainer.getBoundingClientRect();
 			const relativeTop = coords.top - rect.top + scrollContainer.scrollTop;
 			scrollContainer.scrollTo({
-				top: relativeTop - rect.height / 2,
+				top: Math.max(0, relativeTop - rect.height / 2),
 				behavior: 'smooth'
 			});
-		}
-	} catch {}
+		} catch {}
+	});
+}
+
+export function scrollEditorToText(searchText: string): void {
+	const view = editor.view;
+	if (!view) {
+		pendingText = searchText;
+		return;
+	}
+	scrollToText(view, searchText);
 }
 
 export function initPendingScroll(): void {
 	$effect(() => {
-		const tiptap = editor.tiptap;
+		const view = editor.view;
 		const text = pendingText;
-		if (tiptap?.state?.doc && text) {
+		if (view && text) {
 			pendingText = null;
-			scrollToText(tiptap, text);
+			scrollToText(view, text);
 		}
 	});
 }

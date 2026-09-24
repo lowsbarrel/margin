@@ -1,0 +1,361 @@
+.cm-editor .cm-lp-callout {
+	border-left: 3px solid var(--callout-accent, var(--color-border-secondary));
+	background: color-mix(in srgb, var(--callout-accent, transparent) 7%, transparent);
+	padding: 0 1rem;
+}
+
+.cm-editor .cm-lp-callout-note {
+	--callout-accent: var(--color-callout-note);
+}
+.cm-editor .cm-lp-callout-info {
+	--callout-accent: var(--color-callout-info);
+}
+.cm-editor .cm-lp-callout-tip {
+	--callout-accent: var(--color-callout-tip);
+}
+.cm-editor .cm-lp-callout-success {
+	--callout-accent: var(--color-callout-success);
+}
+.cm-editor .cm-lp-callout-question {
+	--callout-accent: var(--color-callout-question);
+}
+.cm-editor .cm-lp-callout-warning {
+	--callout-accent: var(--color-callout-warning);
+}
+.cm-editor .cm-lp-callout-failure {
+	--callout-accent: var(--color-callout-failure);
+}
+.cm-editor .cm-lp-callout-danger {
+	--callout-accent: var(--color-callout-danger);
+}
+.cm-editor .cm-lp-callout-bug {
+	--callout-accent: var(--color-callout-bug);
+}
+.cm-editor .cm-lp-callout-example {
+	--callout-accent: var(--color-callout-example);
+}
+.cm-editor .cm-lp-callout-quote {
+	--callout-accent: var(--color-callout-quote);
+}
+
+.cm-editor .cm-lp-callout.cm-lp-quote {
+	border-left-color: var(--callout-accent);
+	color: var(--color-text-primary);
+	padding-left: 1rem;
+}
+
+.cm-editor .cm-lp-callout-first {
+	border-top: 1px solid var(--color-border-secondary);
+	border-top-left-radius: var(--radius-sm);
+	border-top-right-radius: var(--radius-sm);
+	padding-top: 0.55em;
+	font-weight: 600;
+}
+
+.cm-editor .cm-lp-callout-last {
+	border-bottom: 1px solid var(--color-border-secondary);
+	border-bottom-left-radius: var(--radius-sm);
+	border-bottom-right-radius: var(--radius-sm);
+	padding-bottom: 0.55em;
+}
+
+.cm-editor .cm-lp-callout-head {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.35em;
+}
+
+.cm-editor .cm-lp-callout-svg {
+	width: 1.05em;
+	height: 1.05em;
+	flex: none;
+	color: var(--callout-accent, var(--color-text-secondary));
+}
+
+.cm-editor .cm-lp-callout-label {
+	color: var(--callout-accent, var(--color-text-secondary));
+}
+
+.cm-editor .cm-lp-callout-fold {
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	background: none;
+	padding: 0;
+	margin: 0;
+	color: var(--color-text-tertiary);
+	cursor: pointer;
+}
+
+.cm-editor .cm-lp-callout-fold:hover {
+	color: var(--color-text-primary);
+}
+
+.cm-editor .cm-lp-callout-chevron {
+	width: 0.8em;
+	height: 0.8em;
+	transition: transform var(--transition-fast);
+}
+
+.cm-editor .cm-lp-callout-chevron-open {
+	transform: rotate(90deg);
+}
+
+.cm-editor .cm-lp-block-line {
+	font-size: 0;
+	line-height: 0;
+	overflow: hidden;
+}
+
+.cm-editor .cm-lp-math-inline {
+	padding: 0 0.1em;
+}
+
+.cm-editor .cm-lp-math-block {
+	display: flex;
+	justify-content: center;
+	padding: 0.4em 0;
+	margin: 0.1em 0;
+	overflow-x: auto;
+	font-size: 1.05em;
+}
+
+.cm-editor .cm-lp-math-content {
+	min-width: 0;
+}
+
+/* KaTeX gives display math a 1em block margin; the widget already spaces itself. */
+.cm-editor .cm-lp-math-content .katex-display {
+	margin: 0;
+}
+
+.cm-editor .cm-lp-math-empty {
+	color: var(--color-text-tertiary);
+	font-family: var(--font-sans);
+	font-size: 0.8em;
+}
+
+.cm-editor .cm-lp-math-error {
+	color: var(--color-text-negative);
+	font-family: var(--font-mono);
+	font-size: 0.85em;
+	background: color-mix(in srgb, var(--color-bg-negative) 10%, transparent);
+	border-radius: var(--radius-xs);
+	padding: 0 0.35em;
+}
+
+.cm-editor .katex {
+	color: var(--color-text-primary);
+}
+
+.cm-editor .cm-lp-mermaid {
+	display: flex;
+	justify-content: center;
+	padding: 0.6em 0;
+	overflow-x: auto;
+}
+
+.cm-editor .cm-lp-mermaid svg {
+	max-width: 100%;
+	height: auto;
+}
+
+.cm-editor .cm-lp-mermaid-empty {
+	color: var(--color-text-tertiary);
+	font-size: 0.8em;
+}
+
+.cm-editor .cm-lp-mermaid-error {
+	width: 100%;
+	color: var(--color-text-negative);
+	font-family: var(--font-mono);
+	font-size: 0.8em;
+	white-space: pre-wrap;
+	background: color-mix(in srgb, var(--color-bg-negative) 10%, transparent);
+	border-radius: var(--radius-sm);
+	padding: 0.5em 0.75em;
+}
+
+.cm-editor.cm-lp-embed-editor {
+	height: auto;
+	background: transparent;
+	color: inherit;
+	font-family: inherit;
+	font-size: 0.95em;
+}
+
+.cm-editor.cm-lp-embed-editor .cm-content {
+	padding: 0;
+	max-width: none;
+	margin: 0;
+	width: auto;
+	caret-color: transparent;
+}
+
+.cm-editor.cm-lp-embed-editor .cm-line:first-child {
+	padding-top: 0;
+}
+
+.cm-editor.cm-lp-embed-editor .cm-scroller {
+	overflow: visible;
+	font-family: inherit;
+	line-height: inherit;
+}
+
+.cm-editor.cm-lp-embed-editor .cm-gutters {
+	display: none;
+}
+
+.cm-editor.cm-lp-embed-editor .cm-activeLine {
+	background-color: transparent;
+}
+
+.cm-editor .cm-lp-embed-line {
+	line-height: 0;
+	overflow: hidden;
+	font-size: 0;
+}
+
+.cm-editor .cm-lp-note-embed {
+	margin: 0.5em 0;
+	border: 1px solid var(--color-border-secondary);
+	border-left: 3px solid var(--color-bg-brand);
+	border-radius: var(--radius-md);
+	background: var(--color-bg-secondary);
+	overflow: hidden;
+}
+
+.cm-editor .cm-lp-embed-header {
+	display: flex;
+	align-items: center;
+	gap: 0.45em;
+	width: 100%;
+	padding: 0.4em 0.8em;
+	border: none;
+	border-bottom: 1px solid var(--color-border-secondary);
+	background: none;
+	color: var(--color-text-brand);
+	font-size: 0.78em;
+	font-weight: var(--font-weight-semibold);
+	text-align: left;
+	cursor: pointer;
+}
+
+.cm-editor div.cm-lp-embed-header {
+	cursor: default;
+}
+
+.cm-editor button.cm-lp-embed-header:hover {
+	background: var(--color-bg-hover);
+}
+
+.cm-editor .cm-lp-embed-icon {
+	width: 1em;
+	height: 1em;
+	flex: none;
+}
+
+.cm-editor .cm-lp-embed-body {
+	padding: 0.35em 0.85em 0.5em;
+}
+
+.cm-editor .cm-lp-embed-missing,
+.cm-editor .cm-lp-embed-empty {
+	color: var(--color-text-tertiary);
+	font-size: 0.8em;
+	padding: 0.5em 0.8em;
+	cursor: default;
+}
+
+.cm-editor .cm-lp-embed-plain {
+	color: var(--color-text-secondary);
+	font-family: var(--font-mono);
+	font-size: 0.78em;
+	white-space: pre-wrap;
+	padding: 0.5em 0.8em;
+}
+
+.cm-editor .cm-lp-embed-chip {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.3em;
+	padding: 0 0.45em;
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-xs);
+	background: var(--color-bg-secondary);
+	color: var(--color-text-brand);
+	font-size: 0.9em;
+	cursor: pointer;
+}
+
+.cm-editor .cm-lp-embed-chip:hover {
+	background: var(--color-bg-hover);
+}
+
+.cm-editor .cm-lp-embed-chip-missing,
+.cm-editor .cm-lp-file-card.cm-lp-embed-missing {
+	color: var(--color-text-tertiary);
+	cursor: default;
+}
+
+.cm-editor .cm-lp-embed-chip .cm-lp-embed-icon {
+	width: 0.85em;
+	height: 0.85em;
+}
+
+.cm-editor .cm-lp-file-card {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4em;
+	padding: 0.12em 0.6em;
+	margin: 0.1em 0;
+	border: 1px solid var(--color-border-secondary);
+	border-radius: var(--radius-sm);
+	background: var(--color-bg-secondary);
+	color: var(--color-text-primary);
+	font-size: 0.92em;
+	cursor: pointer;
+}
+
+.cm-editor .cm-lp-file-card:hover {
+	background: var(--color-bg-tertiary);
+}
+
+.cm-editor .cm-lp-file-size {
+	color: var(--color-text-tertiary);
+	font-size: 0.85em;
+}
+
+.cm-editor .cm-lp-footnote-def {
+	color: var(--color-text-tertiary);
+}
+
+.cm-editor .cm-lp-footnote-label {
+	color: var(--color-text-tertiary);
+	font-size: 0.8em;
+	vertical-align: super;
+}
+
+.cm-editor .cm-lp-footnote-ref {
+	font-size: 0.75em;
+	vertical-align: super;
+	line-height: 0;
+}
+
+.cm-editor .cm-lp-footnote-link {
+	border: none;
+	background: none;
+	padding: 0 0.1em;
+	color: var(--color-text-brand);
+	cursor: pointer;
+}
+
+.cm-editor .cm-lp-footnote-link:hover {
+	text-decoration: underline;
+}
+
+@media print {
+	.cm-editor .cm-lp-callout-fold {
+		display: none;
+	}
+}

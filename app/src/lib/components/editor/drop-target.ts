@@ -1,10 +1,5 @@
-import type { Editor } from '@tiptap/core';
-import {
-	handleTauriFileDrop,
-	insertFileAtCursor,
-	setCursorAtCoords
-} from '$lib/editor/handlers/drag-drop';
-import type { AttachmentTarget } from '$lib/editor/attachments';
+import type { EditorView } from '@codemirror/view';
+import { insertDroppedPaths } from '$lib/editor/live/attachments';
 import { drag } from '$lib/stores/drag.svelte';
 import {
 	clearExternalEditorHandlers,
@@ -12,12 +7,18 @@ import {
 	type CssPoint
 } from '$lib/utils/external-drop';
 
+export function placeCursor(view: EditorView, x: number, y: number): void {
+	const pos = view.posAtCoords({ x, y });
+	if (pos == null) return;
+	view.dispatch({ selection: { anchor: pos } });
+}
+
 export function acceptPendingInsert(
 	container: HTMLElement | undefined,
-	target: AttachmentTarget | null
+	view: EditorView | null
 ): void {
 	const pending = drag.pendingInsert;
-	if (!pending || !container || !target) return;
+	if (!pending || !container || !view) return;
 	const rect = container.getBoundingClientRect();
 	const inside =
 		pending.x >= rect.left &&
@@ -26,22 +27,22 @@ export function acceptPendingInsert(
 		pending.y <= rect.bottom;
 	if (!inside) return;
 	drag.clearPendingInsert();
-	setCursorAtCoords(target.editor, pending.x, pending.y);
-	void insertFileAtCursor(pending.path, target);
+	placeCursor(view, pending.x, pending.y);
+	void insertDroppedPaths(view, [pending.path]);
 }
 
-export function registerEditorDropTarget(
-	rich: () => Editor | null,
-	target: () => AttachmentTarget | null
-): () => void {
+// The OS-drop router already hit-tested this editor and converted Tauri's physical drop point to CSS pixels.
+export function registerEditorDropTarget(view: () => EditorView | null): () => void {
 	const handlers = {
 		over: (pos: CssPoint) => {
-			const editor = rich();
-			if (editor) setCursorAtCoords(editor, pos.x, pos.y);
+			const current = view();
+			if (current) placeCursor(current, pos.x, pos.y);
 		},
 		drop: (paths: string[], pos: CssPoint) => {
-			const attachment = target();
-			if (attachment) void handleTauriFileDrop(paths, pos, attachment);
+			const current = view();
+			if (!current) return;
+			placeCursor(current, pos.x, pos.y);
+			void insertDroppedPaths(current, paths);
 		}
 	};
 	setExternalEditorHandlers(handlers);

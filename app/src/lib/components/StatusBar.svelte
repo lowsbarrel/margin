@@ -11,9 +11,9 @@
 		Check,
 		CircleAlert,
 		Moon,
-		FileDown,
 		Link2,
 		FileCode,
+		FileDown,
 		SquareTerminal,
 		Trash2
 	} from '@lucide/svelte';
@@ -63,7 +63,6 @@
 		onterminal,
 		terminalActive = false
 	}: Props = $props();
-	let exporting = $state(false);
 
 	let syncChipClass = $derived(
 		editor.syncStatus === 'synced'
@@ -75,14 +74,15 @@
 					: 'bg-surface-2 text-muted-foreground'
 	);
 
-	async function handleExportPdf() {
-		const tiptap = editor.tiptap;
-		if (!tiptap || exporting) return;
+	let exporting = $state(false);
 
+	async function handleExportPdf() {
+		const view = editor.view;
+		if (!view || exporting) return;
 		exporting = true;
 		try {
 			const { exportPdf } = await import('$lib/utils/pdf-export');
-			await exportPdf(tiptap, m.statusbar_export_pdf_success());
+			await exportPdf(view, m.statusbar_export_pdf_success());
 		} catch (err) {
 			console.error('PDF export failed:', err);
 			toast.error(m.toast_pdf_export_failed({ error: String(err) }));
@@ -105,7 +105,7 @@
 				active={sidebarOpen}
 			/>
 		{/if}
-		{#if editor.tiptap}
+		{#if editor.view}
 			{#if onsidebartoggle}
 				<span class="text-hairline">·</span>
 			{/if}
@@ -154,7 +154,7 @@
 			/>
 		{/if}
 
-		{#if editor.tiptap}
+		{#if editor.view}
 			<IconButton
 				icon={exporting ? Loader : FileDown}
 				size="sm"
@@ -163,7 +163,7 @@
 			/>
 		{/if}
 
-		{#if onbacklinks && editor.tiptap}
+		{#if editor.view && onbacklinks}
 			<IconButton
 				icon={Link2}
 				size="sm"
@@ -173,7 +173,7 @@
 			/>
 		{/if}
 
-		{#if ontoggleviewmode && editor.tiptap}
+		{#if editor.view && ontoggleviewmode}
 			<IconButton
 				icon={FileCode}
 				size="sm"
@@ -183,7 +183,7 @@
 			/>
 		{/if}
 
-		{#if onhistory && editor.tiptap}
+		{#if editor.view && onhistory}
 			<IconButton
 				icon={History}
 				size="sm"

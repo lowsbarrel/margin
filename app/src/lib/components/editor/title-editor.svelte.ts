@@ -12,6 +12,7 @@ export interface TitleEditorHost {
 	setPath(path: string): void;
 	isAlive(): boolean;
 	focusEditor(): void;
+	element(): HTMLElement | undefined;
 	onrename(): ((oldPath: string, newPath: string) => void | Promise<void>) | undefined;
 }
 
@@ -57,8 +58,20 @@ export class TitleEditor {
 		if (validateName(this.text.trim())) this.revert();
 	}
 
+	focusTitle(): void {
+		const element = this.host.element();
+		if (!element) return;
+		element.focus();
+		const range = document.createRange();
+		range.selectNodeContents(element);
+		const selection = window.getSelection();
+		if (!selection) return;
+		selection.removeAllRanges();
+		selection.addRange(range);
+	}
+
 	keydown(event: KeyboardEvent): void {
-		if (event.key !== 'Enter') return;
+		if (event.key !== 'Enter' && event.key !== 'ArrowDown') return;
 		event.preventDefault();
 		this.host.focusEditor();
 	}

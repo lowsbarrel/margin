@@ -1,4 +1,4 @@
-import type { Editor } from '@tiptap/core';
+import type { EditorView } from '@codemirror/view';
 
 export type SyncStatus = 'idle' | 'syncing' | 'synced' | 'error';
 
@@ -27,7 +27,7 @@ const state = $state<EditorState>({
 	localChangeDuringSync: false
 });
 
-let tiptapInstance = $state<Editor | null>(null);
+let activeView = $state<EditorView | null>(null);
 
 function noteLocalEdit() {
 	if (state.syncStatus === 'synced') {
@@ -57,8 +57,8 @@ export const editor = {
 	get dirty() {
 		return state.dirty;
 	},
-	get tiptap() {
-		return tiptapInstance;
+	get view() {
+		return activeView;
 	},
 
 	setSyncStatus(status: SyncStatus, reason?: string) {
@@ -90,11 +90,11 @@ export const editor = {
 	markLocalChange() {
 		noteLocalEdit();
 	},
-	setTiptap(instance: Editor | null) {
-		tiptapInstance = instance;
+	setView(instance: EditorView | null) {
+		activeView = instance;
 	},
 	// A hidden editor deactivating must not unregister the one that replaced it.
-	releaseTiptap(instance: Editor | null) {
-		if (instance && tiptapInstance === instance) tiptapInstance = null;
+	releaseView(instance: EditorView | null) {
+		if (instance && activeView === instance) activeView = null;
 	}
 };

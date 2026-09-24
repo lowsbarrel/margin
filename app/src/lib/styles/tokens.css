@@ -145,6 +145,17 @@
 	--sem-syntax-function: 216 100% 40%;
 	--sem-syntax-comment: var(--neutral-50);
 	--sem-syntax-attr: var(--red-70);
+	--sem-callout-note: var(--blue-70);
+	--sem-callout-info: var(--blue-70);
+	--sem-callout-tip: var(--green-60);
+	--sem-callout-success: var(--green-70);
+	--sem-callout-question: var(--orange-70);
+	--sem-callout-warning: var(--yellow-60);
+	--sem-callout-failure: var(--red-60);
+	--sem-callout-danger: var(--red-70);
+	--sem-callout-bug: var(--red-70);
+	--sem-callout-example: var(--purple-70);
+	--sem-callout-quote: var(--neutral-50);
 
 	color-scheme: light;
 }
@@ -187,6 +198,17 @@
 	--sem-syntax-function: 187 47% 55%;
 	--sem-syntax-comment: var(--neutral-50);
 	--sem-syntax-attr: 5 74% 66%;
+	--sem-callout-note: var(--blue-40);
+	--sem-callout-info: var(--blue-40);
+	--sem-callout-tip: var(--green-40);
+	--sem-callout-success: var(--green-40);
+	--sem-callout-question: var(--orange-40);
+	--sem-callout-warning: var(--yellow-40);
+	--sem-callout-failure: var(--red-40);
+	--sem-callout-danger: var(--red-40);
+	--sem-callout-bug: var(--red-40);
+	--sem-callout-example: var(--purple-40);
+	--sem-callout-quote: var(--neutral-40);
 
 	color-scheme: dark;
 }
@@ -229,6 +251,18 @@
 	--color-syntax-function: hsl(var(--sem-syntax-function));
 	--color-syntax-comment: hsl(var(--sem-syntax-comment));
 	--color-syntax-attr: hsl(var(--sem-syntax-attr));
+
+	--color-callout-note: hsl(var(--sem-callout-note));
+	--color-callout-info: hsl(var(--sem-callout-info));
+	--color-callout-tip: hsl(var(--sem-callout-tip));
+	--color-callout-success: hsl(var(--sem-callout-success));
+	--color-callout-question: hsl(var(--sem-callout-question));
+	--color-callout-warning: hsl(var(--sem-callout-warning));
+	--color-callout-failure: hsl(var(--sem-callout-failure));
+	--color-callout-danger: hsl(var(--sem-callout-danger));
+	--color-callout-bug: hsl(var(--sem-callout-bug));
+	--color-callout-example: hsl(var(--sem-callout-example));
+	--color-callout-quote: hsl(var(--sem-callout-quote));
 
 	--color-border-secondary: hsl(var(--sem-border-secondary));
 	--color-border-divider: hsl(var(--sem-border-divider));

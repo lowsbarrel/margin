@@ -1,31 +1,26 @@
 <script lang="ts">
 	import { onMount, onDestroy, untrack } from 'svelte';
-	import type { Editor } from '@tiptap/core';
-	import { common, createLowlight } from 'lowlight';
-	import { resolveAttachmentFolder, type AttachmentTarget } from '$lib/editor/attachments';
 	import { editor as editorStore } from '$lib/stores/editor.svelte';
+	import { noteFocus } from '$lib/stores/note-focus';
 	import { vault } from '$lib/stores/vault.svelte';
 	import type { ViewMode } from '$lib/stores/panes.svelte';
 	import { drag } from '$lib/stores/drag.svelte';
-	import { handleEditorPaste } from '$lib/editor/handlers/paste';
-	import { setCursorAtCoords } from '$lib/editor/handlers/drag-drop';
+	import { resolveAttachmentFolder } from '$lib/editor/attachments';
+	import { isModalOpen } from '$lib/utils/modal';
+	import { findVaultFile, vaultFileExists, watchVaultIndex } from '$lib/editor/live/vault-index';
+	import { ESCAPE_FIND, onEscape } from '$lib/editor/live/escape';
+	import type { LiveEditorHandle } from '$lib/editor/live/editor-factory';
+	import type { ContextMenuItem } from './ContextMenu.svelte';
+	import type { LightboxImage } from './ImageLightbox.svelte';
 	import * as m from '$lib/paraglide/messages.js';
 	import ContextMenu from './ContextMenu.svelte';
-	import BubbleToolbar from './BubbleToolbar.svelte';
 	import FindReplace from './FindReplace.svelte';
 	import ImageLightbox from './ImageLightbox.svelte';
-	import { NoteDocument } from './editor/note-document';
-	import { createEditorInstance } from './editor/editor-instance';
 	import { SaveController } from './editor/save-controller';
-	import { SourceSurface } from './editor/source-surface';
-	import { BubbleMenu } from './editor/bubble-menu.svelte';
-	import { EditorInteractions } from './editor/editor-interactions.svelte';
 	import { TitleEditor } from './editor/title-editor.svelte';
-	import { adoptExternalContent } from './editor/adopt-external-content';
 	import { acceptPendingInsert, registerEditorDropTarget } from './editor/drop-target';
-	import { reportRichCursor, restoreRichCursor } from './editor/cursor-position';
-	import '$lib/editor/editor-styles.css';
-	import '$lib/editor/search-replace';
+	import '$lib/editor/live/live-preview.css';
+	import '$lib/editor/live/code-block.css';
 
 	interface Props {
 		filePath: string;
@@ -58,23 +53,22 @@
 	}: Props = $props();
 
 	let container: HTMLDivElement;
-	let sourceEl: HTMLDivElement | undefined = $state();
-	let tiptap = $state<Editor | null>(null);
+	let titleEl: HTMLDivElement;
+	let live = $state<LiveEditorHandle | null>(null);
 	let showFindReplace = $state(false);
 	let findReplaceMode = $state(false);
+	let lightbox = $state<{ images: LightboxImage[]; index: number } | null>(null);
+	let contextMenu = $state<{ x: number; y: number; items: ContextMenuItem[] } | null>(null);
 	let currentPath = $state(untrack(() => filePath));
+	let appliedMode = untrack(() => viewMode);
 	let syncedFilePath = untrack(() => filePath);
 	let lastSeenVersion = untrack(() => externalContentVersion);
 	let wasActive = untrack(() => active);
 	let alive = true;
-	let blurTimer: ReturnType<typeof setTimeout> | undefined;
-	let bubbleRaf = 0;
-	let findHotkeyListener: EventListener | null = null;
+	let stopIndex: (() => void) | null = null;
+	let releaseEscape: (() => void) | null = null;
 
 	const folder = $derived(resolveAttachmentFolder(attachmentFolder));
-	const lowlight = createLowlight(common);
-
-	const note = new NoteDocument({ folder: () => folder, vaultPath: () => vault.vaultPath });
 
 	const save = new SaveController(
 		{
@@ -91,118 +85,75 @@
 			path: () => currentPath,
 			setPath: (path) => (currentPath = path),
 			isAlive: () => alive,
-			focusEditor: () => void tiptap?.commands.focus('start'),
+			focusEditor: () => live?.focus(),
+			element: () => titleEl,
 			onrename: () => onrename
 		},
 		untrack(() => initialTitle)
 	);
 
-	const source = new SourceSurface(
-		{
-			serializeRich: (editor) => note.serialize(editor),
-			toEditorContent: (markdown) => note.toEditor(markdown),
-			flushSave: () => save.flush(),
-			scheduleSave: handleSourceChange,
-			isAlive: () => alive,
-			isActiveTab: () => active,
-			onEnter: () => (showFindReplace = false)
-		},
-		untrack(() => initialContent)
-	);
-
-	const bubble = new BubbleMenu();
 	const flushSave = save.flush.bind(save);
 
-	const interactions = new EditorInteractions({
-		container: () => container,
-		rich: () => tiptap,
-		vaultPath: () => vault.vaultPath,
-		onWikiLink: () => onwikilink
-	});
-	const contextMenuListener = interactions.editorContextMenu as EventListener;
-
-	function attachmentTarget(): AttachmentTarget | null {
-		if (!tiptap || !vault.vaultPath) return null;
-		return { editor: tiptap, vaultPath: vault.vaultPath, attachmentFolder: folder };
+	function openLightbox(src: string, alt: string): void {
+		const images = container
+			? Array.from(container.querySelectorAll('img')).map((img) => ({
+					src: img.src,
+					alt: img.alt
+				}))
+			: [];
+		const clicked = images.findIndex((image) => image.src === src);
+		lightbox = clicked >= 0 ? { images, index: clicked } : { images: [{ src, alt }], index: 0 };
 	}
 
-	function handleSourceChange(text: string) {
+	function openContextMenu(x: number, y: number, items: ContextMenuItem[]): void {
+		contextMenu = { x, y, items };
+	}
+
+	function navigateLightbox(index: number): void {
+		if (lightbox) lightbox = { ...lightbox, index };
+	}
+
+	function handleDocumentChange(text: string): void {
 		if (!alive) return;
 		editorStore.setDirty(true);
 		save.schedule(text);
 	}
 
-	function handleDocumentChange(markdown: string) {
-		source.seed = null;
-		editorStore.setDirty(true);
-		save.schedule(markdown);
+	function closeFind(): void {
+		showFindReplace = false;
+		live?.focus();
 	}
 
-	function reportCursorSnapshot() {
-		if (viewMode === 'source' && source.editor) {
-			onsnapshotcursor?.(source.editor.getCursorOffset());
-			return;
-		}
-		if (tiptap) onsnapshotcursor?.(tiptap.state.selection.from);
+	function handleFindHotkey(event: KeyboardEvent): void {
+		if (!active || isModalOpen()) return;
+		if (!(event.metaKey || event.ctrlKey) || event.altKey || event.shiftKey) return;
+		const key = event.key.toLowerCase();
+		if (key !== 'f' && key !== 'h') return;
+		event.preventDefault();
+		findReplaceMode = key === 'h';
+		showFindReplace = true;
 	}
 
-	function restoreCursorOnce() {
-		if (initialCursorPos == null) return;
-		if (viewMode === 'source') {
-			source.pendingCursor = initialCursorPos;
-			return;
-		}
-		if (tiptap) restoreRichCursor(tiptap, initialCursorPos);
-	}
-
-	function handleSelectionUpdate() {
-		if (bubbleRaf) return;
-		bubbleRaf = requestAnimationFrame(() => {
-			bubbleRaf = 0;
-			if (tiptap) reportRichCursor(tiptap);
-			void bubble.update(tiptap);
-		});
-	}
-
-	function handleEditorBlur() {
-		save.flush();
-		blurTimer = setTimeout(() => {
-			blurTimer = undefined;
-			if (!bubble.element?.contains(document.activeElement)) bubble.hide();
-		}, 100);
-	}
-
-	function handleEditorFocus(editor: Editor) {
-		void bubble.update(editor);
-		if (active) editorStore.setTiptap(editor);
-	}
-
-	function handleInternalDragMouseMove(event: MouseEvent) {
-		if (tiptap) setCursorAtCoords(tiptap, event.clientX, event.clientY);
-	}
-
-	function handlePaste(event: ClipboardEvent) {
-		const target = attachmentTarget();
-		if (target) handleEditorPaste(event, target);
-	}
-
-	function handleFindHotkey(event: KeyboardEvent) {
-		if (viewMode === 'source') return;
-		if (!event.metaKey && !event.ctrlKey) return;
-		if (event.key === 'f') {
-			event.preventDefault();
-			findReplaceMode = false;
-			showFindReplace = true;
-		} else if (event.key === 'h') {
-			event.preventDefault();
-			findReplaceMode = true;
-			showFindReplace = true;
-		}
+	function reportCursorSnapshot(): void {
+		const offset = live?.selectionOffset();
+		if (offset != null) onsnapshotcursor?.(offset);
 	}
 
 	$effect(() => {
-		if (active && tiptap) editorStore.setTiptap(tiptap);
-		else editorStore.releaseTiptap(tiptap);
+		if (!active || !noteFocus.take(currentPath)) return;
+		title.focusTitle();
+	});
+
+	$effect(() => {
+		const view = live?.view ?? null;
+		if (active && view) editorStore.setView(view);
+		else editorStore.releaseView(view);
+	});
+
+	$effect(() => {
+		if (!live || viewMode === appliedMode) return;
+		appliedMode = viewMode;
+		live.setMode(viewMode === 'source');
 	});
 
 	$effect(() => {
@@ -212,62 +163,37 @@
 		if (title.pending) return;
 		currentPath = path;
 		title.syncToPath(path);
+		live?.refresh();
 	});
 
 	$effect(() => {
 		const version = externalContentVersion;
 		if (version === lastSeenVersion) return;
 		lastSeenVersion = version;
-		if (!tiptap || initialContent == null) return;
-		adoptExternalContent({
-			content: initialContent,
-			mode: viewMode,
-			rich: tiptap,
-			note,
-			save,
-			source
-		});
+		const editor = live;
+		if (!editor || initialContent == null) return;
+		save.snapshot(editor.text());
+		save.cancel();
+		editorStore.setDirty(false);
+		save.lastSavedText = initialContent;
+		editor.adopt(initialContent);
 	});
 
 	$effect(() => {
-		if (drag.active && drag.item?.kind === 'file' && container) {
-			container.addEventListener('mousemove', handleInternalDragMouseMove);
-			return () => container.removeEventListener('mousemove', handleInternalDragMouseMove);
-		}
+		if (!drag.active || drag.item?.kind !== 'file' || !container || !live) return;
+		const handler = (event: MouseEvent) => live?.placeCursor(event.clientX, event.clientY);
+		container.addEventListener('mousemove', handler);
+		return () => container.removeEventListener('mousemove', handler);
 	});
 
 	$effect(() => {
 		if (!drag.pendingInsert) return;
-		acceptPendingInsert(container, attachmentTarget());
+		acceptPendingInsert(container, live?.view ?? null);
 	});
 
 	$effect(() => {
 		if (!active) return;
-		return registerEditorDropTarget(
-			() => tiptap,
-			() => attachmentTarget()
-		);
-	});
-
-	$effect(() => {
-		const mode = viewMode;
-		const editor = tiptap;
-		if (!editor) return;
-		untrack(() => {
-			if (mode === 'source') void source.enter(editor, sourceEl);
-			else source.exit(editor);
-		});
-	});
-
-	$effect(() => {
-		if (active && viewMode === 'source' && source.editor) source.editor.requestMeasure();
-	});
-
-	$effect(() => {
-		if (!active) return;
-		const handler = (event: MouseEvent) => interactions.linkClick(event);
-		document.addEventListener('click', handler as EventListener, true);
-		return () => document.removeEventListener('click', handler as EventListener, true);
+		return registerEditorDropTarget(() => live?.view ?? null);
 	});
 
 	$effect(() => {
@@ -277,99 +203,97 @@
 	});
 
 	onMount(() => {
-		tiptap = createEditorInstance({
-			element: container,
-			content: note.toEditor(initialContent),
-			lowlight,
-			attachmentFolder: folder,
-			serialize: (editor) => note.serialize(editor),
-			onDocumentChange: handleDocumentChange,
-			onSelectionChange: handleSelectionUpdate,
-			onBlur: handleEditorBlur,
-			onFocus: handleEditorFocus
-		});
-		restoreCursorOnce();
-		container.addEventListener('paste', handlePaste as EventListener, true);
-		container.addEventListener('contextmenu', contextMenuListener, true);
-		findHotkeyListener = handleFindHotkey as EventListener;
-		container.addEventListener('keydown', findHotkeyListener);
+		void (async () => {
+			const { createLiveEditor } = await import('$lib/editor/live/editor-factory');
+			const editor = await createLiveEditor({
+				parent: container,
+				doc: initialContent,
+				source: appliedMode === 'source',
+				vaultPath: () => vault.vaultPath,
+				notePath: () => currentPath,
+				attachmentFolder: () => folder,
+				exists: vaultFileExists,
+				findByName: findVaultFile,
+				openLightbox,
+				openWikiLink: (linkTitle) => onwikilink?.(linkTitle),
+				openContextMenu,
+				onDocChange: handleDocumentChange,
+				onCursor: (line, col) => editorStore.setCursor(line, col),
+				onSelection: () => {}
+			});
+			if (!alive) {
+				editor.destroy();
+				return;
+			}
+			live = editor;
+			editorStore.setView(editor.view);
+			if (initialCursorPos != null) editor.setSelectionOffset(initialCursorPos);
+			stopIndex = watchVaultIndex(vault.vaultPath, () => live?.refresh());
+			releaseEscape = onEscape(editor.view, ESCAPE_FIND, () => {
+				if (!showFindReplace) return false;
+				closeFind();
+				return true;
+			});
+		})();
+
 		window.addEventListener('margin:flush', flushSave);
 		window.addEventListener('margin:flush', reportCursorSnapshot);
+		window.addEventListener('keydown', handleFindHotkey, true);
 	});
 
 	onDestroy(() => {
 		save.flush();
 		alive = false;
 		title.dispose();
-		clearTimeout(blurTimer);
-		if (bubbleRaf) cancelAnimationFrame(bubbleRaf);
+		stopIndex?.();
+		releaseEscape?.();
 		window.removeEventListener('margin:flush', flushSave);
 		window.removeEventListener('margin:flush', reportCursorSnapshot);
-		container?.removeEventListener('paste', handlePaste as EventListener, true);
-		container?.removeEventListener('contextmenu', contextMenuListener, true);
-		if (findHotkeyListener) container?.removeEventListener('keydown', findHotkeyListener);
-		if (showFindReplace && tiptap) tiptap.commands.clearSearch();
-		source.destroy();
-		editorStore.releaseTiptap(tiptap);
-		tiptap?.destroy();
-		tiptap = null;
+		window.removeEventListener('keydown', handleFindHotkey, true);
+		editorStore.releaseView(live?.view ?? null);
+		live?.destroy();
+		live = null;
 	});
 </script>
 
-<div class="bubble-wrapper" class:visible={bubble.visible} bind:this={bubble.element}>
-	<BubbleToolbar editor={tiptap} />
-</div>
-
-<div
-	class="editor-container relative flex-1 bg-background"
-	class:flex={viewMode === 'source'}
-	class:flex-col={viewMode === 'source'}
-	class:overflow-y-auto={viewMode === 'rich'}
-	class:overflow-hidden={viewMode === 'source'}
-	data-drop-kind="editor"
->
-	{#if showFindReplace && viewMode === 'rich'}
+<div class="editor-container relative flex-1 overflow-y-auto bg-background" data-drop-kind="editor">
+	{#if showFindReplace && live}
 		<FindReplace
-			editor={tiptap}
+			view={live.view}
 			showReplace={findReplaceMode}
-			onclose={() => (showFindReplace = false)}
+			ontogglereplace={() => (findReplaceMode = !findReplaceMode)}
+			onclose={closeFind}
 		/>
 	{/if}
 	<div
 		class="title-input mx-auto max-w-187.5 cursor-text px-10 pt-12 font-sans text-3xl leading-[1.2] font-bold tracking-tight wrap-break-word text-foreground outline-none empty:before:pointer-events-none empty:before:text-subtle-foreground empty:before:content-[attr(data-placeholder)]"
 		contenteditable="true"
+		bind:this={titleEl}
 		bind:textContent={title.text}
 		oninput={(e) => title.input(e.currentTarget.textContent?.trim() ?? '')}
 		onkeydown={(e) => title.keydown(e)}
 		onblur={() => title.blur()}
 		data-placeholder={m.editor_untitled()}
 		role="textbox"
-		tabindex={0}
+		tabindex="0"
 	></div>
-	<div
-		class="editor-wrap overflow-hidden bg-background"
-		class:hidden={viewMode === 'source'}
-		bind:this={container}
-	></div>
-	<div class="min-h-0 flex-1" class:hidden={viewMode !== 'source'}>
-		<div class="mx-auto h-full w-full max-w-187.5 px-10 pt-4" bind:this={sourceEl}></div>
-	</div>
+	<div class="editor-wrap overflow-hidden bg-background" bind:this={container}></div>
 </div>
 
-{#if interactions.lightbox}
+{#if lightbox}
 	<ImageLightbox
-		images={interactions.lightbox.images}
-		index={interactions.lightbox.index}
-		onclose={() => (interactions.lightbox = null)}
-		onnavigate={(index) => interactions.navigateLightbox(index)}
+		images={lightbox.images}
+		index={lightbox.index}
+		onclose={() => (lightbox = null)}
+		onnavigate={navigateLightbox}
 	/>
 {/if}
 
-{#if interactions.contextMenu}
+{#if contextMenu}
 	<ContextMenu
-		x={interactions.contextMenu.x}
-		y={interactions.contextMenu.y}
-		items={interactions.contextMenu.items}
-		onclose={() => (interactions.contextMenu = null)}
+		x={contextMenu.x}
+		y={contextMenu.y}
+		items={contextMenu.items}
+		onclose={() => (contextMenu = null)}
 	/>
 {/if}
