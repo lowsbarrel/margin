@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	// Type-only, so the editor stack itself stays behind the dynamic import below.
-	import type { Editor } from '@tiptap/core';
+	import { vault } from '$lib/stores/vault.svelte';
+	import { findVaultFile, vaultFileExists } from '$lib/editor/live/vault-index';
+	import type { LiveEditorHandle } from '$lib/editor/live/editor-factory';
 
 	interface Props {
 		markdown: string;
@@ -11,86 +12,62 @@
 	let { markdown, oncite }: Props = $props();
 
 	let host = $state<HTMLElement | null>(null);
-	let editor: Editor | null = null;
-	let flushTimer: ReturnType<typeof setTimeout> | null = null;
-	let pending = '';
-
-	const FLUSH_MS = 120;
-
-	function flush() {
-		flushTimer = null;
-		if (!pending) return;
-		const text = pending;
-		pending = '';
-		editor?.commands.setContent(text, { emitUpdate: false });
-	}
-
-	function handleClick(event: MouseEvent) {
-		const element = (event.target as HTMLElement).closest('[data-wiki-link]');
-		const title = element?.getAttribute('data-title');
-		if (!title) return;
-		event.preventDefault();
-		event.stopPropagation();
-		oncite(title);
-	}
-
-	onMount(() => {
-		let disposed = false;
-		void (async () => {
-			const [
-				{ Editor },
-				{ default: StarterKit },
-				{ Markdown },
-				{ default: Link },
-				{ default: WikiLink }
-			] = await Promise.all([
-				import('@tiptap/core'),
-				import('@tiptap/starter-kit'),
-				import('tiptap-markdown'),
-				import('@tiptap/extension-link'),
-				import('$lib/editor/wiki-link')
-			]);
-			if (disposed || !host) return;
-
-			editor = new Editor({
-				element: host,
-				editable: false,
-				extensions: [
-					StarterKit.configure({ link: false }),
-					Link.configure({ openOnClick: false }),
-					WikiLink,
-					// `html: false` is the safety property: model output must never become DOM.
-					Markdown.configure({
-						html: false,
-						transformPastedText: false,
-						transformCopiedText: false
-					})
-				],
-				content: markdown,
-				editorProps: { attributes: { class: 'ask-answer-body' } }
-			});
-			host.addEventListener('click', handleClick);
-		})();
-
-		return () => {
-			disposed = true;
-			host?.removeEventListener('click', handleClick);
-			if (flushTimer) clearTimeout(flushTimer);
-			editor?.destroy();
-			editor = null;
-		};
-	});
+	let handle = $state<LiveEditorHandle | null>(null);
 
 	$effect(() => {
-		const next = markdown;
-		if (!editor) return;
-		if (flushTimer !== null) {
-			pending = next;
-			return;
-		}
-		editor.commands.setContent(next, { emitUpdate: false });
-		flushTimer = setTimeout(flush, FLUSH_MS);
+		const text = markdown;
+		const editor = handle;
+		if (editor) editor.adopt(text);
+	});
+
+	onMount(() => {
+		let alive = true;
+		void (async () => {
+			const [{ createLiveEditor }, { EditorState, StateEffect }, { EditorView }] =
+				await Promise.all([
+					import('$lib/editor/live/editor-factory'),
+					import('@codemirror/state'),
+					import('@codemirror/view')
+				]);
+			if (!alive || !host) return;
+			const editor = await createLiveEditor({
+				parent: host,
+				doc: markdown,
+				source: false,
+				vaultPath: () => vault.vaultPath,
+				notePath: () => '',
+				attachmentFolder: () => '',
+				exists: vaultFileExists,
+				findByName: findVaultFile,
+				openLightbox: () => {},
+				openWikiLink: (title) => oncite(title),
+				openContextMenu: () => {},
+				onDocChange: () => {},
+				onCursor: () => {},
+				onSelection: () => {}
+			});
+			if (!alive) {
+				editor.destroy();
+				return;
+			}
+			editor.view.dispatch({
+				effects: StateEffect.appendConfig.of([
+					EditorState.readOnly.of(true),
+					EditorView.editable.of(false),
+					EditorView.theme({
+						'.cm-content': { padding: '0', margin: '0', maxWidth: 'none' },
+						'.cm-scroller': { overflow: 'visible' }
+					})
+				])
+			});
+			handle = editor;
+		})();
+		return () => {
+			alive = false;
+			handle?.destroy();
+			handle = null;
+		};
 	});
 </script>
 
-<div class="editor-wrap text-sm text-foreground" bind:this={host}></div>
+<div class="editor-wrap ask-answer text-sm text-foreground" bind:this={host}></div>
