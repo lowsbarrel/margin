@@ -65,7 +65,7 @@
 			</div>
 
 			{#if screen === 'intro'}
-				<OnboardingIntro onDone={finishIntro} />
+				<OnboardingIntro onDone={finishIntro} replay={login.profiles.length > 0} />
 			{:else}
 				<LoginBrand tagline />
 
