@@ -149,10 +149,14 @@
 	{/if}
 
 	<Field label={m.settings_conflict_resolution()} forId="conflictStrategy">
-		<Select id="conflictStrategy" bind:value={conflictStrategy}>
-			<option value="local_wins">{m.settings_conflict_local_wins()}</option>
-			<option value="keep_newer">{m.settings_conflict_keep_newer()}</option>
-		</Select>
+		<Select
+			id="conflictStrategy"
+			bind:value={conflictStrategy}
+			options={[
+				{ value: 'local_wins', label: m.settings_conflict_local_wins() },
+				{ value: 'keep_newer', label: m.settings_conflict_keep_newer() }
+			]}
+		/>
 	</Field>
 	{#if conflictStrategy === 'keep_newer'}
 		<p class={HINT}>{m.settings_conflict_hint_newer()}</p>

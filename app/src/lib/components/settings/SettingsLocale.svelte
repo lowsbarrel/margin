@@ -12,9 +12,10 @@
 </script>
 
 <Section title={m.settings_language()} icon={Globe} collapsible defaultOpen={false}>
-	<Select id="locale" value={getLocale()} onchange={handleLocaleChange}>
-		{#each locales as loc (loc)}
-			<option value={loc}>{loc === 'en' ? 'English' : 'Italiano'}</option>
-		{/each}
-	</Select>
+	<Select
+		id="locale"
+		value={getLocale()}
+		onchange={handleLocaleChange}
+		options={locales.map((loc) => ({ value: loc, label: loc === 'en' ? 'English' : 'Italiano' }))}
+	/>
 </Section>
