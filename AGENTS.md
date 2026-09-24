@@ -57,23 +57,24 @@ A fact is defined once and imported everywhere else.
 
 The note editor is one CodeMirror 6 view (`src/lib/editor/live/`). **The document
 is the file text, byte for byte** — no load transform, no save serializer:
-`EditorState.create({ doc: fileText })` in, `state.doc.toString()` out. Markdown
-renders through decorations only, so opening a note and typing one character
-changes exactly that character.
-
-Markup is hidden with replace decorations while the selection is elsewhere, and
-shown raw on the selection's lines (Obsidian's rule). Block widgets (images,
-rules) come from a `StateField` (`live/blocks.ts`) because CodeMirror refuses
-them from a view plugin; everything else lives in `live/preview.ts`. Syntax is
-`live/syntax.ts`, a `markdown()` parser with custom Lezer configs for
-`WikiLink`, `Embed`, `Highlight`, `Tag`, `InlineMath`, `BlockMath`,
-`ColonCallout` and `Frontmatter` — names wave-2 features match on.
+`EditorState.create({ doc: fileText })` in, `state.doc.toString()` out, so typing
+one character changes exactly that character. Markdown renders through
+decorations only: markup is hidden while the selection is elsewhere and shown raw
+on the selection's lines (Obsidian's rule). Read-only views (an embed card, an
+Ask answer) never reveal syntax — `touchedLines` returns nothing under the
+`staticPreview` facet.
 
 Adding a live-preview feature: write `src/lib/editor/live/<feature>.ts`
-exporting a CodeMirror `Extension` (or a factory returning one), then add it to
-the flat `previewExtensions` list in `live/extensions.ts` (switched off wholesale
-in raw Markdown mode) or to `baseExtensions` if it must survive the mode switch.
-Read the editor's surroundings from the context facet instead of importing the
+exporting a CodeMirror `Extension` (or a factory returning one), then register it
+in the flat `previewExtensions` list in `live/extensions.ts` (switched off
+wholesale in raw Markdown mode) or in `baseExtensions` if it must survive the
+mode switch. Only a `StateField` may place a block widget (`live/blocks.ts`
+covers images and rules) or replace a line break; a view plugin throws. Syntax is
+`live/syntax.ts`, a `markdown()` parser with custom Lezer configs for
+`WikiLink`, `Embed`, `Highlight`, `Tag`, `InlineMath`, `BlockMath`,
+`ColonCallout` and `Frontmatter` — the names features match on.
+
+Read the view's surroundings from the context facet instead of importing the
 component:
 
 ```ts
@@ -83,26 +84,24 @@ const ctx = contextOf(view.state); // vaultPath(), notePath(), attachmentFolder(
 // openContextMenu(x, y, items), code (lowlight highlighter)
 ```
 
-Input assistance is `live/complete.ts` (slash menu, `[[` note/heading and `#`
-tag completion), `live/bubble.ts` (selection toolbar) and `live/context-menu.ts`
-(right-click menu); their edits go through the commands in `live/commands.ts`.
+`live/preview.ts` renders inline syntax, `live/commands.ts` holds the edits,
+`live/context-menu.ts` builds the right-click menu (including the table
+operations), and CodeMirror packages load through dynamic `import()` from
+`components/Editor.svelte`. `live/resolve.ts` turns Markdown destinations into
+vault paths (note folder → vault root → attachment folder, `![[name]]` →
+attachment folder → vault-wide index) and waits for the file index instead of
+guessing a relative path; reuse it rather than resolving paths again.
+`live/escape.ts` arbitrates Escape — the app swallows the key in a capture-phase
+handler, so completion, find, bubble and tables each register with `onEscape` and
+exactly one answers.
 
-`resolve.ts` turns Markdown destinations into vault paths (note folder → vault
-root → attachment folder, `![[name]]` → attachment folder → vault-wide index):
-reuse it instead of resolving paths again. CodeMirror packages load through
-dynamic `import()` from `components/Editor.svelte`.
-
-GFM tables (`live/tables.ts` + `table-*.ts`) render as a block widget with
-hover row/column handles; Tab/Enter move between cells, and Escape leaves the
-table through a window listener because `+layout.svelte` swallows Escape in a
-capture-phase handler.
-
-Rich blocks (`callouts.ts`, `math.ts`, `mermaid.ts`, `embeds.ts`,
-`footnotes.ts`, styled by `live-blocks.css`): Obsidian `> [!type]` and legacy
-`:::type` callouts, KaTeX `$…$`/`$$…$$`, mermaid fences, `![[Note]]`/`![[file]]`
-embeds and footnotes. A replace decoration that spans a line break must come
-from a state field — a view plugin throws. A note embed mounts a second
-read-only view of the same extensions, bounded by `embedDepth`/`embedChain`.
+GFM tables (`live/tables.ts` + `table-*.ts`) render as a block widget with hover
+row/column handles; Tab and Enter move between cells. Rich blocks
+(`callouts.ts`, `math.ts`, `mermaid.ts`, `embeds.ts`, `footnotes.ts`, styled by
+`live-blocks.css`) cover Obsidian `> [!type]` and legacy `:::type` callouts,
+KaTeX `$…$`/`$$…$$`, mermaid fences, `![[Note]]`/`![[file]]` embeds and
+footnotes. A note embed mounts a second read-only view of the same extensions,
+bounded by `embedDepth`/`embedChain`.
 
 ## The vault on disk
 
