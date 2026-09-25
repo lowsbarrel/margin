@@ -19,6 +19,7 @@
 	"typescript.tsserver.experimental.enableProjectDiagnostics": true,
 	"svelte.enable-ts-plugin": true,
 	"svelte.plugin.diagnostics.enable": true,
+	"tailwindCSS.rootFontSize": 14,
 
 	"rust-analyzer.linkedProjects": ["app/src-tauri/Cargo.toml"],
 	"rust-analyzer.checkOnSave": true,

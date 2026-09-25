@@ -2,7 +2,6 @@
 	import { onDestroy, onMount } from 'svelte';
 	import type { Terminal } from '@xterm/xterm';
 	import type { FitAddon } from '@xterm/addon-fit';
-	import '@xterm/xterm/css/xterm.css';
 	import { terminals, type TerminalTab } from '$lib/stores/terminals.svelte';
 	import { theme } from '$lib/stores/theme.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
@@ -40,7 +39,8 @@
 	onMount(async () => {
 		const [{ Terminal }, { FitAddon }] = await Promise.all([
 			import('@xterm/xterm'),
-			import('@xterm/addon-fit')
+			import('@xterm/addon-fit'),
+			import('@xterm/xterm/css/xterm.css')
 		]);
 		if (disposed || !hostEl) return;
 

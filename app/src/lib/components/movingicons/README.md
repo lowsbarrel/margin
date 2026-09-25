@@ -43,9 +43,9 @@ Same props as the Lucide components for the cases margin uses (`size`), plus
 `animate` to drive the animation externally instead of on hover:
 
 ```svelte
-import {Search} from "$lib/components/movingicons";
+import {Settings} from "$lib/components/movingicons";
 
-<Search size={20} />
+<Settings size={20} />
 ```
 
 Reserve them for interactive controls. A status indicator that animates when

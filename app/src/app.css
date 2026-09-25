@@ -1,17 +1,13 @@
 @import '@fontsource-variable/inter';
 @import '@fontsource-variable/jetbrains-mono';
-@import 'katex/dist/katex.min.css';
 @import 'tailwindcss';
 @import 'tw-animate-css';
 
 @import './lib/styles/tokens.css';
 @import './lib/styles/theme.css';
 @import './lib/styles/components.css' layer(components);
-@import './lib/styles/slash-menu.css' layer(components);
 @import './lib/styles/callouts.css' layer(components);
 @import './lib/styles/math.css' layer(components);
-@import './lib/styles/mermaid.css' layer(components);
-@import './lib/styles/note-embed.css' layer(components);
 
 @utility no-scrollbar {
 	-ms-overflow-style: none;

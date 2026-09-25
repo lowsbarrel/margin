@@ -216,7 +216,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <!-- svelte-ignore a11y_click_events_have_key_events -->
 <div
-	class="fixed inset-0 z-200 flex justify-center bg-(--color-bg-overlay) pt-[min(18vh,120px)]"
+	class="fixed inset-0 z-200 flex justify-center bg-overlay pt-[min(18vh,120px)]"
 	onclick={onclose}
 	onkeydown={handleKeydown}
 >
@@ -244,7 +244,7 @@
 				type="text"
 				spellcheck="false"
 				autocomplete="off"
-				class="min-w-0 flex-1 border-none bg-transparent p-0 text-base text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
+				class="min-w-0 flex-1 border-none bg-transparent p-0 text-base text-foreground caret-brand shadow-none outline-none placeholder:text-subtle-foreground"
 			/>
 			{#if !isTagMode && !isAskMode}
 				<button
