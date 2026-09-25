@@ -51,8 +51,7 @@
 		placeholder={m.login_passphrase_placeholder()}
 		rows="3"
 		spellcheck="false"
-		class="{CONTROL} resize-none font-mono"
-	></textarea>
+		class="{CONTROL} resize-none font-mono"></textarea>
 </div>
 
 {#if error}
