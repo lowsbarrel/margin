@@ -2,6 +2,7 @@ import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import type { FsEntry, TreeEntry } from '$lib/fs/bridge';
 import { clipboard } from '$lib/stores/clipboard.svelte';
 import { files } from '$lib/stores/files.svelte';
+import { parentDir } from '$lib/utils/path';
 import * as m from '$lib/paraglide/messages.js';
 
 export type MenuTarget =
@@ -48,7 +49,7 @@ export function buildMenuItems(target: MenuTarget, handlers: MenuHandlers): Cont
 		{ label: m.sidebar_cut(), onclick: () => handlers.onCut(entry) }
 	);
 	if (clipboard.hasItems) {
-		const pasteDir = entry.is_dir ? entry.path : entry.path.slice(0, entry.path.lastIndexOf('/'));
+		const pasteDir = entry.is_dir ? entry.path : parentDir(entry.path);
 		items.push({ label: m.sidebar_paste(), onclick: () => handlers.onPaste(pasteDir) });
 	}
 	items.push(

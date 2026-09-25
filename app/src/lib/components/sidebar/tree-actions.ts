@@ -12,6 +12,7 @@ import { files } from '$lib/stores/files.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import { vault } from '$lib/stores/vault.svelte';
 import { ensureFolderExpanded } from '$lib/utils/page-actions';
+import { baseName, parentDir } from '$lib/utils/path';
 import { createUniquePath, normalizeDirName, normalizeFileName } from '$lib/utils/sidebar-ops';
 import * as m from '$lib/paraglide/messages.js';
 
@@ -38,7 +39,7 @@ export function createTreeActions(host: TreeActionHost): TreeActions {
 		if (sanitized === null) return false;
 		if (sanitized === entry.name) return true;
 
-		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
+		const parent = parentDir(entry.path);
 		const newPath = `${parent}/${sanitized}`;
 		const differsBeyondCase = newPath.toLowerCase() !== entry.path.toLowerCase();
 		if (differsBeyondCase && (await fileExists(newPath))) {
@@ -89,7 +90,7 @@ export function createTreeActions(host: TreeActionHost): TreeActions {
 
 	async function duplicate(entry: FsEntry): Promise<void> {
 		if (!vault.vaultPath) return;
-		const parent = entry.path.slice(0, entry.path.lastIndexOf('/'));
+		const parent = parentDir(entry.path);
 		const candidate = await createUniquePath(parent, entry.name, 'copy');
 
 		try {
@@ -110,7 +111,7 @@ export function createTreeActions(host: TreeActionHost): TreeActions {
 
 	async function moveEntry(fromPath: string, toDir: string, isDir: boolean): Promise<void> {
 		if (!vault.vaultPath) return;
-		const name = fromPath.split('/').pop() ?? '';
+		const name = baseName(fromPath);
 		const dest = `${toDir}/${name}`;
 		if (await fileExists(dest)) {
 			toast.error(m.toast_exists_in_folder({ name }));
@@ -159,7 +160,7 @@ export function createTreeActions(host: TreeActionHost): TreeActions {
 		for (let i = 0; i < data.paths.length; i++) {
 			const srcPath = data.paths[i];
 			const isDir = data.isDirs[i];
-			const name = srcPath.split('/').pop() ?? '';
+			const name = baseName(srcPath);
 			const dest = await createUniquePath(targetDir, name);
 
 			try {

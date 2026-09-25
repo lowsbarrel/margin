@@ -31,7 +31,7 @@ pub struct FileMetadata {
     pub modified: u64,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn list_directory(path: &str) -> Result<Vec<FsEntry>, String> {
     let p = Path::new(path);

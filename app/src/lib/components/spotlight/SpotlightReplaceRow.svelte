@@ -21,7 +21,7 @@
 		type="text"
 		spellcheck="false"
 		autocomplete="off"
-		class="min-w-0 flex-1 border-none bg-transparent p-0 text-sm text-foreground caret-(--color-bg-brand) shadow-none outline-none placeholder:text-subtle-foreground"
+		class="min-w-0 flex-1 border-none bg-transparent p-0 text-sm text-foreground caret-brand shadow-none outline-none placeholder:text-subtle-foreground"
 	/>
 	<button
 		type="button"

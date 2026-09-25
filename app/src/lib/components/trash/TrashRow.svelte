@@ -2,9 +2,10 @@
 	import { FileText, Folder, History, RotateCcw, Trash2 } from '@lucide/svelte';
 	import { Button, IconButton } from '$lib/ui';
 	import { splitHighlight } from '$lib/utils/sidebar-ops';
+	import { parentDir } from '$lib/utils/path';
 	import type { TrashItem } from '$lib/history/bridge';
 	import * as m from '$lib/paraglide/messages.js';
-	import { PURGE_HINT_DAYS, daysUntilPurge, folderOf, relativeTime } from './trash-model';
+	import { PURGE_HINT_DAYS, daysUntilPurge, relativeTime } from './trash-model';
 
 	interface Props {
 		item: TrashItem;
@@ -20,7 +21,7 @@
 
 	let { item, index, selected, query, now, busy, onselect, onrestore, ondelete }: Props = $props();
 
-	const folder = $derived(folderOf(item.path));
+	const folder = $derived(parentDir(item.path));
 	const relative = $derived(relativeTime(item.deleted_at, now));
 	const purgeDays = $derived(daysUntilPurge(item.deleted_at, now));
 </script>

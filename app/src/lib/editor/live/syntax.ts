@@ -9,20 +9,12 @@ export {
 	HIGHLIGHT,
 	HIGHLIGHT_MARK,
 	INLINE_MATH,
-	INLINE_MATH_MARK,
 	TAG,
 	WIKI_LINK,
 	WIKI_LINK_MARK,
 	WIKI_LINK_TARGET
 } from './syntax-inline';
-export {
-	BLOCK_MATH,
-	BLOCK_MATH_MARK,
-	COLON_CALLOUT,
-	COLON_CALLOUT_MARK,
-	FRONTMATTER,
-	FRONTMATTER_MARK
-} from './syntax-blocks';
+export { BLOCK_MATH, BLOCK_MATH_MARK, COLON_CALLOUT, FRONTMATTER } from './syntax-blocks';
 
 export const markdownSyntax = markdown({
 	base: markdownLanguage,

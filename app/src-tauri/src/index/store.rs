@@ -102,10 +102,10 @@ pub(super) fn upsert(
     }
 
     conn.execute("DELETE FROM links WHERE src = ?1", params![path])?;
-    for link in crate::text::parse_wiki_links(body) {
+    for title in crate::text::parse_wiki_links(body) {
         conn.execute(
             "INSERT OR IGNORE INTO links (src, target_lc) VALUES (?1, ?2)",
-            params![path, link.title.to_lowercase()],
+            params![path, title.to_lowercase()],
         )?;
     }
     Ok(())

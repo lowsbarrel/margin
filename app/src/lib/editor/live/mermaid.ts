@@ -10,7 +10,14 @@ import {
 	type DecorationSet
 } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
-import { collapsedLines, hide, refreshDecorations, touched, touchedLines } from './decorate';
+import {
+	collapsedLines,
+	hide,
+	refreshDecorations,
+	revealMoved,
+	touched,
+	touchedLines
+} from './decorate';
 
 interface MermaidBlock {
 	from: number;
@@ -49,7 +56,7 @@ function mermaidCode(state: EditorState, node: SyntaxNode): string | null {
 	return doc.sliceString(from, Math.max(from, closing - 1));
 }
 
-export function mermaidBlocks(state: EditorState, touchedSet: Set<number>): MermaidBlock[] {
+function mermaidBlocks(state: EditorState, touchedSet: Set<number>): MermaidBlock[] {
 	const doc = state.doc;
 	const out: MermaidBlock[] = [];
 	syntaxTree(state).iterate({
@@ -149,7 +156,7 @@ const mermaidDiagrams = StateField.define<DecorationSet>({
 	update(value, tr) {
 		if (
 			tr.docChanged ||
-			!tr.newSelection.eq(tr.startState.selection) ||
+			revealMoved(tr.startState, tr.newDoc, tr.newSelection) ||
 			tr.effects.some((e) => e.is(refreshDecorations))
 		)
 			return diagramDecorations(tr.state, touchedLines(tr.state));

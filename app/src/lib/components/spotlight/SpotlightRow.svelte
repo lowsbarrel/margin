@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FileText, Hash, Replace } from '@lucide/svelte';
 	import { displayName } from '$lib/utils/filename';
+	import { baseName } from '$lib/utils/path';
 	import { displayPath, splitHighlight } from '$lib/utils/sidebar-ops';
 	import * as m from '$lib/paraglide/messages.js';
 	import { fileIcon, type SpotlightItem } from './spotlight-items';
@@ -55,8 +56,7 @@
 		<span class="ml-auto shrink-0 text-xs text-subtle-foreground">{item.count}</span>
 	{:else}
 		{@const Icon = item.kind === 'name' ? fileIcon(item.path) : FileText}
-		{@const name =
-			item.kind === 'name' ? item.entry.name : (item.path.split('/').pop() ?? item.path)}
+		{@const name = item.kind === 'name' ? item.entry.name : baseName(item.path)}
 		{@const folder = displayPath(item.path, vaultPath)}
 		<Icon
 			size={16}

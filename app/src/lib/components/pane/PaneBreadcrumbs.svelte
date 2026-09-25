@@ -4,6 +4,7 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { vault } from '$lib/stores/vault.svelte';
 	import { displayPath } from '$lib/utils/sidebar-ops';
+	import { parentDir } from '$lib/utils/path';
 	import { vaultBreadcrumbs, type Breadcrumb } from '$lib/utils/breadcrumbs';
 	import { BreadcrumbMenu } from './breadcrumb-menu.svelte';
 
@@ -57,7 +58,7 @@
 	async function toggle(index: number, crumb: Breadcrumb, event: MouseEvent) {
 		if (menu.index === index) return focusAnchor(false);
 		menu.keyboard = event.detail === 0;
-		const listPath = crumb.isDir ? crumb.path : crumb.path.slice(0, crumb.path.lastIndexOf('/'));
+		const listPath = crumb.isDir ? crumb.path : parentDir(crumb.path);
 		await menu.show(index, listPath, path);
 		await place();
 		listEl?.focus();

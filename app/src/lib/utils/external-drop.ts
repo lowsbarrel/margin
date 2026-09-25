@@ -6,6 +6,7 @@ import { editor } from '$lib/stores/editor.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import { importExternalDirectory, importExternalFile, listDirectory } from '$lib/fs/bridge';
+import { baseName, parentDir } from '$lib/utils/path';
 import { createUniquePath } from '$lib/utils/sidebar-ops';
 import { dropDirectory, hitTestDropZone } from '$lib/utils/drop-zone';
 import * as m from '$lib/paraglide/messages.js';
@@ -90,7 +91,7 @@ async function handleExternalDrop(paths: string[], pos: CssPoint) {
 async function importPathsInto(paths: string[], dir: string) {
 	let imported = 0;
 	for (const source of paths) {
-		const name = source.replace(/\\/g, '/').split('/').pop() ?? '';
+		const name = baseName(source.replace(/\\/g, '/'));
 		if (!name) continue;
 		try {
 			const dest = await createUniquePath(dir, name);
@@ -109,11 +110,11 @@ async function importPathsInto(paths: string[], dir: string) {
 
 async function isDirectory(source: string): Promise<boolean> {
 	const normalised = source.replace(/\\/g, '/');
-	const slash = normalised.lastIndexOf('/');
-	if (slash <= 0) return false;
-	const name = normalised.slice(slash + 1);
+	const dir = parentDir(normalised);
+	if (!dir) return false;
+	const name = baseName(normalised);
 	try {
-		const entries = await listDirectory(normalised.slice(0, slash));
+		const entries = await listDirectory(dir);
 		return entries.some((entry) => entry.name === name && entry.is_dir);
 	} catch {
 		return false;

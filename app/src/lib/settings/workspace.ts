@@ -1,6 +1,6 @@
 import { commands } from '$lib/bindings';
 
-export type { WorkspaceTab, WorkspacePane, WorkspaceState } from '$lib/bindings';
+export type { WorkspacePane, WorkspaceState } from '$lib/bindings';
 import type { WorkspaceState } from '$lib/bindings';
 
 export async function saveWorkspaceState(

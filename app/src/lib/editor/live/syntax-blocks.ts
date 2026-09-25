@@ -4,9 +4,9 @@ import { tags } from '@lezer/highlight';
 export const BLOCK_MATH = 'BlockMath';
 export const BLOCK_MATH_MARK = 'BlockMathMark';
 export const COLON_CALLOUT = 'ColonCallout';
-export const COLON_CALLOUT_MARK = 'ColonCalloutMark';
+const COLON_CALLOUT_MARK = 'ColonCalloutMark';
 export const FRONTMATTER = 'Frontmatter';
-export const FRONTMATTER_MARK = 'FrontmatterMark';
+const FRONTMATTER_MARK = 'FrontmatterMark';
 
 const FENCE = /^\$\$\s*$/;
 const ONELINE = /^\$\$(.+?)\$\$\s*$/;

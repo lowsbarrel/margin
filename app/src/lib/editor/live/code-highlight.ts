@@ -1,4 +1,4 @@
-export interface HastNode {
+interface HastNode {
 	type: string;
 	value?: string;
 	properties?: { className?: unknown };
@@ -16,13 +16,43 @@ export interface CodeSpan {
 	className: string;
 }
 
-export async function createHighlighter(): Promise<Highlighter | null> {
-	try {
-		const lowlight = await import('lowlight');
-		return lowlight.createLowlight(lowlight.common);
-	} catch (err) {
-		console.warn('Code highlighting unavailable:', err);
-		return null;
+let highlighter: Promise<Highlighter | null> | null = null;
+
+export function createHighlighter(): Promise<Highlighter | null> {
+	highlighter ??= import('./lowlight')
+		.then(({ common, createLowlight }) => createLowlight(common))
+		.catch((err) => {
+			console.warn('Code highlighting unavailable:', err);
+			return null;
+		});
+	return highlighter;
+}
+
+// Highlighting dominates a rebuild, and a block nobody touched keeps the spans it had last time.
+export class CodeSpanCache {
+	private previous = new Map<string, CodeSpan[]>();
+	private current = new Map<string, CodeSpan[]>();
+
+	spans(code: Highlighter | null, language: string, text: string, offset: number): CodeSpan[] {
+		if (!code) return [];
+		const key = `${language}\u0000${text}`;
+		let spans = this.previous.get(key);
+		if (!spans) {
+			spans = highlightCode(code, language, text);
+			this.previous.set(key, spans);
+		}
+		this.current.set(key, spans);
+		if (offset === 0) return spans;
+		return spans.map((span) => ({
+			from: span.from + offset,
+			to: span.to + offset,
+			className: span.className
+		}));
+	}
+
+	commit(): void {
+		this.previous = this.current;
+		this.current = new Map();
 	}
 }
 
@@ -50,12 +80,7 @@ function walk(nodes: HastNode[], offset: number, inherited: string, out: CodeSpa
 	return pos;
 }
 
-export function highlightCode(
-	code: Highlighter | null,
-	language: string,
-	text: string,
-	offset: number
-): CodeSpan[] {
+function highlightCode(code: Highlighter | null, language: string, text: string): CodeSpan[] {
 	const lang = language
 		.trim()
 		.toLowerCase()
@@ -66,7 +91,7 @@ export function highlightCode(
 		const tree = code.highlight(lang, text);
 		if (!tree) return [];
 		const spans: CodeSpan[] = [];
-		walk(tree.children ?? [], offset, '', spans);
+		walk(tree.children ?? [], 0, '', spans);
 		return spans;
 	} catch {
 		return [];

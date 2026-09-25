@@ -63,7 +63,7 @@ export function isShapeTool(tool: Tool): tool is ShapeKind {
 	return shapeKinds.includes(tool as ShapeKind);
 }
 
-export const strokeWidths: StrokeWidth[] = ['thin', 'medium', 'thick'];
+const strokeWidths: StrokeWidth[] = ['thin', 'medium', 'thick'];
 
 const WIDTH_VALUES: Record<Tool, readonly [number, number, number]> = {
 	hand: [1.5, 3, 6],

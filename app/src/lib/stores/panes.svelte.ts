@@ -24,6 +24,7 @@ import {
 	splitTabToNewPane
 } from '$lib/stores/pane-layout';
 import { restoreLayout } from '$lib/stores/pane-restore';
+import { baseName } from '$lib/utils/path';
 import type { WorkspacePane } from '$lib/settings/workspace';
 
 export type TabType = 'markdown' | 'image' | 'pdf' | 'canvas' | 'unknown';
@@ -51,7 +52,7 @@ export interface Pane {
 }
 
 export function fileTitle(path: string): string {
-	const name = path.split('/').pop() ?? '';
+	const name = baseName(path);
 	if (name.endsWith('.md')) return name.slice(0, -3);
 	if (name.endsWith('.canvas')) return name.slice(0, -7);
 	return name;

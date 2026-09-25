@@ -42,10 +42,3 @@ export function validateName(name: string): string | null {
 export function displayName(name: string): string {
 	return name.replace(/\.(md|canvas)$/, '');
 }
-
-export function ensureMdExtension(raw: string): string | null {
-	const name = raw.trim();
-	const error = validateName(name);
-	if (error) return null;
-	return name.includes('.') ? name : `${name}.md`;
-}

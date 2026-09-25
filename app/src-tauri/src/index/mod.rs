@@ -224,7 +224,7 @@ pub fn rebuild(root: &str) -> Result<u32, String> {
     Ok(present.len() as u32)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn index_search(root: &str, query: &str, limit: u32) -> Result<Vec<SearchHit>, String> {
     search_match(root, &build_match_query(query), limit)
@@ -238,7 +238,7 @@ pub async fn index_rebuild(root: String) -> Result<u32, String> {
         .map_err(|e| e.to_string())?
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn index_tags(root: &str) -> Result<Vec<TagInfo>, String> {
     let conn = open_db(root)?;
@@ -267,7 +267,7 @@ pub fn index_tags(root: &str) -> Result<Vec<TagInfo>, String> {
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn index_backlinks(root: &str, path: &str) -> Result<Vec<Backlink>, String> {
     let Some(stem) = Path::new(path).file_stem().and_then(|s| s.to_str()) else {

@@ -2,7 +2,7 @@ import type { SyntaxNode } from '@lezer/common';
 import type { EditorState, Range } from '@codemirror/state';
 import { Decoration } from '@codemirror/view';
 import type { LiveContext } from './context';
-import { highlightCode } from './code-highlight';
+import type { CodeSpanCache } from './code-highlight';
 import { eachLine, hide, line, mark, touched } from './decorate';
 import { CodeHeaderWidget } from './widgets';
 
@@ -38,7 +38,8 @@ export function codeBlockDecorations(
 	ctx: LiveContext,
 	touchedSet: Set<number>,
 	node: SyntaxNode,
-	ranges: Range<Decoration>[]
+	ranges: Range<Decoration>[],
+	spans: CodeSpanCache
 ): void {
 	const doc = state.doc;
 	eachLine(state, node.from, node.to, (at) =>
@@ -68,7 +69,7 @@ export function codeBlockDecorations(
 	}
 
 	if (!language || content.from >= content.to) return;
-	for (const span of highlightCode(
+	for (const span of spans.spans(
 		ctx.code,
 		language,
 		doc.sliceString(content.from, content.to),

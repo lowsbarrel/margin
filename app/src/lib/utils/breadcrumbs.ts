@@ -1,4 +1,5 @@
 import { fileTitle } from '$lib/stores/panes.svelte';
+import { baseName } from '$lib/utils/path';
 
 export interface Breadcrumb {
 	label: string;
@@ -10,7 +11,7 @@ export function vaultBreadcrumbs(path: string, vaultPath: string | null): Breadc
 	if (!vaultPath || !path.startsWith(`${vaultPath}/`)) return [];
 	const parts = path.slice(vaultPath.length + 1).split('/');
 	const crumbs: Breadcrumb[] = [
-		{ label: vaultPath.split('/').pop() || vaultPath, path: vaultPath, isDir: true }
+		{ label: baseName(vaultPath) || vaultPath, path: vaultPath, isDir: true }
 	];
 	let current = vaultPath;
 	for (const part of parts.slice(0, -1)) {

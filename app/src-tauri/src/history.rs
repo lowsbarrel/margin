@@ -85,7 +85,7 @@ pub fn save_snapshot(
     save_snapshot_inner(vault_path, file_path, &content)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn list_snapshots(vault_path: &str, file_path: &str) -> Result<Vec<Snapshot>, String> {
     let dir = history_dir(vault_path, file_path)?;
@@ -148,7 +148,7 @@ fn safe_snapshot_path(
     Ok(snapshot_path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn read_snapshot(
     vault_path: &str,

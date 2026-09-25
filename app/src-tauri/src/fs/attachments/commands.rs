@@ -1,8 +1,7 @@
 use super::scan::{SWEEP_GRACE, sweep_unused};
 use super::{import_file, store};
-use crate::fs::{
-    VaultPathState, ensure_in_vault, header, request_body, valid_rel_path, vault_root,
-};
+use crate::fs::{VaultPathState, ensure_in_vault, valid_rel_path, vault_root};
+use crate::ipc::{body, header};
 use std::path::PathBuf;
 use tauri::ipc::Request;
 
@@ -38,7 +37,7 @@ pub fn store_attachment_bytes(
 ) -> Result<String, String> {
     let folder = header(&request, "x-folder")?;
     let name = header(&request, "x-name")?;
-    store_attachment(&folder, &name, &request_body(&request)?, &vault_path_state)
+    store_attachment(&folder, &name, &body(&request)?, &vault_path_state)
 }
 
 #[tauri::command]

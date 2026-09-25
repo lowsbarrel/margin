@@ -26,7 +26,7 @@ pub struct VaultProfiles {
     pub last_used: Option<String>,
 }
 
-// Tauri commands run on a threadpool: two callers could otherwise each generate a key, orphaning whatever was encrypted under the discarded one.
+// One key generation at a time: a concurrent caller could otherwise orphan whatever the discarded key encrypted.
 static DEVICE_KEY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
 
 fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {

@@ -1,8 +1,8 @@
 [package]
 name = "app"
 version = "0.1.23"
-description = "A Tauri App"
-authors = ["you"]
+description = "A local-first Markdown note app with end-to-end encrypted S3 sync."
+authors = ["Alessandro Zucchiatti"]
 edition = "2024"
 default-run = "app"
 
@@ -22,7 +22,7 @@ tauri-plugin-updater = "2"
 tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tokio = { version = "1", features = ["full"] }
+tokio = { version = "1", features = ["rt", "time", "fs"] }
 bip39 = "2"
 aes-gcm-siv = "0.11"
 sha2 = "0.10"
@@ -35,7 +35,6 @@ percent-encoding = "2"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 rayon = "1"
 nucleo-matcher = "0.3"
-memchr = "2"
 regex = "1"
 reqwest = { version = "0.12", default-features = false, features = [
     "json",
@@ -56,3 +55,7 @@ portable-pty = "0.9"
 # `forbid`, not `deny`: turning it off must be a visible manifest edit, not a local `#[allow]`.
 unsafe_code = "forbid"
 
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

@@ -20,7 +20,7 @@ export interface LiveEditorHost {
 	openLightbox(src: string, alt: string): void;
 	openWikiLink(title: string): void;
 	openContextMenu(x: number, y: number, items: ContextMenuItem[]): void;
-	onDocChange(text: string): void;
+	onDocChange(text: () => string): void;
 	onCursor(line: number, col: number): void;
 	onSelection(): void;
 }
@@ -94,7 +94,8 @@ export async function createLiveEditor(host: LiveEditorHost): Promise<LiveEditor
 						update.docChanged &&
 						!update.transactions.some((tr) => tr.annotation(Transaction.addToHistory) === false)
 					) {
-						host.onDocChange(update.state.doc.toString());
+						const state = update.state;
+						host.onDocChange(() => state.doc.toString());
 					}
 					if (update.docChanged || update.selectionSet) {
 						const head = update.state.selection.main.head;

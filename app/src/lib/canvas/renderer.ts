@@ -35,12 +35,12 @@ function isNearWhite(color: string): boolean {
 }
 
 // Drawings made before ink existed are full of near-white strokes: paint them as ink so they stay legible in both themes.
-export function resolveColor(color: string, isDark: boolean): string {
+function resolveColor(color: string, isDark: boolean): string {
 	if (color === INK_COLOR || isNearWhite(color)) return themeTokens(isDark).ink;
 	return color;
 }
 
-export function drawGrid(
+function drawGrid(
 	ctx: CanvasRenderingContext2D,
 	w: number,
 	h: number,
@@ -68,7 +68,7 @@ export function drawGrid(
 	ctx.fill();
 }
 
-export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke, isDark: boolean) {
+function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke, isDark: boolean) {
 	if (s.points.length < 2) return;
 	c.lineCap = 'round';
 	c.lineJoin = 'round';
@@ -90,7 +90,7 @@ export function drawStrokeOn(c: CanvasRenderingContext2D, s: Stroke, isDark: boo
 	c.globalCompositeOperation = 'source-over';
 }
 
-export function drawShapeOn(c: CanvasRenderingContext2D, s: Shape, isDark: boolean) {
+function drawShapeOn(c: CanvasRenderingContext2D, s: Shape, isDark: boolean) {
 	c.strokeStyle = resolveColor(s.color, isDark);
 	c.lineWidth = s.size;
 	c.lineCap = 'round';
@@ -136,7 +136,7 @@ export function drawShapeOn(c: CanvasRenderingContext2D, s: Shape, isDark: boole
 	}
 }
 
-export function drawTextOn(c: CanvasRenderingContext2D, t: TextLabel, isDark: boolean) {
+function drawTextOn(c: CanvasRenderingContext2D, t: TextLabel, isDark: boolean) {
 	c.font = `${t.fontSize}px Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`;
 	c.fillStyle = resolveColor(t.color, isDark);
 	c.textBaseline = 'top';

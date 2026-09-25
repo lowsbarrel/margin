@@ -7,7 +7,7 @@ use rand::TryRng;
 use rand::rngs::SysRng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::ipc::{InvokeBody, Request, Response};
+use tauri::ipc::{Request, Response};
 
 #[derive(Serialize, specta::Type)]
 pub struct VaultKeys {
@@ -84,41 +84,11 @@ pub fn decrypt_blob(ciphertext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String
 }
 
 #[tauri::command]
-pub fn encrypt_blob_cmd(request: Request) -> Result<Response, String> {
-    let key = parse_key_header(&request)?;
-    let plaintext = parse_body(&request)?;
-    let result = encrypt_blob(plaintext, key)?;
-    Ok(Response::new(result))
-}
-
-#[tauri::command]
 pub fn decrypt_blob_cmd(request: Request) -> Result<Response, String> {
-    let key = parse_key_header(&request)?;
-    let ciphertext = parse_body(&request)?;
+    let key = crate::ipc::key_header(&request)?;
+    let ciphertext = crate::ipc::body(&request)?;
     let result = decrypt_blob(ciphertext, key)?;
     Ok(Response::new(result))
-}
-
-fn parse_key_header(request: &Request) -> Result<Vec<u8>, String> {
-    let header = request
-        .headers()
-        .get("x-key")
-        .and_then(|v| v.to_str().ok())
-        .ok_or("Missing x-key header")?;
-    header
-        .split(',')
-        .map(|s| s.trim().parse::<u8>())
-        .collect::<Result<Vec<u8>, _>>()
-        .map_err(|e| format!("Invalid key header: {e}"))
-}
-
-fn parse_body(request: &Request) -> Result<Vec<u8>, String> {
-    match request.body() {
-        InvokeBody::Raw(bytes) => Ok(bytes.clone()),
-        InvokeBody::Json(val) => {
-            serde_json::from_value::<Vec<u8>>(val.clone()).map_err(|e| format!("Invalid body: {e}"))
-        }
-    }
 }
 
 #[cfg(test)]

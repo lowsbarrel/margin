@@ -7,7 +7,7 @@ import {
 	type CssPoint
 } from '$lib/utils/external-drop';
 
-export function placeCursor(view: EditorView, x: number, y: number): void {
+function placeCursor(view: EditorView, x: number, y: number): void {
 	const pos = view.posAtCoords({ x, y });
 	if (pos == null) return;
 	view.dispatch({ selection: { anchor: pos } });

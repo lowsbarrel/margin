@@ -1,4 +1,4 @@
-export type ClipboardOp = 'copy' | 'cut';
+type ClipboardOp = 'copy' | 'cut';
 
 interface ClipboardData {
 	paths: string[];

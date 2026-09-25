@@ -18,12 +18,12 @@ export interface SyncOptions {
 let activeSyncAbort: AbortController | null = null;
 let syncLock: Promise<void> = Promise.resolve();
 
-export function cancelSync(): void {
+function cancelSync(): void {
 	activeSyncAbort?.abort();
 	activeSyncAbort = null;
 }
 
-export function isSyncing(): boolean {
+function isSyncing(): boolean {
 	return activeSyncAbort !== null;
 }
 
@@ -172,7 +172,7 @@ export function stopAutoSync(): void {
 	}
 }
 
-export async function runQuietSync(): Promise<void> {
+async function runQuietSync(): Promise<void> {
 	const creds = syncCredentials;
 	if (!creds || isSyncing()) return;
 	try {

@@ -1,7 +1,7 @@
 import { WidgetType, type EditorView } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
 
-export function toggleTaskBox(view: EditorView, element: HTMLElement, next: boolean): void {
+function toggleTaskBox(view: EditorView, element: HTMLElement, next: boolean): void {
 	const pos = view.posAtDOM(element);
 	const line = view.state.doc.lineAt(pos);
 	const match = /^([ \t]*(?:[-*+]|\d+[.)])[ \t]+)\[([ xX])\]/.exec(line.text);

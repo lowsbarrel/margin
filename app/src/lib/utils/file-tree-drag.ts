@@ -2,6 +2,7 @@ import { drag } from '$lib/stores/drag.svelte';
 import { files } from '$lib/stores/files.svelte';
 import { startPointerDrag } from '$lib/utils/drag-handler';
 import { reconcileMovedOut } from '$lib/utils/page-actions';
+import { parentDir } from '$lib/utils/path';
 import { startDrag as startNativeDrag } from '@crabnebula/tauri-plugin-drag';
 import { onVaultFsChanged, type TreeEntry } from '$lib/fs/bridge';
 
@@ -11,11 +12,11 @@ const MOVE_OUT_SETTLE_MS = 10_000;
 
 let outsideSince: number | null = null;
 
-export function isDescendantOrSelf(source: string, target: string): boolean {
+function isDescendantOrSelf(source: string, target: string): boolean {
 	return target === source || target.startsWith(source + '/');
 }
 
-export function getDropEntries(): { path: string; isDir: boolean }[] {
+function getDropEntries(): { path: string; isDir: boolean }[] {
 	const item = drag.item;
 	if (!item || item.kind !== 'file') return [];
 	if (files.selectedEntries.size > 1 && files.isSelected(item.path)) {
@@ -46,7 +47,7 @@ export async function moveEntriesInto(
 	const entries = getDropEntries();
 	const valid = entries.filter((entry) => {
 		if (isDescendantOrSelf(entry.path, folderPath)) return false;
-		return entry.path.slice(0, entry.path.lastIndexOf('/')) !== folderPath;
+		return parentDir(entry.path) !== folderPath;
 	});
 	// End the drag before the first await: the page-level mouseup must not resolve it twice.
 	drag.end();

@@ -133,9 +133,9 @@ sync and export skips hidden paths.
   `shadcn-svelte add`. Restyle through the theme, not by editing it in place.
 - User-facing strings go through Paraglide. Both `en` and `it` are maintained;
   a key added to one and not the other falls back silently.
-- `{@html}` is XSS on note content. Nothing is allowlisted: notes reach the DOM
-  through CodeMirror decorations (raw HTML stays source text), the AI answer
-  through markdown-it with raw HTML off.
+- `{@html}` is XSS on note content. Nothing is allowlisted: notes and the AI
+  answer reach the DOM through CodeMirror decorations (raw HTML stays source
+  text); markdown-it renders only the PDF export, with raw HTML off.
 - The configured AI endpoint is the one place note text leaves the machine
   unencrypted, and only because the user asked a question there. The agent
   loop reads its key from Rust state.

@@ -17,7 +17,7 @@ export interface SaveControllerHost {
 export class SaveController {
 	private readonly host: SaveControllerHost;
 	lastSavedText: string | null;
-	private pendingText: string | null = null;
+	private pendingText: (() => string) | null = null;
 	private timer: ReturnType<typeof setTimeout> | undefined;
 	private lastSnapshotTime = 0;
 	private lastSnapshotMd: string | null = null;
@@ -49,23 +49,25 @@ export class SaveController {
 			});
 	}
 
-	schedule(text: string): void {
+	schedule(text: () => string): void {
 		this.pendingText = text;
 		clearTimeout(this.timer);
 		this.timer = setTimeout(() => {
 			this.timer = undefined;
-			const text = this.pendingText;
-			this.pendingText = null;
-			if (text != null) this.saveNow(text);
+			this.flushPending();
 		}, SAVE_DEBOUNCE_MS);
 	}
 
 	flush(): void {
 		clearTimeout(this.timer);
 		this.timer = undefined;
-		const text = this.pendingText;
+		this.flushPending();
+	}
+
+	private flushPending(): void {
+		const pending = this.pendingText;
 		this.pendingText = null;
-		if (text != null) this.saveNow(text);
+		if (pending) this.saveNow(pending());
 	}
 
 	cancel(): void {

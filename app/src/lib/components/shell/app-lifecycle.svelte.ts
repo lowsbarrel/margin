@@ -37,9 +37,9 @@ export function initAppLifecycle(): void {
 		else unlisteners.push(unlisten);
 	}
 
-	async function applyExternalChange(): Promise<void> {
+	async function applyExternalChange(path: string): Promise<void> {
 		const tab = panes.activeTab;
-		if (!tab) return;
+		if (!tab || tab.path !== path) return;
 		try {
 			const bytes = await readFileBytes(tab.path);
 			if (isOwnRecentWrite(tab.path, bytes)) return;

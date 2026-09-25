@@ -4,8 +4,8 @@
 	import * as m from '$lib/paraglide/messages.js';
 	import { files } from '$lib/stores/files.svelte';
 	import { focusOnMount, useInlineEdit } from '$lib/utils/inline-edit.svelte';
+	import { parentDir } from '$lib/utils/path';
 	import { INLINE_INPUT, ROW_BASE, fileRowClass, folderRowClass } from './row-classes';
-	import { parentDir } from './tree-paths';
 	import { selectStem } from './tree-rename';
 	import type { VisibleItem } from './tree-window.svelte';
 

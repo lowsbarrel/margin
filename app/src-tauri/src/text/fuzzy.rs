@@ -13,7 +13,7 @@ fn display_name(name: &str) -> String {
 }
 
 // `limit` is u32 rather than usize so specta can export it.
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn fuzzy_filter_files(files: Vec<FuzzyEntry>, query: String, limit: u32) -> Vec<FuzzyEntry> {
     let limit = limit as usize;

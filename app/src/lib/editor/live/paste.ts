@@ -154,7 +154,7 @@ export async function pasteFromClipboard(view: EditorView, plain: boolean): Prom
 	}
 }
 
-export function armPlainPaste(view: EditorView): void {
+function armPlainPaste(view: EditorView): void {
 	plainNext = true;
 	window.setTimeout(() => {
 		if (!plainNext) return;
@@ -168,7 +168,7 @@ export function armPlainPaste(view: EditorView): void {
 	}, 250);
 }
 
-export function handlePasteEvent(view: EditorView, event: ClipboardEvent): boolean {
+function handlePasteEvent(view: EditorView, event: ClipboardEvent): boolean {
 	const data = event.clipboardData;
 	if (!data) return false;
 	if (insideCode(view.state)) return false;

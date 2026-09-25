@@ -2,7 +2,7 @@ import type { ChangeSpec, EditorState } from '@codemirror/state';
 import { getLocale } from '$lib/paraglide/runtime.js';
 import * as m from '$lib/paraglide/messages.js';
 
-export interface SlashEdit {
+interface SlashEdit {
 	changes: ChangeSpec[];
 	selection: number;
 }
@@ -70,7 +70,7 @@ function today(): string {
 }
 
 // Built per call: Paraglide resolves the labels against the locale current at call time.
-export function buildSlashItems(): SlashItem[] {
+function buildSlashItems(): SlashItem[] {
 	return [
 		{
 			id: 'h1',

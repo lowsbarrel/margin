@@ -11,6 +11,7 @@ import {
 } from '@codemirror/view';
 import { assetsOf } from './assets';
 import { codeBlockDecorations } from './code-block';
+import { CodeSpanCache } from './code-highlight';
 import { contextOf } from './context';
 import {
 	eachLine,
@@ -19,8 +20,10 @@ import {
 	line,
 	mark,
 	refreshDecorations,
+	revealMoved,
 	touched,
-	touchedLines
+	touchedLines,
+	treeChanged
 } from './decorate';
 import { mermaidOff } from './mermaid';
 import { ListMarkWidget, TaskWidget } from './widgets';
@@ -125,7 +128,7 @@ function markCount(node: SyntaxNode | null): number {
 	return count;
 }
 
-function build(state: EditorState): DecorationSet {
+function build(state: EditorState, spans: CodeSpanCache): DecorationSet {
 	const ctx = contextOf(state);
 	const touchedSet = touchedLines(state);
 	const frontmatter = frontmatterEnd(state);
@@ -153,7 +156,7 @@ function build(state: EditorState): DecorationSet {
 			}
 			if (name === 'FencedCode' || name === 'CodeBlock') {
 				if (mermaidOff(state, node, touchedSet)) return false;
-				codeBlockDecorations(state, ctx, touchedSet, node, ranges);
+				codeBlockDecorations(state, ctx, touchedSet, node, ranges, spans);
 				return false;
 			}
 			if (name === 'Blockquote') {
@@ -283,26 +286,28 @@ function build(state: EditorState): DecorationSet {
 		}
 	});
 
+	spans.commit();
 	return Decoration.set(ranges, true);
 }
 
 class LivePreview {
 	decorations: DecorationSet;
+	private readonly spans = new CodeSpanCache();
 
 	constructor(view: EditorView) {
-		this.decorations = build(view.state);
+		this.decorations = build(view.state, this.spans);
 	}
 
 	update(update: ViewUpdate) {
 		if (
 			!update.docChanged &&
-			!update.selectionSet &&
-			!update.viewportChanged &&
+			!revealMoved(update.startState, update.state.doc, update.state.selection) &&
+			!treeChanged(update) &&
 			!update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))
 		) {
 			return;
 		}
-		this.decorations = build(update.state);
+		this.decorations = build(update.state, this.spans);
 	}
 }
 

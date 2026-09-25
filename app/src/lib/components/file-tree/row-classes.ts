@@ -3,7 +3,7 @@ export const ROW_HEIGHT = 32;
 
 export const ROW_BASE =
 	'tree-row relative flex h-8 w-full items-center gap-2 overflow-hidden pr-3 text-sm tracking-normal [&_svg]:shrink-0';
-export const ROW_BUTTON = `${ROW_BASE} cursor-pointer rounded-sm text-left transition-colors`;
+const ROW_BUTTON = `${ROW_BASE} cursor-pointer rounded-sm text-left transition-colors`;
 const ROW_QUIET = 'font-normal text-muted-foreground hover:bg-surface-1 hover:text-foreground';
 const ROW_SELECTED = 'font-normal bg-surface-2 text-foreground';
 

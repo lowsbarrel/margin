@@ -6,7 +6,5 @@ export { default as LogOut } from './log-out.svelte';
 export { default as PanelLeft } from './panel-left.svelte';
 export { default as PenLine } from './pen-line.svelte';
 export { default as RefreshCw } from './refresh-cw.svelte';
-export { default as Search } from './search.svelte';
 export { default as Settings } from './settings.svelte';
-export { default as Star } from './star.svelte';
 export { default as Sun } from './sun.svelte';

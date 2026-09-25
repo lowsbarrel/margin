@@ -24,7 +24,16 @@ import {
 	chevronElement,
 	type CalloutKind
 } from './callout-types';
-import { hide, line, mark, refreshDecorations, touched, touchedLines } from './decorate';
+import {
+	hide,
+	line,
+	mark,
+	refreshDecorations,
+	revealMoved,
+	touched,
+	touchedLines,
+	treeChanged
+} from './decorate';
 import { COLON_CALLOUT } from './syntax';
 
 interface Callout {
@@ -45,7 +54,7 @@ const OBSIDIAN = /^[ \t]*(?:>[ \t]*)+\[!([A-Za-z][\w-]*)\]([+-]?)[ \t]?/;
 const COLON_OPEN = /^:::([A-Za-z][\w-]*)/;
 const COLON_CLOSE = /^:::[ \t]*$/;
 
-export const setCalloutFold = StateEffect.define<{ pos: number; collapsed: boolean }>();
+const setCalloutFold = StateEffect.define<{ pos: number; collapsed: boolean }>();
 
 // Fold state is view-only, so it lives in a state field and never reaches the file.
 const calloutFold = StateField.define<Map<number, boolean>>({
@@ -135,9 +144,18 @@ function colonCallouts(state: EditorState): Callout[] {
 	return out;
 }
 
-export function calloutsOf(state: EditorState): Callout[] {
+function calloutsOf(state: EditorState): Callout[] {
 	return [...obsidianCallouts(state), ...colonCallouts(state)];
 }
+
+const calloutList = StateField.define<Callout[]>({
+	create: (state) => calloutsOf(state),
+	update(value, tr) {
+		if (tr.docChanged || syntaxTree(tr.state) !== syntaxTree(tr.startState))
+			return calloutsOf(tr.state);
+		return value;
+	}
+});
 
 class CalloutHeadWidget extends WidgetType {
 	readonly kind: CalloutKind;
@@ -212,7 +230,7 @@ function buildCallouts(state: EditorState): DecorationSet {
 	const doc = state.doc;
 	const ranges: Range<Decoration>[] = [];
 
-	for (const callout of calloutsOf(state)) {
+	for (const callout of state.field(calloutList)) {
 		const collapsed = fold.get(callout.header.from) ?? callout.fold === '-';
 		const inside = touched(
 			state,
@@ -256,7 +274,7 @@ function hiddenBodies(state: EditorState): DecorationSet {
 	const touchedSet = touchedLines(state);
 	const fold = state.field(calloutFold);
 	const ranges: Range<Decoration>[] = [];
-	for (const callout of calloutsOf(state)) {
+	for (const callout of state.field(calloutList)) {
 		if (touched(state, touchedSet, callout.header.from, callout.dropTo ?? callout.last.to))
 			continue;
 		if (fold.get(callout.header.from) ?? callout.fold === '-')
@@ -273,7 +291,7 @@ const calloutHides = StateField.define<DecorationSet>({
 	update(value, tr) {
 		if (
 			tr.docChanged ||
-			!tr.newSelection.eq(tr.startState.selection) ||
+			revealMoved(tr.startState, tr.newDoc, tr.newSelection) ||
 			tr.effects.some((e) => e.is(refreshDecorations))
 		)
 			return hiddenBodies(tr.state);
@@ -292,8 +310,8 @@ class LiveCallouts {
 	update(update: ViewUpdate) {
 		if (
 			!update.docChanged &&
-			!update.selectionSet &&
-			!update.viewportChanged &&
+			!revealMoved(update.startState, update.state.doc, update.state.selection) &&
+			!treeChanged(update) &&
 			!update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))
 		) {
 			return;
@@ -304,6 +322,7 @@ class LiveCallouts {
 
 export const liveCallouts: readonly Extension[] = [
 	calloutFold,
+	calloutList,
 	calloutHides,
 	ViewPlugin.fromClass(LiveCallouts, { decorations: (plugin) => plugin.decorations })
 ];
