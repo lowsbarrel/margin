@@ -1,6 +1,6 @@
 {
 	"name": "margin",
-	"version": "0.1.24",
+	"version": "0.1.25",
 	"description": "A local-first Markdown note app with end-to-end encrypted S3 sync.",
 	"type": "module",
 	"engines": {
