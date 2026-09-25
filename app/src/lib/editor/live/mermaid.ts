@@ -86,6 +86,8 @@ async function paintMermaid(target: HTMLElement, code: string, theme: MermaidThe
 		mermaid.initialize({
 			startOnLoad: false,
 			theme,
+			look: 'classic',
+			layout: 'dagre',
 			securityLevel: 'strict',
 			fontFamily: 'inherit'
 		});

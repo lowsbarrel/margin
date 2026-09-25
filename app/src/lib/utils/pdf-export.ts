@@ -106,7 +106,8 @@ async function renderMermaidBlocks(container: HTMLElement): Promise<void> {
 		if (!code.trim()) continue;
 		try {
 			// html2canvas cannot rasterize foreignObject labels, so the PDF gets SVG text labels.
-			const directive = "%%{init: {'theme':'default','flowchart':{'htmlLabels':false}}}%%\n";
+			const directive =
+				"%%{init: {'theme':'default','look':'classic','layout':'dagre','flowchart':{'htmlLabels':false}}}%%\n";
 			const { svg } = await mermaid.render(`pdf-mmd-${++pdfMermaidSeq}`, directive + code);
 			el.innerHTML = svg;
 			el.removeAttribute('data-mermaid');
