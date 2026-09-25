@@ -22,6 +22,7 @@ export class TitleEditor {
 	private readonly host: TitleEditorHost;
 	text = $state('');
 	pending = false;
+	private queued: string | null = null;
 	private timer: ReturnType<typeof setTimeout> | undefined;
 
 	constructor(host: TitleEditorHost, initialTitle: string) {
@@ -30,34 +31,42 @@ export class TitleEditor {
 	}
 
 	input(raw: string): void {
-		if (!this.host.isAlive() || !raw) return;
-		if (raw === fileTitle(this.host.path())) return;
-
 		clearTimeout(this.timer);
+		this.timer = undefined;
+		if (!this.host.isAlive() || !raw) return;
 		this.timer = setTimeout(() => {
-			if (!this.host.isAlive()) return;
-			const error = validateName(raw);
-			if (error) {
-				toast.error(error);
-				return;
-			}
-			const path = this.host.path();
-			const dir = parentDir(path);
-			const newPath = `${dir}/${raw}.md`;
-			if (newPath !== path) void this.renameTo(newPath);
+			this.timer = undefined;
+			this.request(raw, true);
 		}, RENAME_DELAY);
 	}
 
+	// Writing the title while it has focus replaces its text node and throws the caret to the start.
 	syncToPath(path: string): void {
-		this.text = fileTitle(path);
-	}
-
-	revert(): void {
-		this.text = fileTitle(this.host.path());
+		if (!this.editing()) this.text = fileTitle(path);
 	}
 
 	blur(): void {
-		if (validateName(this.text.trim())) this.revert();
+		const debounced = this.timer !== undefined;
+		clearTimeout(this.timer);
+		this.timer = undefined;
+		this.request(this.text.trim(), debounced);
+		if (!this.pending) this.text = fileTitle(this.host.path());
+	}
+
+	private editing(): boolean {
+		const element = this.host.element();
+		return !!element && element === document.activeElement;
+	}
+
+	private request(name: string, report: boolean): void {
+		if (!this.host.isAlive() || !name) return;
+		const error = validateName(name);
+		if (error) {
+			if (report) toast.error(error);
+			return;
+		}
+		this.queued = name;
+		void this.drain();
 	}
 
 	focusTitle(): void {
@@ -83,27 +92,34 @@ export class TitleEditor {
 		this.host.focusEditor();
 	}
 
-	async renameTo(newPath: string): Promise<void> {
+	private async drain(): Promise<void> {
 		if (this.pending) return;
 		this.pending = true;
 		try {
-			const path = this.host.path();
+			while (this.queued !== null && this.host.isAlive()) {
+				const name = this.queued;
+				this.queued = null;
+				const path = this.host.path();
+				if (name !== fileTitle(path)) await this.rename(path, `${parentDir(path)}/${name}.md`);
+			}
+		} finally {
+			this.pending = false;
+			if (this.host.isAlive() && !this.editing()) this.text = fileTitle(this.host.path());
+		}
+	}
+
+	private async rename(path: string, newPath: string): Promise<void> {
+		try {
 			const differsBeyondCase = newPath.toLowerCase() !== path.toLowerCase();
 			if (differsBeyondCase && (await fileExists(newPath))) {
 				toast.error(m.toast_path_exists({ name: baseName(newPath) }));
-				this.revert();
 				return;
 			}
-
 			await this.host.onrename()?.(path, newPath);
 			this.host.setPath(newPath);
-			this.text = fileTitle(newPath);
 		} catch (err) {
 			console.error('Rename failed:', err);
-			this.revert();
 			toast.error(m.toast_rename_failed({ error: String(err) }));
-		} finally {
-			this.pending = false;
 		}
 	}
 
