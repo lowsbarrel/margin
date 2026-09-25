@@ -1,5 +1,5 @@
-mod search;
+mod fuzzy;
 mod wiki_links;
 
-pub use search::*;
+pub use fuzzy::*;
 pub use wiki_links::*;

@@ -3,6 +3,7 @@ mod crypto;
 mod fs;
 mod history;
 mod index;
+mod ipc;
 mod menu;
 mod s3;
 mod session;
@@ -10,7 +11,6 @@ mod settings;
 mod sync;
 mod terminal;
 mod text;
-mod text_transform;
 
 use ai::{LlmCancelState, LlmState};
 use fs::{VaultPathState, VaultWatcherState, WatcherState};
@@ -60,9 +60,7 @@ pub fn run() {
         .manage(VaultPathState(Mutex::new(String::new())))
         .manage(terminal::TerminalState::new())
         .register_uri_scheme_protocol("localfile", |_app, request| {
-            let decoded = percent_encoding::percent_decode_str(request.uri().path())
-                .decode_utf8_lossy()
-                .into_owned();
+            let decoded = ipc::percent_decode_lossy(request.uri().path());
 
             // On Windows the URL path is "/C:/Users/..." — the leading slash has to go before Path::canonicalize can resolve it.
             #[cfg(windows)]
@@ -162,7 +160,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             crypto::generate_mnemonic,
             crypto::derive_vault_keys,
-            crypto::encrypt_blob_cmd,
             crypto::decrypt_blob_cmd,
             fs::set_vault_directory,
             fs::read_file_bytes,
@@ -207,12 +204,8 @@ pub fn run() {
             ai::llm_ask,
             ai::llm_cancel,
             s3::s3_configure,
-            s3::s3_get_config,
             s3::s3_test_connection,
-            s3::s3_upload,
             s3::s3_download,
-            s3::s3_list,
-            s3::s3_delete,
             settings::save_settings,
             settings::load_settings,
             settings::export_settings_string,
@@ -231,9 +224,7 @@ pub fn run() {
             history::delete_snapshot,
             history::clear_snapshots,
             history::rename_history,
-            text::search_in_text,
-            text::extract_wiki_links,
-            text_transform::fuzzy_filter_files,
+            text::fuzzy_filter_files,
             sync::hash_files_batch,
             sync::load_manifest,
             sync::save_manifest,
@@ -307,10 +298,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         ai::llm_ask,
         ai::llm_cancel,
         s3::s3_configure,
-        s3::s3_get_config,
         s3::s3_test_connection,
-        s3::s3_list,
-        s3::s3_delete,
         settings::save_settings,
         settings::load_settings,
         settings::export_settings_string,
@@ -329,9 +317,7 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         history::delete_snapshot,
         history::clear_snapshots,
         history::rename_history,
-        text::search_in_text,
-        text::extract_wiki_links,
-        text_transform::fuzzy_filter_files,
+        text::fuzzy_filter_files,
         sync::hash_files_batch,
         sync::load_manifest,
         sync::save_manifest,

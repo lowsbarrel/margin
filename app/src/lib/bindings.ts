@@ -45,16 +45,7 @@ export const commands = {
 	llmAsk: (requestId: string, question: string, onEvent: Channel<AskEvent>) => typedError<null, string>(__TAURI_INVOKE("llm_ask", { requestId, question, onEvent })),
 	llmCancel: (requestId: string) => typedError<null, string>(__TAURI_INVOKE("llm_cancel", { requestId })),
 	s3Configure: (config: S3Config) => typedError<null, string>(__TAURI_INVOKE("s3_configure", { config })),
-	s3GetConfig: () => typedError<{
-	endpoint: string,
-	bucket: string,
-	region: string,
-	access_key: string,
-	secret_key: string,
-} | null, string>(__TAURI_INVOKE("s3_get_config")),
 	s3TestConnection: () => typedError<string, string>(__TAURI_INVOKE("s3_test_connection")),
-	s3List: (prefix: string) => typedError<string[], string>(__TAURI_INVOKE("s3_list", { prefix })),
-	s3Delete: (key: string) => typedError<null, string>(__TAURI_INVOKE("s3_delete", { key })),
 	saveSettings: (vaultPath: string, encryptionKey: number[], settings: AppSettings) => typedError<null, string>(__TAURI_INVOKE("save_settings", { vaultPath, encryptionKey, settings })),
 	loadSettings: (vaultPath: string, encryptionKey: number[]) => typedError<{
 	s3: S3Config | null,
@@ -93,8 +84,6 @@ export const commands = {
 	deleteSnapshot: (vaultPath: string, filePath: string, snapshotFilename: string) => typedError<null, string>(__TAURI_INVOKE("delete_snapshot", { vaultPath, filePath, snapshotFilename })),
 	clearSnapshots: (vaultPath: string, filePath: string) => typedError<number, string>(__TAURI_INVOKE("clear_snapshots", { vaultPath, filePath })),
 	renameHistory: (vaultPath: string, oldPath: string, newPath: string) => typedError<null, string>(__TAURI_INVOKE("rename_history", { vaultPath, oldPath, newPath })),
-	searchInText: (text: string, pmOffsets: number[], gaps: number[], needle: string, caseSensitive: boolean) => __TAURI_INVOKE<TextMatch[]>("search_in_text", { text, pmOffsets, gaps, needle, caseSensitive }),
-	extractWikiLinks: (nodes: TextNode[]) => __TAURI_INVOKE<WikiLinkMatch[]>("extract_wiki_links", { nodes }),
 	fuzzyFilterFiles: (files: FuzzyEntry[], query: string, limit: number) => __TAURI_INVOKE<FuzzyEntry[]>("fuzzy_filter_files", { files, query, limit }),
 	hashFilesBatch: (vaultPath: string, paths: string[]) => typedError<string[], string>(__TAURI_INVOKE("hash_files_batch", { vaultPath, paths })),
 	loadManifest: (vaultPath: string, encryptionKey: number[]) => typedError<Manifest_Serialize, string>(__TAURI_INVOKE("load_manifest", { vaultPath, encryptionKey })),
@@ -219,16 +208,6 @@ export type TagInfo = {
 	files: string[],
 };
 
-export type TextMatch = {
-	from: number,
-	to: number,
-};
-
-export type TextNode = {
-	text: string,
-	pos: number,
-};
-
 export type TrashItem = {
 	id: string,
 	name: string,
@@ -260,12 +239,6 @@ export type VaultProfile = {
 export type VaultProfiles = {
 	profiles: VaultProfile[],
 	last_used: string | null,
-};
-
-export type WikiLinkMatch = {
-	from: number,
-	to: number,
-	title: string,
 };
 
 export type WorkspacePane = {

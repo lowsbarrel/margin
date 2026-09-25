@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 
 const MAX_RESULTS: usize = 200;
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn search_files(root: &str, query: &str) -> Result<Vec<FsEntry>, String> {
     Ok(crate::index::tree::search(root, query, MAX_RESULTS))

@@ -66,7 +66,7 @@ fn target(raw: &str, out: &mut HashSet<String>) {
     if raw.is_empty() {
         return;
     }
-    let decoded = percent_encoding::percent_decode_str(raw).decode_utf8_lossy();
+    let decoded = crate::ipc::percent_decode_lossy(raw);
     let decoded = normalise_slashes(&decoded);
     if let Some(name) = decoded.rsplit('/').next()
         && !name.is_empty()

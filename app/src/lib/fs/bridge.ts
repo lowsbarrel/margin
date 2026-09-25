@@ -1,32 +1,10 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen, type UnlistenFn } from '@tauri-apps/api/event';
 import { commands } from '$lib/bindings';
-import { initWriteQueue, queuedWrite, flushWriteQueue, remapRecentWrites } from './write-queue';
+import { initWriteQueue, queuedWrite, remapRecentWrites } from './write-queue';
 
-export { flushWriteQueue };
-
-export type {
-	Backlink,
-	FileMetadata,
-	FsEntry,
-	TreeEntry,
-	SearchHit,
-	TagInfo,
-	TextMatch,
-	TextNode,
-	WikiLinkMatch
-} from '$lib/bindings';
-import type {
-	Backlink,
-	FileMetadata,
-	FsEntry,
-	TreeEntry,
-	SearchHit,
-	TagInfo,
-	TextMatch,
-	TextNode,
-	WikiLinkMatch
-} from '$lib/bindings';
+export type { Backlink, FileMetadata, FsEntry, TreeEntry, SearchHit, TagInfo } from '$lib/bindings';
+import type { Backlink, FileMetadata, FsEntry, TreeEntry, SearchHit, TagInfo } from '$lib/bindings';
 
 const X_PATH_HEADER = 'x-path';
 
@@ -54,10 +32,6 @@ initWriteQueue(rawWriteFileBytes);
 
 export function writeFileBytes(path: string, content: Uint8Array): Promise<void> {
 	return queuedWrite(path, content);
-}
-
-export async function writeFileBytesRaw(path: string, content: Uint8Array): Promise<void> {
-	return rawWriteFileBytes(path, content);
 }
 
 export async function storeAttachmentBytes(
@@ -271,18 +245,4 @@ export async function listBacklinks(root: string, path: string): Promise<Backlin
 export async function exportVaultZip(vaultPath: string, destPath: string): Promise<void> {
 	const r = await commands.exportVaultZip(vaultPath, destPath);
 	if (r.status === 'error') throw r.error;
-}
-
-export async function searchInText(
-	text: string,
-	pmOffsets: number[],
-	gaps: number[],
-	needle: string,
-	caseSensitive: boolean
-): Promise<TextMatch[]> {
-	return commands.searchInText(text, pmOffsets, gaps, needle, caseSensitive);
-}
-
-export async function extractWikiLinks(nodes: TextNode[]): Promise<WikiLinkMatch[]> {
-	return commands.extractWikiLinks(nodes);
 }

@@ -1,25 +1,4 @@
-use serde::{Deserialize, Serialize};
-
-#[derive(Deserialize, specta::Type)]
-pub struct TextNode {
-    pub text: String,
-    pub pos: u32,
-}
-
-#[derive(Serialize, specta::Type)]
-pub struct WikiLinkMatch {
-    pub from: u32,
-    pub to: u32,
-    pub title: String,
-}
-
-pub struct ParsedWikiLink {
-    pub start: usize,
-    pub end: usize,
-    pub title: String,
-}
-
-pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
+pub fn parse_wiki_links(text: &str) -> Vec<String> {
     let bytes = text.as_bytes();
     let len = bytes.len();
     let mut results = Vec::new();
@@ -43,11 +22,7 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
                 {
                     let title = title.trim();
                     if !title.is_empty() {
-                        results.push(ParsedWikiLink {
-                            start: i,
-                            end: close + 2,
-                            title: title.to_string(),
-                        });
+                        results.push(title.to_string());
                     }
                 }
                 i = close + 2;
@@ -55,27 +30,6 @@ pub fn parse_wiki_links(text: &str) -> Vec<ParsedWikiLink> {
             }
         }
         i += 1;
-    }
-
-    results
-}
-
-#[tauri::command]
-#[specta::specta]
-pub fn extract_wiki_links(nodes: Vec<TextNode>) -> Vec<WikiLinkMatch> {
-    let mut results = Vec::new();
-
-    for node in &nodes {
-        for link in parse_wiki_links(&node.text) {
-            // ProseMirror positions count chars while the parser works in bytes, so both ends are re-counted.
-            let char_start = node.text[..link.start].chars().count();
-            let char_end = node.text[..link.end].chars().count();
-            results.push(WikiLinkMatch {
-                from: node.pos + char_start as u32,
-                to: node.pos + char_end as u32,
-                title: link.title,
-            });
-        }
     }
 
     results
@@ -97,27 +51,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_wiki_links() {
-        let nodes = vec![TextNode {
-            text: "see [[My Note]] and [[Other]]".to_string(),
-            pos: 10,
-        }];
-        let results = extract_wiki_links(nodes);
-        assert_eq!(results.len(), 2);
-        assert_eq!(results[0].title, "My Note");
-        assert_eq!(results[0].from, 14);
-        assert_eq!(results[0].to, 25);
-        assert_eq!(results[1].title, "Other");
+    fn wiki_links_are_parsed_in_order() {
+        let links = parse_wiki_links("see [[My Note]] and [[Other]]");
+        assert_eq!(links.as_slice(), ["My Note", "Other"]);
     }
 
     #[test]
-    fn test_wiki_links_skips_image_embeds() {
-        let nodes = vec![TextNode {
-            text: "![[image.png]] and [[real link]]".to_string(),
-            pos: 0,
-        }];
-        let results = extract_wiki_links(nodes);
-        assert_eq!(results.len(), 1);
-        assert_eq!(results[0].title, "real link");
+    fn image_embeds_are_not_wiki_links() {
+        let links = parse_wiki_links("![[image.png]] and [[real link]]");
+        assert_eq!(links.as_slice(), ["real link"]);
     }
 }

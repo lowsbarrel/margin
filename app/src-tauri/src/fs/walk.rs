@@ -76,7 +76,7 @@ where
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn walk_directory(root: &str, include_hidden: bool) -> Result<Vec<FsEntry>, String> {
     let mut entries = Vec::new();
@@ -95,7 +95,7 @@ pub fn walk_directory(root: &str, include_hidden: bool) -> Result<Vec<FsEntry>, 
     Ok(entries)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn build_visible_tree(
     root: &str,
@@ -197,7 +197,7 @@ fn build_tree_impl(
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn build_subtree(
     folder: &str,
