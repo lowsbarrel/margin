@@ -2,7 +2,7 @@ import type { Point, Shape, TextLabel } from './types';
 
 const textWidthCache = new Map<string, number>();
 
-export function measureTextWidth(
+function measureTextWidth(
 	ctx: CanvasRenderingContext2D | null,
 	text: string,
 	fontSize: number
@@ -19,7 +19,7 @@ export function measureTextWidth(
 	return w;
 }
 
-export function buildSnapPoints(
+function buildSnapPoints(
 	shapes: Shape[],
 	textLabels: TextLabel[],
 	ctx: CanvasRenderingContext2D | null

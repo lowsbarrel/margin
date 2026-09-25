@@ -1,7 +1,7 @@
 import type { TreeEntry } from '$lib/fs/bridge';
 import { files } from '$lib/stores/files.svelte';
+import { parentDir } from '$lib/utils/path';
 import type { TreeFocus } from './tree-focus.svelte';
-import { parentDir } from './tree-paths';
 import type { TreeWindow } from './tree-window.svelte';
 
 export function createTreeKeyboard(options: {

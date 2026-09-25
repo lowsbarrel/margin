@@ -1,37 +1,37 @@
 import { listAllTags, type TagInfo } from '$lib/fs/bridge';
 
 interface TagsState {
-	items: TagInfo[];
 	loading: boolean;
 	vaultPath: string | null;
 }
 
 const state = $state<TagsState>({
-	items: [],
 	loading: false,
 	vaultPath: null
 });
 
+let items = $state.raw<TagInfo[]>([]);
+
 export const tags = {
 	get items() {
-		return state.items;
+		return items;
 	},
 	get loading() {
 		return state.loading;
 	},
 
 	async load(vaultPath: string): Promise<TagInfo[]> {
-		if (state.vaultPath === vaultPath && state.items.length > 0) {
-			return state.items;
+		if (state.vaultPath === vaultPath && items.length > 0) {
+			return items;
 		}
 		state.loading = true;
 		try {
-			state.items = await listAllTags(vaultPath);
+			items = await listAllTags(vaultPath);
 			state.vaultPath = vaultPath;
-			return state.items;
+			return items;
 		} catch (err) {
 			console.warn('Failed to load tags:', err);
-			return state.items;
+			return items;
 		} finally {
 			state.loading = false;
 		}
@@ -43,7 +43,7 @@ export const tags = {
 	},
 
 	clear() {
-		state.items = [];
+		items = [];
 		state.vaultPath = null;
 		state.loading = false;
 	}

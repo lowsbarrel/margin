@@ -3,6 +3,7 @@ import type { FsEntry, TreeEntry } from '$lib/fs/bridge';
 import { buildSubtree, walkDirectory } from '$lib/fs/bridge';
 import { files } from '$lib/stores/files.svelte';
 import { panes } from '$lib/stores/panes.svelte';
+import { baseName } from '$lib/utils/path';
 
 const MAX_MATCHES = 200;
 
@@ -42,7 +43,7 @@ export class BreadcrumbMenu {
 
 	async list(path: string): Promise<void> {
 		this.#listPath = path;
-		this.title = path.slice(path.lastIndexOf('/') + 1);
+		this.title = baseName(path);
 		const rows = (await this.#fetch()) ?? [];
 		this.rows = rows;
 		const preferred = rows.findIndex((row) => row.path === this.source);

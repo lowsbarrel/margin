@@ -12,7 +12,7 @@ export type { Manifest_Serialize as Manifest } from '$lib/bindings';
 import type { ManifestEntry_Serialize as ManifestEntry } from '$lib/bindings';
 import type { Manifest_Serialize as Manifest } from '$lib/bindings';
 
-export function validateManifest(obj: unknown): Manifest {
+function validateManifest(obj: unknown): Manifest {
 	if (typeof obj !== 'object' || obj === null) throw new Error('Manifest is not an object');
 	const m = obj as Record<string, unknown>;
 	if (typeof m.version !== 'number') throw new Error('Manifest missing version');

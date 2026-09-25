@@ -8,7 +8,7 @@ interface DragState {
 	y: number;
 }
 
-export interface PendingInsert {
+interface PendingInsert {
 	path: string;
 	x: number;
 	y: number;

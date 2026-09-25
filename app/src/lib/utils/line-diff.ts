@@ -1,4 +1,4 @@
-export type DiffKind = 'same' | 'added' | 'removed';
+type DiffKind = 'same' | 'added' | 'removed';
 
 export interface DiffLine {
 	kind: DiffKind;
@@ -7,7 +7,7 @@ export interface DiffLine {
 	after: number | null;
 }
 
-export const MAX_DIFF_LINES = 20_000;
+const MAX_DIFF_LINES = 20_000;
 
 function toLines(text: string): string[] {
 	return text.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));

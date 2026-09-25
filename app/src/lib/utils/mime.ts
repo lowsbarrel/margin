@@ -1,5 +1,5 @@
 // Mirrored by `mime_from_ext` in src-tauri/src/lib.rs; the two lists must stay in step.
-export const IMAGE_EXTS_ARRAY = [
+const IMAGE_EXTS_ARRAY = [
 	'png',
 	'jpg',
 	'jpeg',
@@ -39,7 +39,7 @@ export function mimeForPath(path: string): string {
 	return map[ext] ?? 'application/octet-stream';
 }
 
-export function getExt(nameOrPath: string): string {
+function getExt(nameOrPath: string): string {
 	return nameOrPath.split('.').pop()?.toLowerCase() ?? '';
 }
 

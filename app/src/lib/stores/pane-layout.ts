@@ -2,7 +2,7 @@ import type { Pane, Tab } from '$lib/stores/panes.svelte';
 import { nextPaneId } from '$lib/stores/pane-tabs';
 
 export type DropSide = 'left' | 'right';
-export type FlexSink = 'neighbour' | number;
+type FlexSink = 'neighbour' | number;
 
 export interface LayoutMove {
 	panes: Pane[];
@@ -60,7 +60,7 @@ export function splitAtPane(
 	return { flexes: next, insertAt };
 }
 
-export function detachTab(
+function detachTab(
 	panes: Pane[],
 	srcPaneIndex: number,
 	srcTabIndex: number
@@ -77,12 +77,7 @@ export function detachTab(
 	return { tab, emptied: pane.tabs.length === 0 };
 }
 
-export function removePaneAt(
-	panes: Pane[],
-	flexes: number[],
-	index: number,
-	flexSink: FlexSink
-): void {
+function removePaneAt(panes: Pane[], flexes: number[], index: number, flexSink: FlexSink): void {
 	const removed = flexes[index];
 	flexes.splice(index, 1);
 	panes.splice(index, 1);

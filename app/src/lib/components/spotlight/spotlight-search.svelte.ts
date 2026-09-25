@@ -1,12 +1,12 @@
 import { searchFiles, searchIndex, type FsEntry, type SearchHit } from '$lib/fs/bridge';
 
-export const MAX_CONTENT_RESULTS = 100;
+const MAX_CONTENT_RESULTS = 100;
 const MAX_NAME_RESULTS = 8;
 const DEBOUNCE_MS = 90;
 
 export class SpotlightSearch {
-	names = $state<FsEntry[]>([]);
-	contents = $state<SearchHit[]>([]);
+	names = $state.raw<FsEntry[]>([]);
+	contents = $state.raw<SearchHit[]>([]);
 	searching = $state(false);
 
 	#onResults: () => void;

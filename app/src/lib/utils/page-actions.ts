@@ -17,6 +17,7 @@ import {
 	writeFileBytes
 } from '$lib/fs/bridge';
 import { createUniqueFilePath } from '$lib/utils/sidebar-ops';
+import { parentDir } from '$lib/utils/path';
 import { renameHistory } from '$lib/history/bridge';
 import { flushEditorWrites } from '$lib/fs/write-queue';
 import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
@@ -116,13 +117,12 @@ export async function reconcileMovedOut(
 	return remaining;
 }
 
-export function newEntryFolder(): string | null {
+function newEntryFolder(): string | null {
 	const selected = files.selectedEntry;
-	if (selected)
-		return selected.isDir ? selected.path : selected.path.slice(0, selected.path.lastIndexOf('/'));
+	if (selected) return selected.isDir ? selected.path : parentDir(selected.path);
 	if (files.selectedFolder) return files.selectedFolder;
 	const active = files.activeFile;
-	if (active) return active.slice(0, active.lastIndexOf('/'));
+	if (active) return parentDir(active);
 	return vault.vaultPath;
 }
 

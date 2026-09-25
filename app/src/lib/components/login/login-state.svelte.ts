@@ -4,6 +4,7 @@ import { toast } from '$lib/stores/toast.svelte';
 import { open } from '@tauri-apps/plugin-dialog';
 import * as m from '$lib/paraglide/messages.js';
 import { loadVaultProfiles, unlockVault } from './vault-session';
+import { baseName } from '$lib/utils/path';
 
 export interface LoginState {
 	readonly profiles: VaultProfile[];
@@ -127,7 +128,7 @@ export function createLoginState(): LoginState {
 		loading = true;
 		error = '';
 		try {
-			const name = vaultName.trim() || vaultPath.split('/').pop() || 'Vault';
+			const name = vaultName.trim() || baseName(vaultPath) || 'Vault';
 			await unlockVault(mnemonic.trim(), vaultPath, name);
 		} catch (e) {
 			error = String(e);

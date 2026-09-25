@@ -4,6 +4,7 @@
 	import { listBacklinks, type Backlink } from '$lib/fs/bridge';
 	import { IconButton } from '$lib/ui';
 	import { Link2, X } from '@lucide/svelte';
+	import { parentDir } from '$lib/utils/path';
 	import * as m from '$lib/paraglide/messages.js';
 
 	interface Props {
@@ -49,8 +50,7 @@
 	function folderOf(path: string): string {
 		const root = vault.vaultPath;
 		const rel = root && path.startsWith(root) ? path.slice(root.length + 1) : path;
-		const cut = rel.lastIndexOf('/');
-		return cut > 0 ? rel.slice(0, cut) : '';
+		return parentDir(rel);
 	}
 </script>
 

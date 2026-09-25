@@ -39,7 +39,7 @@
 		initPendingScroll,
 		scrollEditorToText
 	} from '$lib/components/shell/editor-scroll.svelte';
-	import { handleGlobalKeydown } from '$lib/components/shell/keyboard-shortcuts';
+	import { handleGlobalKeydown } from '$lib/utils/keyboard-shortcuts';
 	import { initAppLifecycle } from '$lib/components/shell/app-lifecycle.svelte';
 
 	let showSettings = $state(false);

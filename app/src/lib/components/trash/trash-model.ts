@@ -1,6 +1,6 @@
 import type { TrashItem } from '$lib/history/bridge';
 
-export const PURGE_DAYS = 30;
+const PURGE_DAYS = 30;
 export const PURGE_HINT_DAYS = 7;
 
 const DAY_MS = 86_400_000;
@@ -18,16 +18,11 @@ export type TrashRow =
 	| { kind: 'group'; key: string; label: GroupLabel; day: number | null }
 	| { kind: 'item'; key: string; item: TrashItem; index: number };
 
-export type RelativeUnit = 'now' | 'minute' | 'hour' | 'day';
+type RelativeUnit = 'now' | 'minute' | 'hour' | 'day';
 
 export interface RelativeTime {
 	unit: RelativeUnit;
 	count: number;
-}
-
-export function folderOf(path: string): string {
-	const cut = path.lastIndexOf('/');
-	return cut === -1 ? '' : path.slice(0, cut);
 }
 
 export function filterItems(items: TrashItem[], query: string): TrashItem[] {

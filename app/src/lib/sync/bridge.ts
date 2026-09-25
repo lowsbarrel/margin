@@ -2,7 +2,7 @@ import { commands } from '$lib/bindings';
 import type { ManifestEntry_Deserialize, Manifest_Deserialize } from '$lib/bindings';
 import type { ManifestEntry, Manifest } from './s3sync-manifest';
 
-export type SyncActionKind =
+type SyncActionKind =
 	| 'upload'
 	| 'download'
 	| 'delete-remote'

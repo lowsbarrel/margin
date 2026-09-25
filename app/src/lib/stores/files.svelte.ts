@@ -1,17 +1,16 @@
 import { SvelteSet } from 'svelte/reactivity';
 import { buildVisibleTree, type TreeEntry } from '$lib/fs/bridge';
 import { remapPath } from '$lib/utils/path-remap';
+import { parentDir } from '$lib/utils/path';
 import { fileSelection, type SelectedEntry } from '$lib/stores/file-selection.svelte';
 
 export type SortOrder = 'name' | 'date';
 export type TreeRevealTarget =
 	| { kind: 'entry'; path: string }
 	| { kind: 'pending-new-folder'; parentPath: string };
-export type { TreeEntry };
 export type { SelectedEntry };
 
 interface FilesState {
-	flatTree: TreeEntry[];
 	vaultRoot: string | null;
 	activeFile: string | null;
 	selectedFolder: string | null;
@@ -25,7 +24,6 @@ interface FilesState {
 }
 
 const state = $state<FilesState>({
-	flatTree: [],
 	vaultRoot: null,
 	activeFile: null,
 	selectedFolder: null,
@@ -38,6 +36,8 @@ const state = $state<FilesState>({
 	sortOrder: 'name'
 });
 
+let _flatTree = $state.raw<TreeEntry[]>([]);
+
 let _rebuildGeneration = 0;
 
 let hiddenPaths: string[] = [];
@@ -49,22 +49,19 @@ async function _rebuild(): Promise<void> {
 	const flatTree = await buildVisibleTree(state.vaultRoot, expanded, state.sortOrder, hiddenPaths);
 	// Rebuilds can resolve out of order; only the newest snapshot may land.
 	if (generation !== _rebuildGeneration) return;
-	state.flatTree = flatTree;
+	_flatTree = flatTree;
 	_pruneSelection();
 }
 
 function hiddenByCollapsedAncestor(path: string, live: Set<string>): boolean {
-	let slash = path.lastIndexOf('/');
-	while (slash > 0) {
-		const parent = path.slice(0, slash);
+	for (let parent = parentDir(path); parent !== ''; parent = parentDir(parent)) {
 		if (live.has(parent) && !state.expandedFolders.has(parent)) return true;
-		slash = parent.lastIndexOf('/');
 	}
 	return false;
 }
 
 function _pruneSelection(): void {
-	const live = new Set(state.flatTree.map((r) => r.path));
+	const live = new Set(_flatTree.map((r) => r.path));
 	fileSelection.prune(live, (path) => hiddenByCollapsedAncestor(path, live));
 }
 
@@ -75,7 +72,7 @@ function _requestTreeReveal(target: TreeRevealTarget) {
 
 export const files = {
 	get flatTree() {
-		return state.flatTree;
+		return _flatTree;
 	},
 	get activeFile() {
 		return state.activeFile;
@@ -169,7 +166,7 @@ export const files = {
 	},
 
 	selectRange(path: string) {
-		fileSelection.selectRange(path, state.flatTree);
+		fileSelection.selectRange(path, _flatTree);
 	},
 
 	isSelected(path: string) {
@@ -190,7 +187,7 @@ export const files = {
 	},
 
 	selectAll() {
-		fileSelection.selectAll(state.flatTree);
+		fileSelection.selectAll(_flatTree);
 	},
 
 	setSelectedEntry(path: string, isDir: boolean) {
@@ -213,17 +210,17 @@ export const files = {
 
 	async collapseFolder(path: string) {
 		state.expandedFolders.delete(path);
-		const idx = state.flatTree.findIndex((r) => r.path === path);
+		const idx = _flatTree.findIndex((r) => r.path === path);
 		if (idx !== -1) {
-			const parentDepth = state.flatTree[idx].depth;
+			const parentDepth = _flatTree[idx].depth;
 			let end = idx + 1;
-			while (end < state.flatTree.length && state.flatTree[end].depth > parentDepth) {
+			while (end < _flatTree.length && _flatTree[end].depth > parentDepth) {
 				end++;
 			}
 			if (end > idx + 1) {
-				const next = [...state.flatTree];
+				const next = [..._flatTree];
 				next.splice(idx + 1, end - idx - 1);
-				state.flatTree = next;
+				_flatTree = next;
 			}
 		} else {
 			await _rebuild();
@@ -261,7 +258,7 @@ export const files = {
 	},
 
 	clear() {
-		state.flatTree = [];
+		_flatTree = [];
 		state.vaultRoot = null;
 		state.activeFile = null;
 		state.selectedFolder = null;

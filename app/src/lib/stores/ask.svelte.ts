@@ -2,7 +2,7 @@ import { llmAsk, llmCancel, llmConfigure, type AskEvent } from '$lib/ai/bridge';
 import { loadSettings } from '$lib/settings/bridge';
 import { vault } from '$lib/stores/vault.svelte';
 
-export interface AskStep {
+interface AskStep {
 	name: string;
 	summary: string;
 }
