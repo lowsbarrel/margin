@@ -1,7 +1,7 @@
 import type { EditorState, Extension, Range } from '@codemirror/state';
 import { StateField } from '@codemirror/state';
 import { Decoration, EditorView, ViewPlugin, keymap, type DecorationSet } from '@codemirror/view';
-import { eachLine, line, refreshDecorations, touched, touchedLines } from './decorate';
+import { eachLine, line, refreshDecorations, revealMoved, touched, touchedLines } from './decorate';
 import { ESCAPE_TABLE, onEscape } from './escape';
 import { locateCell, readTables, tableAt, type TableModel } from './table-model';
 import { appendRow } from './table-ops';
@@ -34,10 +34,14 @@ function tableDecorations(state: EditorState): DecorationSet {
 	return Decoration.set(ranges, true);
 }
 
-export const liveTables = StateField.define<DecorationSet>({
+const liveTables = StateField.define<DecorationSet>({
 	create: (state) => tableDecorations(state),
 	update(value, tr) {
-		if (tr.docChanged || tr.selection || tr.effects.some((effect) => effect.is(refreshDecorations)))
+		if (
+			tr.docChanged ||
+			revealMoved(tr.startState, tr.newDoc, tr.newSelection) ||
+			tr.effects.some((effect) => effect.is(refreshDecorations))
+		)
 			return tableDecorations(tr.state);
 		return value.map(tr.changes);
 	},
@@ -111,9 +115,9 @@ class TableEscape {
 	}
 }
 
-export const tableEscape = ViewPlugin.fromClass(TableEscape);
+const tableEscape = ViewPlugin.fromClass(TableEscape);
 
-export const tableKeymap = keymap.of([
+const tableKeymap = keymap.of([
 	{ key: 'Tab', run: nextCell },
 	{ key: 'Shift-Tab', run: previousCell },
 	{ key: 'Enter', run: enterCell }

@@ -63,6 +63,7 @@
 	let appliedMode = untrack(() => viewMode);
 	let syncedFilePath = untrack(() => filePath);
 	let lastSeenVersion = untrack(() => externalContentVersion);
+	let seenContent = untrack(() => initialContent);
 	let wasActive = untrack(() => active);
 	let alive = true;
 	let stopIndex: (() => void) | null = null;
@@ -114,7 +115,7 @@
 		if (lightbox) lightbox = { ...lightbox, index };
 	}
 
-	function handleDocumentChange(text: string): void {
+	function handleDocumentChange(text: () => string): void {
 		if (!alive) return;
 		editorStore.setDirty(true);
 		save.schedule(text);
@@ -169,15 +170,21 @@
 
 	$effect(() => {
 		const version = externalContentVersion;
+		const content = initialContent;
+		if (content === seenContent) {
+			lastSeenVersion = version;
+			return;
+		}
+		seenContent = content;
 		if (version === lastSeenVersion) return;
 		lastSeenVersion = version;
 		const editor = live;
-		if (!editor || initialContent == null) return;
+		if (!editor || content == null) return;
 		save.snapshot(editor.text());
 		save.cancel();
 		editorStore.setDirty(false);
-		save.lastSavedText = initialContent;
-		editor.adopt(initialContent);
+		save.lastSavedText = content;
+		editor.adopt(content);
 	});
 
 	$effect(() => {

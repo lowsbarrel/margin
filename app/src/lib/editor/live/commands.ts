@@ -6,7 +6,7 @@ import type { ChangeSpec, EditorState, Line } from '@codemirror/state';
 import { keymap, type EditorView } from '@codemirror/view';
 import type { SyntaxNode } from '@lezer/common';
 import { alignColumn, deleteColumn, deleteRow, insertColumn, insertRow } from './table-ops';
-import { emptyRow, serializeTable, tableAt, type Align, type TableModel } from './table-model';
+import { tableAt, type Align, type TableModel } from './table-model';
 
 const HEADING = /^(#{1,6})[ \t]+/;
 const MARKER = /^([ \t]*)(?:([-*+])|(\d+[.)]))([ \t]+)(\[[ xX]\][ \t]+)?/;
@@ -39,7 +39,7 @@ function selectedLines(state: EditorState): Line[] {
 	return lines;
 }
 
-export function toggleHeading(view: EditorView, level: number): boolean {
+function toggleHeading(view: EditorView, level: number): boolean {
 	const changes: ChangeSpec[] = [];
 	for (const line of selectedLines(view.state)) {
 		const match = HEADING.exec(line.text);
@@ -205,7 +205,7 @@ export function setBlock(view: EditorView, type: BlockType): boolean {
 	return true;
 }
 
-export function insertLink(view: EditorView): boolean {
+function insertLink(view: EditorView): boolean {
 	const range = view.state.selection.main;
 	const text = view.state.sliceDoc(range.from, range.to);
 	const insert = `[${text}]()`;
@@ -284,27 +284,6 @@ function tableCommand(
 }
 
 // The slash menu and the editor context menu reach tables through these five, keyed by caret.
-export function insertTable(view: EditorView, rows = 3, cols = 3): boolean {
-	const height = Math.max(1, Math.min(50, Math.floor(rows)));
-	const width = Math.max(1, Math.min(20, Math.floor(cols)));
-	const text = serializeTable(
-		Array.from({ length: height }, () => emptyRow(width)),
-		Array.from({ length: width }, () => 'none' as Align)
-	);
-	const { from, to } = view.state.selection.main;
-	const line = view.state.doc.lineAt(from);
-	const prefix = line.text.slice(0, from - line.from).trim() ? '\n' : '';
-	const suffix = view.state.doc.sliceString(to, line.to).trim() ? '\n' : '';
-	const at = from + prefix.length;
-	view.dispatch({
-		changes: { from, to, insert: prefix + text + suffix },
-		selection: { anchor: at + 2 },
-		scrollIntoView: true,
-		userEvent: 'input'
-	});
-	return true;
-}
-
 export function insertTableRow(
 	view: EditorView,
 	index: number,

@@ -11,7 +11,16 @@ import {
 	type ViewUpdate
 } from '@codemirror/view';
 import * as m from '$lib/paraglide/messages.js';
-import { collapsedLines, hide, mark, refreshDecorations, touched, touchedLines } from './decorate';
+import {
+	collapsedLines,
+	hide,
+	mark,
+	refreshDecorations,
+	revealMoved,
+	touched,
+	touchedLines,
+	treeChanged
+} from './decorate';
 import { paintMath } from './math-render';
 import { BLOCK_MATH, BLOCK_MATH_MARK, INLINE_MATH } from './syntax';
 
@@ -41,7 +50,7 @@ function mathInner(state: EditorState, node: SyntaxNode): string {
 	return doc.sliceString(from, Math.max(from, last.from - 1));
 }
 
-export function blockMathOf(state: EditorState): MathBlock[] {
+function blockMathOf(state: EditorState): MathBlock[] {
 	const doc = state.doc;
 	const out: MathBlock[] = [];
 	syntaxTree(state).iterate({
@@ -143,7 +152,7 @@ const mathBlocks = StateField.define<DecorationSet>({
 	update(value, tr) {
 		if (
 			tr.docChanged ||
-			!tr.newSelection.eq(tr.startState.selection) ||
+			revealMoved(tr.startState, tr.newDoc, tr.newSelection) ||
 			tr.effects.some((e) => e.is(refreshDecorations))
 		)
 			return blockMathDecorations(tr.state, touchedLines(tr.state));
@@ -184,8 +193,8 @@ class LiveMath {
 	update(update: ViewUpdate) {
 		if (
 			!update.docChanged &&
-			!update.selectionSet &&
-			!update.viewportChanged &&
+			!revealMoved(update.startState, update.state.doc, update.state.selection) &&
+			!treeChanged(update) &&
 			!update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))
 		) {
 			return;

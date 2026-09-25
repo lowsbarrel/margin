@@ -1,11 +1,17 @@
-import type { EditorState, Line, Range } from '@codemirror/state';
+import { syntaxTree } from '@codemirror/language';
+import type { EditorSelection, EditorState, Line, Range, Text } from '@codemirror/state';
 import { StateEffect } from '@codemirror/state';
-import { Decoration } from '@codemirror/view';
+import { Decoration, type ViewUpdate } from '@codemirror/view';
 import { staticPreview, type LiveContext } from './context';
 import { noteDir, type ResolveSources } from './resolve';
 import { vaultIndexReady } from './vault-index';
 
 export const refreshDecorations = StateEffect.define<null>();
+
+// The background parser extends the tree without touching the document, and decorations have to follow it.
+export function treeChanged(update: ViewUpdate): boolean {
+	return syntaxTree(update.state) !== syntaxTree(update.startState);
+}
 
 export function sourcesOf(ctx: LiveContext): ResolveSources {
 	return {
@@ -35,15 +41,28 @@ export function line(from: number, className: string): Range<Decoration> {
 	return Decoration.line({ class: className }).range(from);
 }
 
-export function touchedLines(state: EditorState): Set<number> {
+function selectedLines(doc: Text, selection: EditorSelection): Set<number> {
 	const lines = new Set<number>();
-	if (state.facet(staticPreview)) return lines;
-	for (const range of state.selection.ranges) {
-		const first = state.doc.lineAt(range.from).number;
-		const last = state.doc.lineAt(range.to).number;
+	for (const range of selection.ranges) {
+		const first = doc.lineAt(range.from).number;
+		const last = doc.lineAt(range.to).number;
 		for (let number = first; number <= last; number++) lines.add(number);
 	}
 	return lines;
+}
+
+export function touchedLines(state: EditorState): Set<number> {
+	if (state.facet(staticPreview)) return new Set();
+	return selectedLines(state.doc, state.selection);
+}
+
+export function revealMoved(start: EditorState, doc: Text, selection: EditorSelection): boolean {
+	if (start.facet(staticPreview) || start.selection.eq(selection)) return false;
+	const before = selectedLines(start.doc, start.selection);
+	const after = selectedLines(doc, selection);
+	if (before.size !== after.size) return true;
+	for (const number of before) if (!after.has(number)) return true;
+	return false;
 }
 
 export function frontmatterEnd(state: EditorState): number {

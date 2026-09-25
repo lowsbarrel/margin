@@ -15,7 +15,15 @@ import {
 	NoteEmbedCardWidget,
 	NoteLinkWidget
 } from './embed-widgets';
-import { hide, line, refreshDecorations, touched, touchedLines } from './decorate';
+import {
+	hide,
+	line,
+	refreshDecorations,
+	revealMoved,
+	touched,
+	touchedLines,
+	treeChanged
+} from './decorate';
 
 function blockDecorations(state: EditorState, touchedSet: Set<number>): DecorationSet {
 	const ctx = contextOf(state);
@@ -43,7 +51,7 @@ const embedBlocks = StateField.define<DecorationSet>({
 	update(value, tr) {
 		if (
 			tr.docChanged ||
-			!tr.newSelection.eq(tr.startState.selection) ||
+			revealMoved(tr.startState, tr.newDoc, tr.newSelection) ||
 			tr.effects.some((e) => e.is(refreshDecorations))
 		)
 			return blockDecorations(tr.state, touchedLines(tr.state));
@@ -82,8 +90,8 @@ class LiveEmbeds {
 	update(update: ViewUpdate) {
 		if (
 			!update.docChanged &&
-			!update.selectionSet &&
-			!update.viewportChanged &&
+			!revealMoved(update.startState, update.state.doc, update.state.selection) &&
+			!treeChanged(update) &&
 			!update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))
 		) {
 			return;

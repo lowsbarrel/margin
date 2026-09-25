@@ -1,6 +1,6 @@
 import { readFileBytes } from '$lib/fs/bridge';
 
-export function noteHeadings(text: string): string[] {
+function noteHeadings(text: string): string[] {
 	const headings: string[] = [];
 	let fenced = false;
 	let frontmatter = false;

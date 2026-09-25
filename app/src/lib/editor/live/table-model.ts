@@ -4,13 +4,13 @@ import type { EditorState, Line } from '@codemirror/state';
 
 export type Align = 'left' | 'center' | 'right' | 'none';
 
-export interface TableCell {
+interface TableCell {
 	text: string;
 	from: number;
 	to: number;
 }
 
-export interface TableRow {
+interface TableRow {
 	from: number;
 	to: number;
 	cells: TableCell[];
@@ -31,7 +31,7 @@ const ALIGN_MARK: Record<Align, string> = {
 	none: '---'
 };
 
-export function alignOf(text: string): Align {
+function alignOf(text: string): Align {
 	const value = text.trim();
 	if (!/^:?-+:?$/.test(value)) return 'none';
 	if (value.startsWith(':') && value.endsWith(':')) return 'center';
@@ -122,7 +122,14 @@ export function readTables(state: EditorState): TableModel[] {
 }
 
 export function tableAt(state: EditorState, pos: number): TableModel | null {
-	return readTables(state).find((table) => pos >= table.from && pos <= table.to) ?? null;
+	for (const side of [1, -1] as const) {
+		let node: SyntaxNode | null = syntaxTree(state).resolveInner(pos, side);
+		while (node) {
+			if (node.name === 'Table' && node.parent?.name === 'Document') return readTable(state, node);
+			node = node.parent;
+		}
+	}
+	return null;
 }
 
 export function locateCell(table: TableModel, pos: number): { row: number; col: number } | null {

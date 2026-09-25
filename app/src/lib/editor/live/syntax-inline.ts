@@ -10,7 +10,7 @@ export const HIGHLIGHT = 'Highlight';
 export const HIGHLIGHT_MARK = 'HighlightMark';
 export const TAG = 'Tag';
 export const INLINE_MATH = 'InlineMath';
-export const INLINE_MATH_MARK = 'InlineMathMark';
+const INLINE_MATH_MARK = 'InlineMathMark';
 
 const PUNCTUATION = /[!"#$%&'()*+,\-./:;<=>?@[\\\]^_`{|}~]/;
 

@@ -30,7 +30,7 @@ function imageTarget(state: EditorState, node: SyntaxNode, text: string): string
 	return open < 0 ? '' : text.slice(open + 2, text.endsWith(')') ? -1 : undefined);
 }
 
-export function collectAssets(state: EditorState, sources: ResolveSources): AssetNode[] {
+function collectAssets(state: EditorState, sources: ResolveSources): AssetNode[] {
 	const doc = state.doc;
 	const out: AssetNode[] = [];
 	syntaxTree(state).iterate({

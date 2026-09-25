@@ -9,7 +9,16 @@ import {
 	type EditorView,
 	type ViewUpdate
 } from '@codemirror/view';
-import { hide, line, mark, refreshDecorations, touched, touchedLines } from './decorate';
+import {
+	hide,
+	line,
+	mark,
+	refreshDecorations,
+	revealMoved,
+	touched,
+	touchedLines,
+	treeChanged
+} from './decorate';
 
 const DEFINITION = /^[ \t]{0,3}\[\^([^\]\s]+)\]:[ \t]*/;
 const REFERENCE = /\[\^([^\]\s]+)\]/g;
@@ -124,8 +133,8 @@ class LiveFootnotes {
 	update(update: ViewUpdate) {
 		if (
 			!update.docChanged &&
-			!update.selectionSet &&
-			!update.viewportChanged &&
+			!revealMoved(update.startState, update.state.doc, update.state.selection) &&
+			!treeChanged(update) &&
 			!update.transactions.some((tr) => tr.effects.some((e) => e.is(refreshDecorations)))
 		) {
 			return;

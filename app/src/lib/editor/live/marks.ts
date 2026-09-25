@@ -60,7 +60,7 @@ function delimiters(
 	return { open: { from: first.from, to: first.to }, close: { from: last.from, to: last.to } };
 }
 
-export function markSpans(state: EditorState, from: number, to: number): Span[] {
+function markSpans(state: EditorState, from: number, to: number): Span[] {
 	const spans: Span[] = [];
 	syntaxTree(state).iterate({
 		from,

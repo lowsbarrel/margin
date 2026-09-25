@@ -1,6 +1,7 @@
 import type { EditorView } from '@codemirror/view';
 import { importAttachment, storeAttachmentBytes } from '$lib/fs/bridge';
 import { isImageFile } from '$lib/utils/mime';
+import { baseName } from '$lib/utils/path';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import { contextOf } from './context';
@@ -22,7 +23,7 @@ export async function insertDroppedPaths(view: EditorView, paths: string[]): Pro
 	if (!vaultPath) return;
 	let cursor: TextRange = captureSelection(view);
 	for (const source of paths) {
-		const name = source.replace(/\\/g, '/').split('/').pop() ?? source;
+		const name = baseName(source.replace(/\\/g, '/'));
 		const ext = name.split('.').pop()?.toLowerCase() ?? '';
 		try {
 			if (ext === 'md' || ext === 'canvas') {

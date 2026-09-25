@@ -8,7 +8,7 @@ import {
 	SearchQuery,
 	setSearchQuery
 } from '@codemirror/search';
-import { Compartment, StateEffect, type EditorState, type Extension } from '@codemirror/state';
+import { Compartment, StateEffect, type Extension, type Text } from '@codemirror/state';
 import { EditorView, type Panel } from '@codemirror/view';
 
 const MATCH_LIMIT = 5000;
@@ -74,26 +74,79 @@ export function setFindQuery(view: EditorView, input: FindQueryInput): void {
 	dispatchQuery(view, input);
 }
 
-function matchRanges(state: EditorState): { from: number; to: number }[] {
+interface MatchRange {
+	from: number;
+	to: number;
+}
+
+interface FindCache {
+	doc: Text | null;
+	query: SearchQuery | null;
+	ranges: MatchRange[];
+}
+
+const caches = new WeakMap<EditorView, FindCache>();
+
+function sameQuery(a: SearchQuery, b: SearchQuery | null): boolean {
+	return (
+		!!b &&
+		a.search === b.search &&
+		a.replace === b.replace &&
+		a.caseSensitive === b.caseSensitive &&
+		a.literal === b.literal
+	);
+}
+
+function matchRanges(view: EditorView): MatchRange[] {
+	const state = view.state;
 	const query = getSearchQuery(state);
-	if (!query.valid) return [];
-	const ranges: { from: number; to: number }[] = [];
-	const cursor = query.getCursor(state);
-	for (let match = cursor.next(); !match.done && ranges.length < MATCH_LIMIT; match = cursor.next())
-		ranges.push(match.value);
+	let cache = caches.get(view);
+	if (!cache) {
+		cache = { doc: null, query: null, ranges: [] };
+		caches.set(view, cache);
+	}
+	if (cache.doc === state.doc && sameQuery(query, cache.query)) return cache.ranges;
+
+	const ranges: MatchRange[] = [];
+	if (query.valid) {
+		const cursor = query.getCursor(state);
+		for (
+			let match = cursor.next();
+			!match.done && ranges.length < MATCH_LIMIT;
+			match = cursor.next()
+		)
+			ranges.push(match.value);
+	}
+	cache.doc = state.doc;
+	cache.query = query;
+	cache.ranges = ranges;
 	return ranges;
 }
 
-export function findState(view: EditorView): FindStats {
-	const selection = view.state.selection.main;
-	const ranges = matchRanges(view.state);
-	let current = 0;
-	let next = 0;
-	for (let i = 0; i < ranges.length; i++) {
-		if (ranges[i].from === selection.from && ranges[i].to === selection.to) current = i + 1;
-		else if (!next && ranges[i].from >= selection.head) next = i + 1;
+function firstAtOrAfter(ranges: MatchRange[], pos: number): number {
+	let low = 0;
+	let high = ranges.length;
+	while (low < high) {
+		const mid = (low + high) >> 1;
+		if (ranges[mid].from < pos) low = mid + 1;
+		else high = mid;
 	}
-	return { total: ranges.length, index: ranges.length ? current || next || 1 : 0 };
+	return low;
+}
+
+export function findState(view: EditorView): FindStats {
+	const ranges = matchRanges(view);
+	if (ranges.length === 0) return { total: 0, index: 0 };
+	const selection = view.state.selection.main;
+	const selectedAt = firstAtOrAfter(ranges, selection.from);
+	const selected = ranges[selectedAt];
+	const current =
+		selected && selected.from === selection.from && selected.to === selection.to
+			? selectedAt + 1
+			: 0;
+	const at = firstAtOrAfter(ranges, selection.head);
+	const next = at < ranges.length ? at + 1 : 0;
+	return { total: ranges.length, index: current || next || 1 };
 }
 
 export { findNext as findNextMatch, findPrevious as findPreviousMatch } from '@codemirror/search';
@@ -101,7 +154,7 @@ export { replaceAll as replaceEveryMatch } from '@codemirror/search';
 
 export function replaceCurrentMatch(view: EditorView): void {
 	const selection = view.state.selection.main;
-	const onMatch = matchRanges(view.state).some(
+	const onMatch = matchRanges(view).some(
 		(range) => range.from === selection.from && range.to === selection.to
 	);
 	// CodeMirror's replaceNext only moves to the next match; a click on Replace has to replace the highlighted one.

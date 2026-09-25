@@ -4,6 +4,7 @@ import {
 	stripLocalfilePrefix,
 	toOsPath
 } from '$lib/editor/image-url';
+import { parentDir } from '$lib/utils/path';
 
 const SAFE_DESTINATION = /[A-Za-z0-9\-_.~/]/;
 const PERCENT_ESCAPE = /%([0-9A-Fa-f]{2})/g;
@@ -64,8 +65,7 @@ export function noteDir(notePath: string, vaultPath: string | null): string {
 	const target = notePath.replace(/\\/g, '/').replace(/\/+$/, '');
 	const root = vaultPath.replace(/\\/g, '/').replace(/\/+$/, '');
 	const rel = target.startsWith(`${root}/`) ? target.slice(root.length + 1) : target;
-	const slash = rel.lastIndexOf('/');
-	return slash < 0 ? '' : rel.slice(0, slash);
+	return parentDir(rel);
 }
 
 export function vaultRelative(absPath: string, vaultPath: string | null): string | null {

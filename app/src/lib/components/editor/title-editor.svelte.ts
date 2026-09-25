@@ -3,6 +3,7 @@ import { fileExists } from '$lib/fs/bridge';
 import { fileTitle } from '$lib/stores/panes.svelte';
 import { toast } from '$lib/stores/toast.svelte';
 import { validateName } from '$lib/utils/filename';
+import { baseName, parentDir } from '$lib/utils/path';
 import * as m from '$lib/paraglide/messages.js';
 
 const RENAME_DELAY = 150;
@@ -41,7 +42,7 @@ export class TitleEditor {
 				return;
 			}
 			const path = this.host.path();
-			const dir = path.substring(0, path.lastIndexOf('/'));
+			const dir = parentDir(path);
 			const newPath = `${dir}/${raw}.md`;
 			if (newPath !== path) void this.renameTo(newPath);
 		}, RENAME_DELAY);
@@ -89,7 +90,7 @@ export class TitleEditor {
 			const path = this.host.path();
 			const differsBeyondCase = newPath.toLowerCase() !== path.toLowerCase();
 			if (differsBeyondCase && (await fileExists(newPath))) {
-				toast.error(m.toast_path_exists({ name: newPath.split('/').pop() ?? '' }));
+				toast.error(m.toast_path_exists({ name: baseName(newPath) }));
 				this.revert();
 				return;
 			}

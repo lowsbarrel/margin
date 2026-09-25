@@ -18,6 +18,7 @@ import { commands, type FuzzyEntry } from '$lib/bindings';
 import { tags as tagsStore } from '$lib/stores/tags.svelte';
 import { vault } from '$lib/stores/vault.svelte';
 import { isImageFile } from '$lib/utils/mime';
+import { baseName, parentDir } from '$lib/utils/path';
 import { assistCompletion, assistCompletionConfig, assistTheme } from './complete-theme';
 import { contextOf } from './context';
 import { ESCAPE_COMPLETION, onEscape } from './escape';
@@ -118,14 +119,13 @@ function noteRelativePath(state: EditorState, target: string): string | null {
 
 function vaultEntries(): FuzzyEntry[] {
 	return listVaultFiles().map((path) => ({
-		name: path.slice(path.lastIndexOf('/') + 1),
+		name: baseName(path),
 		path
 	}));
 }
 
 function wikiCompletion(entry: FuzzyEntry): Completion {
-	const slash = entry.path.lastIndexOf('/');
-	const folder = slash < 0 ? '' : entry.path.slice(0, slash);
+	const folder = parentDir(entry.path);
 	const name = entry.name.replace(/\.(md|canvas)$/i, '');
 	return assistCompletion(name, folder, isImageFile(entry.name) ? '🖼' : '📄', {
 		apply: (view, completion, from, to) => insertWiki(view, completion, from, to, name)
