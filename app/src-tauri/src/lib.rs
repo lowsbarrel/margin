@@ -1,0 +1,348 @@
+mod ai;
+mod crypto;
+mod fs;
+mod history;
+mod index;
+mod ipc;
+mod menu;
+mod s3;
+mod session;
+mod settings;
+mod sync;
+mod terminal;
+mod text;
+
+use ai::{LlmCancelState, LlmState};
+use fs::{VaultPathState, VaultWatcherState, WatcherState};
+use s3::S3State;
+use std::sync::Mutex;
+use tauri::Manager;
+
+fn mime_from_ext(path: &str) -> &'static str {
+    match std::path::Path::new(path)
+        .extension()
+        .and_then(|e| e.to_str())
+        .map(|e| e.to_ascii_lowercase())
+        .as_deref()
+    {
+        Some("png") => "image/png",
+        Some("jpg" | "jpeg") => "image/jpeg",
+        Some("gif") => "image/gif",
+        Some("webp") => "image/webp",
+        Some("svg") => "image/svg+xml",
+        Some("bmp") => "image/bmp",
+        Some("avif") => "image/avif",
+        Some("tif" | "tiff") => "image/tiff",
+        Some("ico") => "image/x-icon",
+        Some("pdf") => "application/pdf",
+        Some("mp4") => "video/mp4",
+        Some("webm") => "video/webm",
+        Some("mp3") => "audio/mpeg",
+        Some("wav") => "audio/wav",
+        _ => "application/octet-stream",
+    }
+}
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_dialog::init())
+        .plugin(tauri_plugin_drag::init())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init())
+        .on_menu_event(|app, event| menu::handle(app, event.id().as_ref()))
+        .manage(LlmState::default())
+        .manage(LlmCancelState::default())
+        .manage(S3State(Mutex::new(None)))
+        .manage(WatcherState(Mutex::new(None)))
+        .manage(VaultWatcherState(Mutex::new(None)))
+        .manage(VaultPathState(Mutex::new(String::new())))
+        .manage(terminal::TerminalState::new())
+        .register_uri_scheme_protocol("localfile", |_app, request| {
+            let decoded = ipc::percent_decode_lossy(request.uri().path());
+
+            // On Windows the URL path is "/C:/Users/...", so the leading slash has to go before Path::canonicalize can resolve it.
+            #[cfg(windows)]
+            let decoded = {
+                let bytes = decoded.as_bytes();
+                if bytes.len() >= 3
+                    && bytes[0] == b'/'
+                    && bytes[1].is_ascii_alphabetic()
+                    && bytes[2] == b':'
+                {
+                    decoded[1..].to_string()
+                } else {
+                    decoded
+                }
+            };
+
+            // Canonicalize before the containment check: a symlink inside the vault contains no `..` yet escapes it once resolved.
+            let path = std::path::Path::new(&decoded);
+            let canonical = match path.canonicalize() {
+                Ok(c) => c,
+                Err(_) => {
+                    return tauri::http::Response::builder()
+                        .status(tauri::http::StatusCode::NOT_FOUND)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+
+            let vault_root = {
+                let state = _app.app_handle().state::<VaultPathState>();
+
+                match state.0.lock() {
+                    Ok(vp) if !vp.is_empty() => vp.as_str().to_owned(),
+                    _ => String::new(),
+                }
+            };
+
+            if vault_root.is_empty() {
+                return tauri::http::Response::builder()
+                    .status(tauri::http::StatusCode::FORBIDDEN)
+                    .body(Vec::new())
+                    .unwrap();
+            }
+
+            let canonical_vault = match std::path::Path::new(&vault_root).canonicalize() {
+                Ok(c) => c,
+                Err(_) => {
+                    return tauri::http::Response::builder()
+                        .status(tauri::http::StatusCode::FORBIDDEN)
+                        .body(Vec::new())
+                        .unwrap();
+                }
+            };
+
+            if !canonical.starts_with(&canonical_vault) {
+                return tauri::http::Response::builder()
+                    .status(tauri::http::StatusCode::FORBIDDEN)
+                    .body(Vec::new())
+                    .unwrap();
+            }
+
+            match std::fs::read(&canonical) {
+                Ok(data) => {
+                    let mime = mime_from_ext(&decoded);
+                    tauri::http::Response::builder()
+                        .header("Content-Type", mime)
+                        .header("Access-Control-Allow-Origin", "*")
+                        .body(data)
+                        .unwrap()
+                }
+                Err(_) => tauri::http::Response::builder()
+                    .status(tauri::http::StatusCode::NOT_FOUND)
+                    .body(Vec::new())
+                    .unwrap(),
+            }
+        })
+        .setup(|app| {
+            use tauri::WebviewUrl;
+            use tauri::WebviewWindowBuilder;
+
+            #[cfg(target_os = "macos")]
+            app.set_menu(menu::build(app.handle())?)?;
+
+            let _win = WebviewWindowBuilder::new(app, "main", WebviewUrl::default())
+                .title("Margin")
+                .inner_size(800.0, 600.0)
+                .on_navigation(|url: &tauri::Url| {
+                    let s = url.as_str();
+                    s.starts_with("http://localhost")
+                        || s.starts_with("https://tauri.localhost")
+                        || s.starts_with("http://tauri.localhost")
+                        || s.starts_with("tauri://")
+                })
+                .build()?;
+            Ok(())
+        })
+        .invoke_handler(tauri::generate_handler![
+            crypto::generate_mnemonic,
+            crypto::derive_vault_keys,
+            crypto::decrypt_blob_cmd,
+            fs::set_vault_directory,
+            fs::read_file_bytes,
+            fs::write_file_bytes,
+            fs::save_file_bytes,
+            fs::list_directory,
+            fs::walk_directory,
+            fs::build_visible_tree,
+            fs::build_subtree,
+            fs::delete_entry,
+            fs::trash_list,
+            fs::trash_restore,
+            fs::trash_delete,
+            fs::trash_empty,
+            fs::rename_entry,
+            fs::create_directory,
+            fs::file_exists,
+            fs::file_metadata,
+            fs::copy_file,
+            fs::import_external_file,
+            fs::import_external_directory,
+            fs::store_attachment_bytes,
+            fs::import_attachment,
+            fs::sweep_unused_attachments,
+            fs::copy_directory,
+            fs::reveal_in_file_manager,
+            fs::set_mtime,
+            fs::watch_file,
+            fs::unwatch_file,
+            fs::watch_vault,
+            fs::unwatch_vault,
+            fs::search_files,
+            fs::replace_in_file,
+            fs::export_vault_zip,
+            fs::has_unsynced_changes,
+            index::index_search,
+            index::index_rebuild,
+            index::index_tags,
+            index::index_backlinks,
+            ai::llm_configure,
+            ai::llm_list_models,
+            ai::llm_ask,
+            ai::llm_cancel,
+            s3::s3_configure,
+            s3::s3_test_connection,
+            s3::s3_download,
+            settings::save_settings,
+            settings::load_settings,
+            settings::export_settings_string,
+            settings::import_settings_string,
+            settings::save_workspace_state,
+            settings::load_workspace_state,
+            session::save_session,
+            session::load_session,
+            session::clear_session,
+            session::load_vault_profiles,
+            session::save_vault_profile,
+            session::delete_vault_profile,
+            history::save_snapshot,
+            history::list_snapshots,
+            history::read_snapshot,
+            history::delete_snapshot,
+            history::clear_snapshots,
+            history::rename_history,
+            text::fuzzy_filter_files,
+            sync::hash_files_batch,
+            sync::load_manifest,
+            sync::save_manifest,
+            sync::compute_sync_actions,
+            sync::collect_tombstones,
+            sync::merge_tombstones,
+            sync::prune_tombstones,
+            sync::sync_upload_files,
+            sync::sync_download_files,
+            sync::sync_upload_manifest,
+            sync::sync_delete_files,
+            sync::path_to_s3_key,
+            terminal::pty_spawn,
+            terminal::pty_write,
+            terminal::pty_resize,
+            terminal::pty_kill,
+            terminal::pty_kill_all,
+        ])
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application")
+        .run(|app, event| {
+            if matches!(
+                event,
+                tauri::RunEvent::ExitRequested { .. } | tauri::RunEvent::Exit
+            ) {
+                terminal::kill_all(&app.state::<terminal::TerminalState>());
+            }
+        });
+}
+
+pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
+    tauri_specta::Builder::<tauri::Wry>::new().commands(tauri_specta::collect_commands![
+        crypto::generate_mnemonic,
+        crypto::derive_vault_keys,
+        fs::set_vault_directory,
+        fs::list_directory,
+        fs::walk_directory,
+        fs::build_visible_tree,
+        fs::build_subtree,
+        fs::delete_entry,
+        fs::trash_list,
+        fs::trash_restore,
+        fs::trash_delete,
+        fs::trash_empty,
+        fs::rename_entry,
+        fs::create_directory,
+        fs::file_exists,
+        fs::file_metadata,
+        fs::copy_file,
+        fs::import_external_file,
+        fs::import_external_directory,
+        fs::import_attachment,
+        fs::sweep_unused_attachments,
+        fs::copy_directory,
+        fs::reveal_in_file_manager,
+        fs::set_mtime,
+        fs::watch_file,
+        fs::unwatch_file,
+        fs::watch_vault,
+        fs::unwatch_vault,
+        fs::search_files,
+        fs::replace_in_file,
+        fs::export_vault_zip,
+        fs::has_unsynced_changes,
+        index::index_search,
+        index::index_rebuild,
+        index::index_tags,
+        index::index_backlinks,
+        ai::llm_configure,
+        ai::llm_list_models,
+        ai::llm_ask,
+        ai::llm_cancel,
+        s3::s3_configure,
+        s3::s3_test_connection,
+        settings::save_settings,
+        settings::load_settings,
+        settings::export_settings_string,
+        settings::import_settings_string,
+        settings::save_workspace_state,
+        settings::load_workspace_state,
+        session::save_session,
+        session::load_session,
+        session::clear_session,
+        session::load_vault_profiles,
+        session::save_vault_profile,
+        session::delete_vault_profile,
+        history::save_snapshot,
+        history::list_snapshots,
+        history::read_snapshot,
+        history::delete_snapshot,
+        history::clear_snapshots,
+        history::rename_history,
+        text::fuzzy_filter_files,
+        sync::hash_files_batch,
+        sync::load_manifest,
+        sync::save_manifest,
+        sync::compute_sync_actions,
+        sync::collect_tombstones,
+        sync::merge_tombstones,
+        sync::prune_tombstones,
+        sync::sync_upload_files,
+        sync::sync_download_files,
+        sync::sync_upload_manifest,
+        sync::sync_delete_files,
+        sync::path_to_s3_key,
+        terminal::pty_spawn,
+        terminal::pty_write,
+        terminal::pty_resize,
+        terminal::pty_kill,
+        terminal::pty_kill_all,
+    ])
+}
+
+pub fn export_bindings() {
+    specta_builder()
+        .export(
+            specta_typescript::Typescript::default(),
+            "../src/lib/bindings.ts",
+        )
+        .expect("failed to export TypeScript bindings");
+}

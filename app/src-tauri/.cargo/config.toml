@@ -1,0 +1,5 @@
+[future-incompat-report]
+frequency = "always"
+
+[alias]
+lint = "clippy --all-targets -- -D warnings"

@@ -1,0 +1,61 @@
+[package]
+name = "app"
+version = "0.1.29"
+description = "A local-first Markdown note app with end-to-end encrypted S3 sync."
+authors = ["Alessandro Zucchiatti"]
+edition = "2024"
+default-run = "app"
+
+[lib]
+# The `_lib` suffix avoids a name clash with the `app` bin on Windows, see rust-lang/cargo#8519.
+name = "app_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+tauri = { version = "2", features = ["specta"] }
+tauri-plugin-opener = "2"
+tauri-plugin-dialog = "2"
+tauri-plugin-updater = "2"
+tauri-plugin-process = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["rt", "time", "fs"] }
+bip39 = "2"
+aes-gcm-siv = "0.11"
+sha2 = "0.10"
+hmac = "0.12"
+rand = "0.10"
+hex = "0.4"
+rust-s3 = { version = "0.37", default-features = false, features = ["tokio-rustls-tls"] }
+base64 = "0.22"
+percent-encoding = "2"
+notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
+rayon = "1"
+nucleo-matcher = "0.3"
+regex = "1"
+reqwest = { version = "0.12", default-features = false, features = [
+    "json",
+    "stream",
+    "rustls-tls",
+] }
+futures-util = "0.3"
+rusqlite = { version = "0.40", features = ["bundled"] }
+filetime = "0.2"
+zip = { version = "4", default-features = false, features = ["deflate"] }
+tauri-plugin-drag = "2.1.0"
+specta = { version = "2.0.0-rc.25", features = ["derive"] }
+specta-typescript = "0.0.12"
+tauri-specta = { version = "2.0.0-rc.25", features = ["derive", "typescript"] }
+portable-pty = "0.9"
+
+[lints.rust]
+# `forbid`, not `deny`: turning it off must be a visible manifest edit, not a local `#[allow]`.
+unsafe_code = "forbid"
+
+[profile.release]
+codegen-units = 1
+lto = true
+strip = true

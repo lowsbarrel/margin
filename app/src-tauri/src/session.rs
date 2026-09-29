@@ -1,0 +1,264 @@
+use crate::crypto;
+use crate::fs::normalise_slashes;
+use rand::TryRng;
+use rand::rngs::SysRng;
+use serde::{Deserialize, Serialize};
+use std::fs;
+use std::path::PathBuf;
+use tauri::Manager;
+
+#[derive(Serialize, Deserialize)]
+struct LegacySession {
+    mnemonic: String,
+    vault_path: String,
+}
+
+#[derive(Serialize, Deserialize, Clone, specta::Type)]
+pub struct VaultProfile {
+    pub name: String,
+    pub mnemonic: String,
+    pub vault_path: String,
+}
+
+#[derive(Serialize, Deserialize, specta::Type)]
+pub struct VaultProfiles {
+    pub profiles: Vec<VaultProfile>,
+    pub last_used: Option<String>,
+}
+
+// One key generation at a time: a concurrent caller could otherwise orphan whatever the discarded key encrypted.
+static DEVICE_KEY_LOCK: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
+fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
+    let _guard = DEVICE_KEY_LOCK.lock().map_err(|e| e.to_string())?;
+
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {e}"))?;
+    fs::create_dir_all(&data_dir).map_err(|e| format!("Cannot create app data dir: {e}"))?;
+
+    let key_path = data_dir.join("device.key");
+
+    if key_path.exists() {
+        let key = fs::read(&key_path).map_err(|e| format!("Failed to read device key: {e}"))?;
+        if key.len() == 32 {
+            return Ok(key);
+        }
+        // A previous write can leave the file read-only on Windows, which would fail the rewrite.
+        #[cfg(windows)]
+        {
+            if let Ok(meta) = fs::metadata(&key_path) {
+                let mut p = meta.permissions();
+                #[allow(clippy::permissions_set_readonly_false)]
+                p.set_readonly(false);
+                let _ = fs::set_permissions(&key_path, p);
+            }
+        }
+    }
+
+    let mut key = vec![0u8; 32];
+    SysRng
+        .try_fill_bytes(&mut key)
+        .map_err(|e| format!("OS random source failed: {e}"))?;
+    let tmp_key_path = key_path.with_extension("tmp");
+    fs::write(&tmp_key_path, &key).map_err(|e| format!("Failed to write device key: {e}"))?;
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::PermissionsExt;
+        fs::set_permissions(&tmp_key_path, fs::Permissions::from_mode(0o600))
+            .map_err(|e| format!("Failed to set device key permissions: {e}"))?;
+    }
+    fs::rename(&tmp_key_path, &key_path).map_err(|e| {
+        let _ = fs::remove_file(&tmp_key_path);
+        format!("Failed to finalise device key write: {e}")
+    })?;
+    #[cfg(windows)]
+    {
+        let mut perms = fs::metadata(&key_path)
+            .map_err(|e| format!("Failed to read device key metadata: {e}"))?
+            .permissions();
+        perms.set_readonly(true);
+        fs::set_permissions(&key_path, perms)
+            .map_err(|e| format!("Failed to set device key permissions: {e}"))?;
+    }
+    Ok(key)
+}
+
+fn profiles_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {e}"))?;
+    Ok(data_dir.join("profiles.enc"))
+}
+
+fn legacy_session_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
+    let data_dir = app
+        .path()
+        .app_data_dir()
+        .map_err(|e| format!("Cannot resolve app data dir: {e}"))?;
+    Ok(data_dir.join("session.enc"))
+}
+
+fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, String> {
+    let key = get_device_key(app)?;
+    let path = profiles_path(app)?;
+
+    if path.exists() {
+        let encrypted = fs::read(&path).map_err(|e| format!("Read failed: {e}"))?;
+        let decrypted = crypto::decrypt_blob(encrypted, key)?;
+        let mut profiles: VaultProfiles =
+            serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
+
+        let mut seen = std::collections::HashSet::new();
+        for p in &mut profiles.profiles {
+            p.vault_path = normalise_slashes(&p.vault_path);
+        }
+        profiles
+            .profiles
+            .retain(|p| seen.insert(p.vault_path.clone()));
+        if let Some(lu) = &mut profiles.last_used {
+            *lu = normalise_slashes(lu);
+        }
+
+        return Ok(profiles);
+    }
+
+    let legacy_path = legacy_session_path(app)?;
+    if legacy_path.exists() {
+        let encrypted = fs::read(&legacy_path).map_err(|e| format!("Read failed: {e}"))?;
+        if let Ok(decrypted) = crypto::decrypt_blob(encrypted, key.clone())
+            && let Ok(legacy) = serde_json::from_slice::<LegacySession>(&decrypted)
+        {
+            let folder_name = std::path::Path::new(&legacy.vault_path)
+                .file_name()
+                .and_then(|n| n.to_str())
+                .unwrap_or("Vault")
+                .to_string();
+            let profile = VaultProfile {
+                name: folder_name,
+                mnemonic: legacy.mnemonic,
+                vault_path: normalise_slashes(&legacy.vault_path),
+            };
+            let profiles = VaultProfiles {
+                last_used: Some(profile.vault_path.clone()),
+                profiles: vec![profile],
+            };
+            save_profiles_internal(app, &profiles)?;
+            let _ = fs::remove_file(&legacy_path);
+            return Ok(profiles);
+        }
+    }
+
+    Ok(VaultProfiles {
+        profiles: vec![],
+        last_used: None,
+    })
+}
+
+fn save_profiles_internal(app: &tauri::AppHandle, profiles: &VaultProfiles) -> Result<(), String> {
+    let key = get_device_key(app)?;
+    let json = serde_json::to_vec(profiles).map_err(|e| format!("Serialize failed: {e}"))?;
+    let encrypted = crypto::encrypt_blob(json, key)?;
+    let path = profiles_path(app)?;
+    crate::fs::atomic_write(&path, &encrypted)?;
+    Ok(())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn load_vault_profiles(app: tauri::AppHandle) -> Result<VaultProfiles, String> {
+    load_profiles_internal(&app)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Result<(), String> {
+    let mut data = load_profiles_internal(&app)?;
+    let norm = normalise_slashes(&profile.vault_path);
+    let mut profile = profile;
+    profile.vault_path = norm.clone();
+    if let Some(existing) = data
+        .profiles
+        .iter_mut()
+        .find(|p| normalise_slashes(&p.vault_path) == norm)
+    {
+        existing.name = profile.name;
+        existing.mnemonic = profile.mnemonic;
+        existing.vault_path = norm.clone();
+    } else {
+        data.profiles.push(profile);
+    }
+    data.last_used = Some(norm);
+    save_profiles_internal(&app, &data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn delete_vault_profile(app: tauri::AppHandle, vault_path: String) -> Result<(), String> {
+    let mut data = load_profiles_internal(&app)?;
+    let norm = normalise_slashes(&vault_path);
+    data.profiles
+        .retain(|p| normalise_slashes(&p.vault_path) != norm);
+    if data.last_used.as_deref().map(normalise_slashes) == Some(norm) {
+        data.last_used = data.profiles.first().map(|p| p.vault_path.clone());
+    }
+    save_profiles_internal(&app, &data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn save_session(
+    app: tauri::AppHandle,
+    mnemonic: String,
+    vault_path: String,
+) -> Result<(), String> {
+    let folder_name = std::path::Path::new(&vault_path)
+        .file_name()
+        .and_then(|n| n.to_str())
+        .unwrap_or("Vault")
+        .to_string();
+
+    let vault_path = normalise_slashes(&vault_path);
+
+    let data = load_profiles_internal(&app)?;
+    let name = data
+        .profiles
+        .iter()
+        .find(|p| normalise_slashes(&p.vault_path) == vault_path)
+        .map(|p| p.name.clone())
+        .unwrap_or(folder_name);
+
+    let profile = VaultProfile {
+        name,
+        mnemonic,
+        vault_path,
+    };
+    save_vault_profile(app, profile)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, String> {
+    let data = load_profiles_internal(&app)?;
+    if let Some(last) = &data.last_used {
+        let norm_last = normalise_slashes(last);
+        if let Some(profile) = data
+            .profiles
+            .iter()
+            .find(|p| normalise_slashes(&p.vault_path) == norm_last)
+        {
+            return Ok(Some(profile.clone()));
+        }
+    }
+    Ok(data.profiles.into_iter().next())
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn clear_session(app: tauri::AppHandle) -> Result<(), String> {
+    let mut data = load_profiles_internal(&app)?;
+    data.last_used = None;
+    save_profiles_internal(&app, &data)
+}

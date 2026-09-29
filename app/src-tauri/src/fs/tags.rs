@@ -1,0 +1,58 @@
+pub(crate) fn extract_tags_from_content(content: &str) -> Vec<String> {
+    let mut tags = Vec::new();
+    let mut in_code_block = false;
+
+    for line in content.lines() {
+        let trimmed = line.trim_start();
+        let bytes = trimmed.as_bytes();
+
+        if bytes.starts_with(b"```") || bytes.starts_with(b"~~~") {
+            in_code_block = !in_code_block;
+            continue;
+        }
+        if in_code_block || is_heading(bytes) {
+            continue;
+        }
+
+        let mut i = 0usize;
+        while i < bytes.len() {
+            if bytes[i] == b'#' {
+                let prev_ok = i == 0 || {
+                    let p = bytes[i - 1];
+                    !p.is_ascii_alphanumeric() && p != b'_' && p != b'#'
+                };
+                if prev_ok && i + 1 < bytes.len() && bytes[i + 1].is_ascii_alphabetic() {
+                    let start = i + 1;
+                    let mut j = start;
+                    while j < bytes.len()
+                        && (bytes[j].is_ascii_alphanumeric()
+                            || bytes[j] == b'-'
+                            || bytes[j] == b'_'
+                            || bytes[j] == b'/')
+                    {
+                        j += 1;
+                    }
+                    let tag = std::str::from_utf8(&bytes[start..j])
+                        .unwrap_or("")
+                        .to_ascii_lowercase();
+                    if !tag.is_empty() {
+                        tags.push(tag);
+                    }
+                    i = j;
+                    continue;
+                }
+            }
+            i += 1;
+        }
+    }
+
+    tags
+}
+
+fn is_heading(bytes: &[u8]) -> bool {
+    if bytes.first() != Some(&b'#') {
+        return false;
+    }
+    let hashes = bytes.iter().take_while(|&&b| b == b'#').count();
+    bytes.get(hashes).is_none_or(|&b| b == b' ')
+}

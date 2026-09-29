@@ -1,0 +1,28 @@
+# `--all-features` is deliberately absent: it enables Tauri's custom-protocol feature, which needs a bundled frontend that does not exist at check time.
+default_job = "check"
+
+[jobs.check]
+command = ["cargo", "check", "--all-targets"]
+need_stdout = false
+
+[jobs.clippy]
+command = ["cargo", "clippy", "--all-targets", "--", "-D", "warnings"]
+need_stdout = false
+
+[jobs.test]
+command = ["cargo", "test"]
+need_stdout = true
+
+[jobs.fmt]
+command = ["cargo", "fmt", "--", "--check"]
+need_stdout = true
+
+[jobs.test-one]
+command = ["cargo", "test"]
+need_stdout = true
+
+[keybindings]
+c = "job:check"
+shift-c = "job:clippy"
+t = "job:test"
+f = "job:fmt"
