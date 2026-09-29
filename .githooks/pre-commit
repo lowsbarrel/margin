@@ -1,0 +1,11 @@
+#!/bin/sh
+set -e
+
+echo "pre-commit ▸ bun run check:secrets"
+(cd app && bun run check:secrets)
+echo "pre-commit ▸ bun run check:invariants"
+(cd app && bun run check:invariants)
+echo "pre-commit ▸ bun run lint"
+(cd app && bun run lint)
+echo "pre-commit ▸ cargo fmt --check"
+(cd app/src-tauri && cargo fmt -- --check)

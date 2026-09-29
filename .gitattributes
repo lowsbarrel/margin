@@ -1,0 +1,12 @@
+* text=auto eol=lf
+
+app/bun.lock              -diff linguist-generated
+app/src-tauri/Cargo.lock  -diff linguist-generated
+app/src/lib/bindings.ts   linguist-generated
+
+*.png   binary
+*.jpg   binary
+*.ico   binary
+*.icns  binary
+*.webp  binary
+*.woff2 binary

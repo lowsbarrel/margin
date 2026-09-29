@@ -1,0 +1,13 @@
+node_modules/
+.DS_Store
+Thumbs.db
+.env
+.env.*
+!.env.example
+
+/app/.svelte-kit/
+/app/build/
+/app/src/lib/paraglide/
+/app/vite.config.*.timestamp-*
+/app/src-tauri/target/
+/app/src-tauri/gen/schemas/

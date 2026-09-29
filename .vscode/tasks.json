@@ -1,0 +1,76 @@
+{
+	"version": "2.0.0",
+	"options": {
+		"cwd": "${workspaceFolder}/app"
+	},
+	"tasks": [
+		{
+			"label": "tauri: dev",
+			"type": "shell",
+			"command": "bun run tauri dev",
+			"isBackground": true,
+			"problemMatcher": [],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
+			"label": "tauri: build",
+			"type": "shell",
+			"command": "bun run tauri build",
+			"group": { "kind": "build", "isDefault": true },
+			"problemMatcher": ["$rustc", "$tsc"],
+			"presentation": { "reveal": "always", "panel": "dedicated" }
+		},
+		{
+			"label": "bun: check",
+			"type": "shell",
+			"command": "bun run check",
+			"problemMatcher": ["$tsc"]
+		},
+		{
+			"label": "bun: lint",
+			"type": "shell",
+			"command": "bun run lint",
+			"problemMatcher": []
+		},
+		{
+			"label": "bun: format",
+			"type": "shell",
+			"command": "bun run format",
+			"problemMatcher": []
+		},
+		{
+			"label": "bun: gen:bindings",
+			"type": "shell",
+			"command": "bun run gen:bindings",
+			"problemMatcher": ["$rustc"]
+		},
+		{
+			"label": "cargo: fmt",
+			"type": "shell",
+			"command": "cargo fmt",
+			"options": { "cwd": "${workspaceFolder}/app/src-tauri" },
+			"problemMatcher": []
+		},
+		{
+			"label": "cargo: clippy",
+			"type": "shell",
+			"command": "cargo clippy --all-targets -- -D warnings",
+			"options": { "cwd": "${workspaceFolder}/app/src-tauri" },
+			"problemMatcher": ["$rustc"]
+		},
+		{
+			"label": "gate: pre-commit",
+			"dependsOn": ["bun: lint", "cargo: fmt"],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": "test"
+		},
+		{
+			"label": "gate: full",
+			"dependsOn": ["bun: lint", "bun: check", "cargo: fmt", "cargo: clippy"],
+			"dependsOrder": "sequence",
+			"problemMatcher": [],
+			"group": { "kind": "test", "isDefault": true }
+		}
+	]
+}
