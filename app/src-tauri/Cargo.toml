@@ -23,7 +23,7 @@ tauri-plugin-process = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tokio = { version = "1", features = ["rt", "time", "fs"] }
-bip39 = "2"
+bip39 = "3"
 aes-gcm-siv = "0.11"
 sha2 = "0.10"
 hmac = "0.12"
