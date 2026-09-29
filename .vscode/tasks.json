@@ -5,6 +5,17 @@
 	},
 	"tasks": [
 		{
+			"label": "bun: dev",
+			"type": "shell",
+			"command": "bun run dev",
+			"isBackground": true,
+			"problemMatcher": {
+				"owner": "vite",
+				"pattern": { "regexp": "^$" },
+				"background": { "activeBegins": true, "beginsPattern": "VITE", "endsPattern": "Local" }
+			}
+		},
+		{
 			"label": "tauri: dev",
 			"type": "shell",
 			"command": "bun run tauri dev",
@@ -17,14 +28,14 @@
 			"type": "shell",
 			"command": "bun run tauri build",
 			"group": { "kind": "build", "isDefault": true },
-			"problemMatcher": ["$rustc", "$tsc"],
+			"problemMatcher": ["$rustc"],
 			"presentation": { "reveal": "always", "panel": "dedicated" }
 		},
 		{
 			"label": "bun: check",
 			"type": "shell",
 			"command": "bun run check",
-			"problemMatcher": ["$tsc"]
+			"problemMatcher": []
 		},
 		{
 			"label": "bun: lint",
@@ -60,17 +71,18 @@
 		},
 		{
 			"label": "gate: pre-commit",
-			"dependsOn": ["bun: lint", "cargo: fmt"],
-			"dependsOrder": "sequence",
-			"problemMatcher": [],
-			"group": "test"
+			"type": "shell",
+			"command": "sh .githooks/pre-commit",
+			"options": { "cwd": "${workspaceFolder}" },
+			"group": "test",
+			"problemMatcher": []
 		},
 		{
 			"label": "gate: full",
-			"dependsOn": ["bun: lint", "bun: check", "cargo: fmt", "cargo: clippy"],
-			"dependsOrder": "sequence",
-			"problemMatcher": [],
-			"group": { "kind": "test", "isDefault": true }
+			"type": "shell",
+			"command": "bun run check:secrets && bun run check:invariants && bun run lint && bun run check && cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test",
+			"group": { "kind": "test", "isDefault": true },
+			"problemMatcher": ["$rustc"]
 		}
 	]
 }

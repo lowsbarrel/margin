@@ -11,22 +11,19 @@
 		"editor.defaultFormatter": "rust-lang.rust-analyzer"
 	},
 	"eslint.validate": ["javascript", "typescript", "svelte"],
-	"eslint.useFlatConfig": true,
 	"eslint.workingDirectories": ["app"],
 
-	"typescript.tsdk": "app/node_modules/typescript/lib",
-	"typescript.enablePromptUseWorkspaceTsdk": true,
-	"typescript.tsserver.experimental.enableProjectDiagnostics": true,
+	"js/ts.tsdk.path": "app/node_modules/typescript/lib",
+	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
+	"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
 	"svelte.enable-ts-plugin": true,
-	"svelte.plugin.diagnostics.enable": true,
 	"tailwindCSS.rootFontSize": 14,
 
 	"rust-analyzer.linkedProjects": ["app/src-tauri/Cargo.toml"],
-	"rust-analyzer.checkOnSave": true,
 	"rust-analyzer.check.command": "clippy",
-	"rust-analyzer.check.extraArgs": ["--all-targets", "--", "-D", "warnings"],
+	"rust-analyzer.check.extraArgs": ["--", "-D", "warnings"],
 
-	"npm.packageManager": "auto",
+	"npm.packageManager": "bun",
 	"files.exclude": {
 		"**/.svelte-kit": true,
 		"**/src-tauri/target": true
@@ -37,7 +34,8 @@
 		"**/src/lib/paraglide": true
 	},
 	"files.readonlyInclude": {
-		"app/src/lib/bindings.ts": true
+		"app/src/lib/bindings.ts": true,
+		"app/src/lib/paraglide/**": true
 	},
 	"files.eol": "\n"
 }

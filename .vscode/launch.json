@@ -6,10 +6,15 @@
 			"type": "lldb",
 			"request": "launch",
 			"cargo": {
-				"args": ["build", "--manifest-path=./app/src-tauri/Cargo.toml", "--no-default-features"]
+				"args": [
+					"build",
+					"--manifest-path=./app/src-tauri/Cargo.toml",
+					"--no-default-features",
+					"--bin=app"
+				]
 			},
 			"cwd": "${workspaceFolder}/app/src-tauri",
-			"preLaunchTask": "tauri: before dev"
+			"preLaunchTask": "bun: dev"
 		},
 		{
 			"name": "Debug current Node script",
