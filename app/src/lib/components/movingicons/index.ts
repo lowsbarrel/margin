@@ -1,0 +1,10 @@
+export { default as ArrowLeftRight } from './arrow-left-right.svelte';
+export { default as FilePlus } from './file-plus.svelte';
+export { default as FolderPlus } from './folder-plus.svelte';
+export { default as History } from './history.svelte';
+export { default as LogOut } from './log-out.svelte';
+export { default as PanelLeft } from './panel-left.svelte';
+export { default as PenLine } from './pen-line.svelte';
+export { default as RefreshCw } from './refresh-cw.svelte';
+export { default as Settings } from './settings.svelte';
+export { default as Sun } from './sun.svelte';
