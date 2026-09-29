@@ -1,0 +1,173 @@
+@import '@fontsource-variable/inter';
+@import '@fontsource-variable/jetbrains-mono';
+@import 'tailwindcss';
+@import 'tw-animate-css';
+
+@import './lib/styles/tokens.css';
+@import './lib/styles/theme.css';
+@import './lib/styles/components.css' layer(components);
+@import './lib/styles/callouts.css' layer(components);
+@import './lib/styles/math.css' layer(components);
+
+@utility no-scrollbar {
+	-ms-overflow-style: none;
+	scrollbar-width: none;
+
+	&::-webkit-scrollbar {
+		display: none;
+	}
+}
+
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* These rules MUST stay inside `@layer base`: unlayered CSS beats layered CSS outright, so a bare `button { padding }` here would outrank every `px-4` utility. */
+@layer base {
+	/* Tailwind's preflight emits `ol,ul,menu{list-style:none}`, which is right for app chrome and wrong for rendered Markdown; nesting cycles disc → circle → square. */
+	.editor-wrap ul:not([data-type='taskList']) {
+		list-style-type: disc;
+	}
+	.editor-wrap ul:not([data-type='taskList']) ul:not([data-type='taskList']) {
+		list-style-type: circle;
+	}
+	.editor-wrap
+		ul:not([data-type='taskList'])
+		ul:not([data-type='taskList'])
+		ul:not([data-type='taskList']) {
+		list-style-type: square;
+	}
+
+	html,
+	body {
+		height: 100%;
+		font-family: var(--font-sans);
+		font-size: var(--text-size-sm);
+		line-height: var(--text-leading-sm);
+		font-weight: var(--font-weight-normal);
+		letter-spacing: var(--text-tracking-normal);
+		background: var(--color-bg-primary);
+		color: var(--color-text-primary);
+		overflow: hidden;
+		-webkit-font-smoothing: antialiased;
+		-moz-osx-font-smoothing: grayscale;
+		font-feature-settings:
+			'dlig' on,
+			'ss07' on,
+			'calt' off;
+	}
+
+	h1,
+	h2,
+	h3,
+	h4,
+	h5,
+	h6 {
+		font-weight: var(--font-weight-semibold);
+		letter-spacing: var(--text-tracking-tight);
+	}
+
+	html {
+		-webkit-user-select: none;
+		user-select: none;
+	}
+
+	input,
+	textarea,
+	[contenteditable='true'],
+	.editor-wrap,
+	pre {
+		-webkit-user-select: text;
+		user-select: text;
+	}
+
+	button {
+		font-family: var(--font-sans);
+		font-size: inherit;
+		font-weight: var(--font-weight-medium);
+		letter-spacing: var(--text-tracking-normal);
+		cursor: pointer;
+		border: none;
+		border-radius: var(--radius-sm);
+		padding: 8px 14px;
+		transition:
+			background var(--transition-fast),
+			border-color var(--transition-fast),
+			color var(--transition-fast),
+			opacity var(--transition-fast);
+	}
+
+	button:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	input:not([type='checkbox']),
+	textarea,
+	select {
+		font-family: var(--font-sans);
+		font-size: var(--text-size-sm);
+		letter-spacing: var(--text-tracking-normal);
+		background: var(--color-bg-secondary);
+		color: var(--color-text-primary);
+		border: 1px solid var(--color-border-secondary);
+		border-radius: var(--radius-sm);
+		padding: 9px 12px;
+		outline: none;
+		transition:
+			border-color var(--transition-fast),
+			box-shadow var(--transition-fast);
+	}
+
+	input:focus,
+	textarea:focus,
+	select:focus {
+		border-color: var(--color-border-focus);
+		box-shadow: 0 0 0 3px var(--color-brand-16);
+	}
+
+	input::placeholder,
+	textarea::placeholder {
+		color: var(--color-text-tertiary);
+	}
+
+	::selection {
+		background: var(--color-brand-24);
+		color: var(--color-text-primary);
+	}
+
+	::-webkit-scrollbar {
+		width: 10px;
+		height: 10px;
+	}
+
+	::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	::-webkit-scrollbar-thumb {
+		background: var(--color-border-strong);
+		border-radius: var(--radius-full);
+		border: 3px solid transparent;
+		background-clip: content-box;
+	}
+
+	::-webkit-scrollbar-thumb:hover {
+		background: var(--color-text-tertiary);
+		background-clip: content-box;
+	}
+
+	:focus-visible {
+		outline: 2px solid var(--color-border-focus);
+		outline-offset: 2px;
+	}
+}
+
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		animation-iteration-count: 1 !important;
+		transition-duration: 0.01ms !important;
+		scroll-behavior: auto !important;
+	}
+}

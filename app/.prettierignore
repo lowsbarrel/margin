@@ -1,0 +1,13 @@
+package-lock.json
+yarn.lock
+bun.lock
+bun.lockb
+/static/
+/build/
+/.svelte-kit/
+/src-tauri/
+/src/lib/bindings.ts
+/src/lib/paraglide/
+/project.inlang/cache/
+/project.inlang/.meta.json
+/project.inlang/README.md

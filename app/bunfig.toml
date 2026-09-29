@@ -1,0 +1,12 @@
+[install]
+minimumReleaseAge = 604800
+# Exact-pinned Tauri platform binaries can't back off to an older release, so the age gate would block them.
+minimumReleaseAgeExcludes = [
+	"@tauri-apps/api",
+	"@tauri-apps/cli",
+	"@tauri-apps/plugin-dialog",
+	"@tauri-apps/plugin-opener",
+	"@tauri-apps/plugin-process",
+	"@tauri-apps/plugin-updater",
+	"@crabnebula/tauri-plugin-drag"
+]
