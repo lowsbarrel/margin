@@ -1,0 +1,66 @@
+.cm-editor .cm-lp-grip {
+	position: absolute;
+	top: 0;
+	left: 0;
+	z-index: 5;
+	display: none;
+	align-items: center;
+	justify-content: center;
+	width: 18px;
+	height: 24px;
+	border-radius: var(--radius-sm);
+	color: var(--color-text-tertiary);
+	cursor: grab;
+	opacity: 0.55;
+	touch-action: none;
+	user-select: none;
+	-webkit-user-select: none;
+	transition:
+		opacity var(--transition-fast),
+		background-color var(--transition-fast);
+}
+
+.cm-editor .cm-lp-grip[data-visible] {
+	display: flex;
+}
+
+.cm-editor .cm-lp-grip:hover,
+.cm-editor .cm-lp-grip[data-dragging] {
+	opacity: 1;
+	color: var(--color-text-secondary);
+	background: var(--color-bg-hover);
+}
+
+.cm-editor .cm-lp-drop-line {
+	position: absolute;
+	top: -1px;
+	left: 0;
+	z-index: 5;
+	display: none;
+	height: 2px;
+	border-radius: 1px;
+	background: var(--color-bg-brand);
+	pointer-events: none;
+}
+
+.cm-editor .cm-lp-drop-line[data-visible] {
+	display: block;
+}
+
+.cm-editor .cm-lp-drag-source {
+	opacity: 0.4;
+}
+
+body.cm-lp-dragging,
+body.cm-lp-dragging * {
+	cursor: grabbing !important;
+	user-select: none !important;
+	-webkit-user-select: none !important;
+}
+
+@media print {
+	.cm-editor .cm-lp-grip,
+	.cm-editor .cm-lp-drop-line {
+		display: none !important;
+	}
+}

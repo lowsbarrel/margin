@@ -1,0 +1,11 @@
+.cm-assist-bubble {
+	position: fixed;
+	left: -9999px;
+	top: 0;
+	z-index: 150;
+	visibility: hidden;
+}
+
+.cm-assist-bubble.is-visible {
+	visibility: visible;
+}

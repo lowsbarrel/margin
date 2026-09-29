@@ -1,0 +1,154 @@
+.cm-editor .cm-lp-callout {
+	--lp-base: 24px;
+	background: color-mix(in srgb, var(--callout-accent, transparent) 10%, transparent);
+	padding: 0 12px 0 var(--lp-base);
+}
+
+.cm-editor .cm-lp-callout-note {
+	--callout-accent: var(--color-callout-note);
+}
+.cm-editor .cm-lp-callout-abstract {
+	--callout-accent: var(--color-callout-abstract);
+}
+.cm-editor .cm-lp-callout-info {
+	--callout-accent: var(--color-callout-info);
+}
+.cm-editor .cm-lp-callout-todo {
+	--callout-accent: var(--color-callout-todo);
+}
+.cm-editor .cm-lp-callout-tip {
+	--callout-accent: var(--color-callout-tip);
+}
+.cm-editor .cm-lp-callout-success {
+	--callout-accent: var(--color-callout-success);
+}
+.cm-editor .cm-lp-callout-question {
+	--callout-accent: var(--color-callout-question);
+}
+.cm-editor .cm-lp-callout-warning {
+	--callout-accent: var(--color-callout-warning);
+}
+.cm-editor .cm-lp-callout-failure {
+	--callout-accent: var(--color-callout-failure);
+}
+.cm-editor .cm-lp-callout-danger {
+	--callout-accent: var(--color-callout-danger);
+}
+.cm-editor .cm-lp-callout-bug {
+	--callout-accent: var(--color-callout-bug);
+}
+.cm-editor .cm-lp-callout-example {
+	--callout-accent: var(--color-callout-example);
+}
+.cm-editor .cm-lp-callout-quote {
+	--callout-accent: var(--color-callout-quote);
+}
+
+.cm-editor .cm-lp-callout.cm-lp-quote {
+	--lp-base: 24px;
+	background-image: none;
+	color: var(--color-text-primary);
+	padding-left: var(--lp-base);
+}
+
+.cm-editor .cm-lp-callout .cm-lp-quote-mark {
+	text-align: left;
+}
+
+.cm-editor .cm-lp-callout-first {
+	border-radius: 4px 4px 0 0;
+	padding-top: 12px;
+	font-weight: 600;
+}
+
+.cm-editor .cm-lp-callout-last {
+	border-radius: 0 0 4px 4px;
+	padding-bottom: 12px;
+}
+
+.cm-editor .cm-lp-callout-first.cm-lp-callout-last {
+	border-radius: 4px;
+}
+
+.cm-editor .cm-lp-callout-first:not(.cm-lp-callout-last) {
+	padding-bottom: 1em;
+}
+
+.cm-editor .cm-lp-callout-last:not(.cm-lp-callout-first) {
+	padding-bottom: calc(12px + 1em);
+}
+
+.cm-editor .cm-lp-callout.cm-lp-callout-inset {
+	background-image: linear-gradient(
+		to right,
+		transparent 12px,
+		color-mix(in srgb, var(--inset-accent) 10%, transparent) 12px calc(100% - 12px),
+		transparent calc(100% - 12px)
+	);
+	background-repeat: no-repeat;
+	--lp-base: 36px;
+	padding-left: var(--lp-base);
+	padding-right: 24px;
+}
+
+.cm-editor .cm-lp-callout.cm-lp-callout-inset-first {
+	background-position: 0 6px;
+	padding-top: 16px;
+	font-weight: 600;
+}
+
+.cm-editor .cm-lp-callout.cm-lp-callout-inset-last {
+	background-position: 0 -6px;
+	padding-bottom: 16px;
+}
+
+.cm-editor .cm-lp-callout.cm-lp-callout-inset-first.cm-lp-callout-inset-last {
+	background-position: 0 6px;
+	background-size: 100% calc(100% - 12px);
+}
+
+.cm-editor .cm-lp-callout-inset .cm-lp-callout-head {
+	--callout-accent: var(--inset-accent);
+}
+
+.cm-editor .cm-lp-callout-head {
+	display: inline-flex;
+	align-items: center;
+	gap: 6px;
+}
+
+.cm-editor .cm-lp-callout-svg {
+	width: 1.05em;
+	height: 1.05em;
+	flex: none;
+	color: var(--callout-accent, var(--color-text-secondary));
+}
+
+.cm-editor .cm-lp-callout-label {
+	color: var(--callout-accent, var(--color-text-secondary));
+}
+
+.cm-editor .cm-lp-callout-fold {
+	display: inline-flex;
+	align-items: center;
+	border: none;
+	background: none;
+	padding: 0;
+	margin: 0;
+	color: var(--callout-accent, var(--color-text-tertiary));
+	cursor: pointer;
+}
+
+.cm-editor .cm-lp-callout-fold:hover {
+	opacity: 0.75;
+}
+
+.cm-editor .cm-lp-callout-chevron {
+	width: 0.9em;
+	height: 0.9em;
+	transition: transform var(--transition-fast);
+}
+
+.cm-editor .cm-lp-callout-chevron-open {
+	transform: rotate(90deg);
+}

@@ -1,0 +1,74 @@
+.cm-editor .cm-lp-bullet,
+.cm-editor .cm-lp-number {
+	display: inline-block;
+	box-sizing: border-box;
+	width: 1.5em;
+	color: var(--color-text-secondary);
+	line-height: 1;
+	white-space: nowrap;
+}
+
+.cm-editor .cm-lp-bullet {
+	width: calc(1.5em / 1.15);
+	padding-left: calc(0.35em / 1.15);
+	font-size: 1.15em;
+	vertical-align: -0.04em;
+}
+
+.cm-editor .cm-lp-number {
+	padding-right: 0.4em;
+	text-align: right;
+	font-variant-numeric: tabular-nums;
+}
+
+.cm-editor .cm-content .cm-line.cm-lp-list-line,
+.cm-editor .cm-content .cm-line.cm-lp-list-cont {
+	--lp-list-step: 1.5em;
+	--lp-marker: 1.5em;
+	--lp-hang: calc(var(--lp-list-level) * var(--lp-list-step) + var(--lp-marker));
+	padding-left: calc(var(--lp-base, 0px) + var(--lp-hang));
+}
+
+.cm-editor .cm-content .cm-line.cm-lp-list-numbered-task {
+	--lp-marker: 3em;
+}
+
+.cm-editor .cm-content .cm-line.cm-lp-list-line {
+	text-indent: calc(-1 * var(--lp-hang));
+}
+
+.cm-editor .cm-lp-list-line * {
+	text-indent: 0;
+}
+
+.cm-editor .cm-content .cm-line.cm-lp-list-line:not(.cm-lp-quote),
+.cm-editor .cm-content .cm-line.cm-lp-list-cont:not(.cm-lp-quote) {
+	background-image: repeating-linear-gradient(
+		to right,
+		var(--color-border-secondary) 0 1px,
+		transparent 1px var(--lp-list-step)
+	);
+	background-size: calc(var(--lp-list-level) * var(--lp-list-step)) 100%;
+	background-position: 0.55em 0;
+	background-repeat: no-repeat;
+}
+
+.cm-editor .cm-lp-list-indent {
+	display: inline-block;
+	width: calc(var(--lp-list-level) * var(--lp-list-step));
+}
+
+.cm-editor .cm-lp-bullet-source,
+.cm-editor .cm-lp-number-source {
+	display: inline-block;
+	box-sizing: border-box;
+	min-width: 1.5em;
+}
+
+.cm-editor .cm-lp-bullet-source {
+	padding-left: 0.35em;
+}
+
+.cm-editor .cm-lp-number-source {
+	text-align: right;
+}
