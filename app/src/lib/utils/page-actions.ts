@@ -20,7 +20,7 @@ import { createUniqueFilePath } from '$lib/utils/sidebar-ops';
 import { parentDir } from '$lib/utils/path';
 import { renameHistory } from '$lib/history/bridge';
 import { flushEditorWrites } from '$lib/fs/write-queue';
-import { stopAutoSync, clearSyncCredentials } from '$lib/sync/s3sync';
+import { stopAutoSync, cancelSync, clearSyncCredentials } from '$lib/sync/s3sync';
 
 export async function handleRename(oldPath: string, newPath: string, isDir = false) {
 	if (!vault.vaultPath || oldPath === newPath) return;
@@ -89,6 +89,7 @@ function forgetEntry(path: string, isDir: boolean) {
 export async function handleDelete(path: string, isDir: boolean) {
 	if (!vault.vaultPath) return;
 	try {
+		await flushEditorWrites();
 		await unwatchFile();
 		forgetEntry(path, isDir);
 		await deleteEntry(path);
@@ -110,6 +111,7 @@ export async function reconcileMovedOut(
 		((await fileExists(entry.path)) ? remaining : gone).push(entry);
 	}
 	if (gone.length === 0) return remaining;
+	await flushEditorWrites();
 	await unwatchFile();
 	for (const entry of gone) forgetEntry(entry.path, entry.isDir);
 	await files.refresh(vault.vaultPath);
@@ -171,6 +173,7 @@ export async function handleWikiLink(title: string): Promise<boolean> {
 export function handleLogout(onBeforeLogout?: () => void) {
 	onBeforeLogout?.();
 	stopAutoSync();
+	cancelSync();
 	clearSyncCredentials();
 	terminals.reset();
 	panes.reset();

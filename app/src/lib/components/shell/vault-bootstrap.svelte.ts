@@ -21,7 +21,6 @@ export function initVaultBootstrap(): void {
 	$effect(() => {
 		if (!vault.isUnlocked || !vault.vaultPath) return;
 		const currentVaultPath = vault.vaultPath;
-		const currentKey = vault.encryptionKey;
 		untrack(() => {
 			files
 				.refresh(currentVaultPath)
@@ -30,57 +29,44 @@ export function initVaultBootstrap(): void {
 			watchVault(currentVaultPath).catch((err) =>
 				console.warn('Failed to start vault watcher:', err)
 			);
-			if (currentKey) {
-				loadSettings(currentVaultPath, currentKey)
-					.then((settings) => {
-						if (vault.vaultPath !== currentVaultPath) return;
-						if (settings?.s3) {
-							s3Configure(settings.s3).catch((err) => console.warn('Failed to configure S3:', err));
-							const conflictStrategy: ConflictStrategy =
-								settings.conflict_strategy === 'keep_newer' ? 'keep_newer' : 'local_wins';
-							if (vault.vaultId && vault.encryptionKey) {
-								setSyncCredentials(
-									currentVaultPath,
-									vault.vaultId,
-									vault.encryptionKey,
-									settings.s3,
-									{ conflictStrategy }
-								);
-							}
-							if (currentKey) {
-								hasUnsyncedChanges(currentVaultPath, currentKey)
-									.then((pending) => {
-										if (vault.vaultPath !== currentVaultPath) return;
-										if (editor.syncStatus === 'syncing') return;
-										editor.setSyncStatus(pending ? 'idle' : 'synced');
-									})
-									.catch(() => {
-										if (editor.syncStatus === 'syncing') return;
-										editor.setSyncStatus('idle');
-									});
-							}
-							if (settings.auto_sync && vault.vaultId && vault.encryptionKey) {
-								startAutoSync(
-									currentVaultPath,
-									vault.vaultId,
-									vault.encryptionKey,
-									settings.s3,
-									undefined,
-									{ conflictStrategy }
-								);
-							}
-						} else {
-							editor.setSyncStatus('idle');
+			loadSettings(currentVaultPath)
+				.then((settings) => {
+					if (vault.vaultPath !== currentVaultPath) return;
+					if (settings?.s3) {
+						s3Configure(settings.s3).catch((err) => console.warn('Failed to configure S3:', err));
+						const conflictStrategy: ConflictStrategy =
+							settings.conflict_strategy === 'keep_newer' ? 'keep_newer' : 'local_wins';
+						if (vault.vaultId) {
+							setSyncCredentials(currentVaultPath, vault.vaultId, settings.s3, {
+								conflictStrategy
+							});
 						}
-						folder = resolveAttachmentFolder(settings?.attachment_folder);
-						sweepUnusedAttachments(folder).catch((err) =>
-							console.warn('Attachment sweep failed:', err)
-						);
-					})
-					.catch((err) => {
-						console.warn('Failed to load settings:', err);
-					});
-			}
+						hasUnsyncedChanges(currentVaultPath)
+							.then((pending) => {
+								if (vault.vaultPath !== currentVaultPath) return;
+								if (editor.syncStatus === 'syncing') return;
+								editor.setSyncStatus(pending ? 'idle' : 'synced');
+							})
+							.catch(() => {
+								if (editor.syncStatus === 'syncing') return;
+								editor.setSyncStatus('idle');
+							});
+						if (settings.auto_sync && vault.vaultId) {
+							startAutoSync(currentVaultPath, vault.vaultId, settings.s3, undefined, {
+								conflictStrategy
+							});
+						}
+					} else {
+						editor.setSyncStatus('idle');
+					}
+					folder = resolveAttachmentFolder(settings?.attachment_folder);
+					sweepUnusedAttachments(folder).catch((err) =>
+						console.warn('Attachment sweep failed:', err)
+					);
+				})
+				.catch((err) => {
+					console.warn('Failed to load settings:', err);
+				});
 		});
 	});
 

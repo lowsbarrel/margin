@@ -5,13 +5,7 @@ import { files } from '$lib/stores/files.svelte';
 import { panes } from '$lib/stores/panes.svelte';
 import { terminals } from '$lib/stores/terminals.svelte';
 import { vault } from '$lib/stores/vault.svelte';
-import {
-	onFileChanged,
-	onVaultFsChanged,
-	readFileBytes,
-	rebuildIndex,
-	unwatchFile
-} from '$lib/fs/bridge';
+import { onFileChanged, onVaultFsChanged, readFileBytes, unwatchFile } from '$lib/fs/bridge';
 import { saveSnapshot } from '$lib/history/bridge';
 import { flushEditorWrites, isOwnRecentWrite } from '$lib/fs/write-queue';
 import { stopAutoSync } from '$lib/sync/s3sync';
@@ -66,7 +60,6 @@ export function initAppLifecycle(): void {
 		vaultRefreshTimer = setTimeout(() => {
 			vaultRefreshTimer = null;
 			files.refresh().catch((err) => console.warn('Failed to refresh file tree:', err));
-			if (vault.vaultPath) void rebuildIndex(vault.vaultPath).catch(() => {});
 		}, VAULT_REFRESH_DEBOUNCE_MS);
 	}
 
@@ -76,11 +69,11 @@ export function initAppLifecycle(): void {
 		event.preventDefault();
 		try {
 			stopAutoSync();
-			terminals.reset();
 			await Promise.race([
-				flushEditorWrites(),
+				Promise.all([flushEditorWrites(), saveWorkspace()]),
 				new Promise((resolve) => setTimeout(resolve, CLOSE_FLUSH_TIMEOUT_MS))
 			]);
+			terminals.reset();
 		} finally {
 			try {
 				await getCurrentWindow().destroy();

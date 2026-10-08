@@ -63,7 +63,7 @@
 	}
 
 	async function handleSync() {
-		if (!vault.vaultPath || !vault.vaultId || !vault.encryptionKey) return;
+		if (!vault.vaultPath || !vault.vaultId || !vault.isUnlocked) return;
 		const config = getS3Config();
 		if (!config.endpoint || !config.bucket) {
 			toast.error(m.toast_configure_s3());
@@ -71,7 +71,7 @@
 		}
 		syncing = true;
 		try {
-			await syncToS3(vault.vaultPath, vault.vaultId, vault.encryptionKey, config, {
+			await syncToS3(vault.vaultPath, vault.vaultId, config, {
 				conflictStrategy
 			});
 			if (vault.vaultPath) await files.refresh(vault.vaultPath);

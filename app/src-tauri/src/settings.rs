@@ -1,10 +1,12 @@
 use crate::ai::config::LlmConfig;
 use crate::crypto;
+use crate::crypto::VaultKeyState;
 use crate::s3::S3Config;
 use base64::{Engine, engine::general_purpose::STANDARD as B64};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
+use tauri::State;
 
 #[derive(Serialize, Deserialize, Clone, Debug, specta::Type)]
 pub struct AppSettings {
@@ -23,11 +25,12 @@ pub struct AppSettings {
 #[specta::specta]
 pub fn save_settings(
     vault_path: String,
-    encryption_key: Vec<u8>,
     settings: AppSettings,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<(), String> {
+    let key = crypto::current_key(&key_state)?;
     let json = serde_json::to_vec(&settings).map_err(|e| format!("Serialize failed: {e}"))?;
-    let encrypted = crypto::encrypt_blob(json, encryption_key)?;
+    let encrypted = crypto::encrypt_blob(json, key.to_vec())?;
 
     let settings_path = Path::new(&vault_path).join(".margin").join("settings.enc");
     if let Some(parent) = settings_path.parent() {
@@ -42,15 +45,16 @@ pub fn save_settings(
 #[specta::specta]
 pub fn load_settings(
     vault_path: String,
-    encryption_key: Vec<u8>,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<Option<AppSettings>, String> {
+    let key = crypto::current_key(&key_state)?;
     let settings_path = Path::new(&vault_path).join(".margin").join("settings.enc");
     if !settings_path.exists() {
         return Ok(None);
     }
 
     let encrypted = fs::read(&settings_path).map_err(|e| format!("Read failed: {e}"))?;
-    let decrypted = crypto::decrypt_blob(encrypted, encryption_key)?;
+    let decrypted = crypto::decrypt_blob(encrypted, key.to_vec())?;
     let settings: AppSettings =
         serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
 
@@ -60,11 +64,12 @@ pub fn load_settings(
 #[tauri::command]
 #[specta::specta]
 pub fn export_settings_string(
-    encryption_key: Vec<u8>,
     settings: AppSettings,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<String, String> {
+    let key = crypto::current_key(&key_state)?;
     let json = serde_json::to_vec(&settings).map_err(|e| format!("Serialize failed: {e}"))?;
-    let encrypted = crypto::encrypt_blob(json, encryption_key)?;
+    let encrypted = crypto::encrypt_blob(json, key.to_vec())?;
     Ok(B64.encode(&encrypted))
 }
 
@@ -101,13 +106,14 @@ fn validate_settings(settings: &AppSettings) -> Result<(), String> {
 #[tauri::command]
 #[specta::specta]
 pub fn import_settings_string(
-    encryption_key: Vec<u8>,
     encoded: String,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<AppSettings, String> {
+    let key = crypto::current_key(&key_state)?;
     let encrypted = B64
         .decode(encoded.trim())
         .map_err(|e| format!("Invalid base64: {e}"))?;
-    let decrypted = crypto::decrypt_blob(encrypted, encryption_key)?;
+    let decrypted = crypto::decrypt_blob(encrypted, key.to_vec())?;
     let settings: AppSettings =
         serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
     validate_settings(&settings)?;
@@ -155,11 +161,12 @@ pub struct WorkspaceState {
 #[specta::specta]
 pub fn save_workspace_state(
     vault_path: String,
-    encryption_key: Vec<u8>,
     state: WorkspaceState,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<(), String> {
+    let key = crypto::current_key(&key_state)?;
     let json = serde_json::to_vec(&state).map_err(|e| format!("Serialize failed: {e}"))?;
-    let encrypted = crypto::encrypt_blob(json, encryption_key)?;
+    let encrypted = crypto::encrypt_blob(json, key.to_vec())?;
 
     let ws_path = Path::new(&vault_path).join(".margin").join("workspace.enc");
     if let Some(parent) = ws_path.parent() {
@@ -174,15 +181,16 @@ pub fn save_workspace_state(
 #[specta::specta]
 pub fn load_workspace_state(
     vault_path: String,
-    encryption_key: Vec<u8>,
+    key_state: State<'_, VaultKeyState>,
 ) -> Result<Option<WorkspaceState>, String> {
+    let key = crypto::current_key(&key_state)?;
     let ws_path = Path::new(&vault_path).join(".margin").join("workspace.enc");
     if !ws_path.exists() {
         return Ok(None);
     }
 
     let encrypted = fs::read(&ws_path).map_err(|e| format!("Read failed: {e}"))?;
-    let decrypted = crypto::decrypt_blob(encrypted, encryption_key)?;
+    let decrypted = crypto::decrypt_blob(encrypted, key.to_vec())?;
     let state: WorkspaceState =
         serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
 

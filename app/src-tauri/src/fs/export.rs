@@ -95,16 +95,17 @@ fn walk_vault_files(root: &Path) -> Vec<(String, u64)> {
 #[specta::specta]
 pub async fn has_unsynced_changes(
     vault_path: String,
-    encryption_key: Vec<u8>,
+    key_state: tauri::State<'_, crate::crypto::VaultKeyState>,
 ) -> Result<bool, String> {
-    tokio::task::spawn_blocking(move || has_unsynced_changes_blocking(&vault_path, encryption_key))
+    let key = crate::crypto::current_key(&key_state)?;
+    tokio::task::spawn_blocking(move || has_unsynced_changes_blocking(&vault_path, key))
         .await
         .map_err(|e| e.to_string())?
 }
 
 fn has_unsynced_changes_blocking(
     vault_path: &str,
-    encryption_key: Vec<u8>,
+    encryption_key: [u8; 32],
 ) -> Result<bool, String> {
     struct CachedResult {
         vault_path: String,
@@ -136,7 +137,7 @@ fn has_unsynced_changes_blocking(
 
     let manifest: Manifest = if manifest_path.exists() {
         let enc = fs::read(&manifest_path).map_err(|e| format!("Failed to read manifest: {e}"))?;
-        let dec = crate::crypto::decrypt_blob(enc, encryption_key)?;
+        let dec = crate::crypto::decrypt_blob(enc, encryption_key.to_vec())?;
         serde_json::from_slice(&dec).map_err(|e| format!("Failed to parse manifest: {e}"))?
     } else {
         Manifest::empty()

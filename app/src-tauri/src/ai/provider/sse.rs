@@ -1,12 +1,12 @@
 #[derive(Default)]
 pub(super) struct SseDecoder {
-    buffer: String,
+    buffer: Vec<u8>,
     data: String,
 }
 
 impl SseDecoder {
-    pub(super) fn push(&mut self, chunk: &str) -> Vec<String> {
-        self.buffer.push_str(chunk);
+    pub(super) fn push(&mut self, chunk: &[u8]) -> Vec<String> {
+        self.buffer.extend_from_slice(chunk);
         let mut events = Vec::new();
         while let Some(line) = self.take_line() {
             if line.is_empty() {
@@ -25,8 +25,8 @@ impl SseDecoder {
     }
 
     fn take_line(&mut self) -> Option<String> {
-        let newline = self.buffer.find('\n')?;
-        let mut line = self.buffer[..newline].to_string();
+        let newline = self.buffer.iter().position(|&b| b == b'\n')?;
+        let mut line = String::from_utf8_lossy(&self.buffer[..newline]).into_owned();
         self.buffer.drain(..=newline);
         if line.ends_with('\r') {
             line.pop();

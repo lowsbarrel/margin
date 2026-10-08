@@ -72,12 +72,19 @@ export function queuedWrite(path: string, content: Uint8Array): Promise<void> {
 	}
 
 	const prev = pending.get(path);
-	if (prev) {
-		prev.resolve();
-	}
 
 	return new Promise<void>((resolve, reject) => {
-		pending.set(path, { content, resolve, reject });
+		pending.set(path, {
+			content,
+			resolve: () => {
+				prev?.resolve();
+				resolve();
+			},
+			reject: (err) => {
+				prev?.reject(err);
+				reject(err);
+			}
+		});
 	});
 }
 

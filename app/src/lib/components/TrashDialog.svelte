@@ -53,7 +53,7 @@
 		if (!vault.vaultPath) return;
 		loading = true;
 		try {
-			items = await listTrash(vault.vaultPath);
+			items = await listTrash();
 			now = Date.now();
 		} catch (err) {
 			console.error('Failed to list trash:', err);
@@ -69,7 +69,7 @@
 		busyId = item.id;
 		try {
 			// trash_restore answers with a vault-relative path; the tree and the panes take absolute ones
-			const restored = `${vaultPath}/${await restoreTrash(vaultPath, item.id)}`;
+			const restored = `${vaultPath}/${await restoreTrash(item.id)}`;
 			items = items.filter((i) => i.id !== item.id);
 			onrestored?.(restored);
 			const message = m.trash_restored({ name: item.name });
@@ -92,7 +92,7 @@
 		if (!vaultPath || busyId) return;
 		busyId = item.id;
 		try {
-			await deleteTrash(vaultPath, item.id);
+			await deleteTrash(item.id);
 			items = items.filter((i) => i.id !== item.id);
 			toast.success(m.trash_deleted_forever({ name: item.name }));
 		} catch (err) {
@@ -109,7 +109,7 @@
 		if (!vaultPath || emptying) return;
 		emptying = true;
 		try {
-			const count = await emptyTrash(vaultPath);
+			const count = await emptyTrash();
 			items = [];
 			toast.success(m.trash_emptied({ count: String(count) }));
 		} catch (err) {

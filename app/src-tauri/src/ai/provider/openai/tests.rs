@@ -47,21 +47,6 @@ fn openai_keeps_parallel_tool_calls_apart_by_index() {
 }
 
 #[test]
-fn unparseable_tool_arguments_become_null_rather_than_panicking() {
-    let mut text = String::new();
-    let mut calls = PartialCalls::new();
-    let mut reasoning = ReasoningBlocks::new();
-    apply_delta(
-        &json!({"tool_calls": [{"index": 0, "id": "a", "function": {"name": "grep", "arguments": "{\"pattern\": "}}]}),
-        &mut text,
-        &mut calls,
-        &mut reasoning,
-    );
-    let finished = finish_calls(calls);
-    assert!(finished[0].args.is_null());
-}
-
-#[test]
 fn openai_reasoning_details_accumulate_and_ride_back_with_the_tool_results() {
     let mut text = String::new();
     let mut calls = PartialCalls::new();

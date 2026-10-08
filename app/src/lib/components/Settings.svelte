@@ -40,8 +40,8 @@
 	let llmEffort = $state<Effort | null>(null);
 
 	$effect(() => {
-		if (vault.vaultPath && vault.encryptionKey) {
-			loadSettings(vault.vaultPath, vault.encryptionKey)
+		if (vault.vaultPath && vault.isUnlocked) {
+			loadSettings(vault.vaultPath)
 				.then((settings) => {
 					if (settings?.s3) {
 						endpoint = settings.s3.endpoint;
@@ -136,16 +136,16 @@
 	}
 
 	async function handleSave() {
-		if (!vault.vaultPath || !vault.encryptionKey) return;
+		if (!vault.vaultPath || !vault.isUnlocked) return;
 		try {
 			const settings = getAppSettings();
 			if (settings.s3) await s3Configure(settings.s3);
 			if (settings.llm) await llmConfigure(settings.llm);
 			ask.markConfigured(Boolean(settings.llm));
-			await saveSettings(vault.vaultPath, vault.encryptionKey, settings);
+			await saveSettings(vault.vaultPath, settings);
 
-			if (autoSync && settings.s3 && vault.vaultId && vault.encryptionKey) {
-				startAutoSync(vault.vaultPath, vault.vaultId, vault.encryptionKey, settings.s3, undefined, {
+			if (autoSync && settings.s3 && vault.vaultId) {
+				startAutoSync(vault.vaultPath, vault.vaultId, settings.s3, undefined, {
 					conflictStrategy
 				});
 			} else {

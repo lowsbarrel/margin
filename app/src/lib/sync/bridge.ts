@@ -27,30 +27,28 @@ export async function hashFilesBatch(vaultPath: string, paths: string[]): Promis
 	return r.data;
 }
 
-export async function loadManifest(vaultPath: string, encryptionKey: number[]): Promise<Manifest> {
-	const r = await commands.loadManifest(vaultPath, encryptionKey);
+export async function loadManifest(vaultPath: string): Promise<Manifest> {
+	const r = await commands.loadManifest(vaultPath);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-export async function saveManifest(
-	vaultPath: string,
-	encryptionKey: number[],
-	manifest: Manifest
-): Promise<void> {
-	const r = await commands.saveManifest(vaultPath, encryptionKey, asDeserManifest(manifest));
+export async function saveManifest(vaultPath: string, manifest: Manifest): Promise<void> {
+	const r = await commands.saveManifest(vaultPath, asDeserManifest(manifest));
 	if (r.status === 'error') throw r.error;
 }
 
 export async function computeSyncActionsNative(
 	baseFiles: ManifestEntry[],
 	localFiles: ManifestEntry[],
-	remoteFiles: ManifestEntry[]
+	remoteFiles: ManifestEntry[],
+	nowSeconds: number
 ): Promise<SyncAction[]> {
 	return commands.computeSyncActions(
 		asDeserEntries(baseFiles),
 		asDeserEntries(localFiles),
-		asDeserEntries(remoteFiles)
+		asDeserEntries(remoteFiles),
+		nowSeconds
 	) as Promise<SyncAction[]>;
 }
 
@@ -75,10 +73,9 @@ export async function pruneTombstonesNative(
 export async function syncUploadFiles(
 	vaultPath: string,
 	s3Prefix: string,
-	paths: string[],
-	encryptionKey: number[]
+	paths: string[]
 ): Promise<void> {
-	const r = await commands.syncUploadFiles(vaultPath, s3Prefix, paths, encryptionKey);
+	const r = await commands.syncUploadFiles(vaultPath, s3Prefix, paths);
 	if (r.status === 'error') throw r.error;
 }
 
@@ -86,32 +83,36 @@ export async function syncDownloadFiles(
 	vaultPath: string,
 	s3Prefix: string,
 	paths: string[],
-	mtimes: number[],
-	encryptionKey: number[]
+	mtimes: number[]
 ): Promise<string[]> {
-	const r = await commands.syncDownloadFiles(vaultPath, s3Prefix, paths, mtimes, encryptionKey);
+	const r = await commands.syncDownloadFiles(vaultPath, s3Prefix, paths, mtimes);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-export async function syncUploadManifest(
-	s3Prefix: string,
-	encryptionKey: number[],
-	manifest: Manifest
-): Promise<void> {
-	const r = await commands.syncUploadManifest(s3Prefix, encryptionKey, asDeserManifest(manifest));
+export async function syncUploadManifest(s3Prefix: string, manifest: Manifest): Promise<void> {
+	const r = await commands.syncUploadManifest(s3Prefix, asDeserManifest(manifest));
 	if (r.status === 'error') throw r.error;
 }
 
-export async function syncDeleteFiles(
-	s3Prefix: string,
-	paths: string[],
-	encryptionKey: number[]
-): Promise<void> {
-	const r = await commands.syncDeleteFiles(s3Prefix, paths, encryptionKey);
+export async function syncDeleteFiles(s3Prefix: string, paths: string[]): Promise<void> {
+	const r = await commands.syncDeleteFiles(s3Prefix, paths);
 	if (r.status === 'error') throw r.error;
 }
 
-export async function pathToS3Key(relPath: string, encryptionKey: number[]): Promise<string> {
-	return commands.pathToS3Key(relPath, encryptionKey);
+export async function syncLoadRemoteManifest(s3Prefix: string): Promise<Manifest | null> {
+	const r = await commands.syncLoadRemoteManifest(s3Prefix);
+	if (r.status === 'error') throw r.error;
+	return r.data;
+}
+
+export async function syncWriteRemoteCopy(
+	vaultPath: string,
+	s3Prefix: string,
+	relPath: string,
+	destPath: string,
+	modified: number
+): Promise<void> {
+	const r = await commands.syncWriteRemoteCopy(vaultPath, s3Prefix, relPath, destPath, modified);
+	if (r.status === 'error') throw r.error;
 }

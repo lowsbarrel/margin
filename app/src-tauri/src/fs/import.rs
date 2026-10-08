@@ -1,6 +1,6 @@
 use super::{
     MAX_WALK_DEPTH, VaultPathState, WalkAction, copy_file_at, ensure_in_vault, occupied_error,
-    path_to_string, vault_root, walk_dir_capped,
+    path_to_string, vault_root, walk_dir,
 };
 use rayon::prelude::*;
 use std::fs;
@@ -60,13 +60,20 @@ fn import_dir_at(src: &Path, dst: &Path) -> Result<(), String> {
             path_to_string(src.to_path_buf())
         ));
     }
-    if dst.starts_with(src) {
+    // `dst` is canonicalized by ensure_in_vault, so `src` is canonicalized too for the prefix test to hold on Windows.
+    let src = src
+        .canonicalize()
+        .map_err(|e| format!("Failed to resolve source directory: {e}"))?;
+    if dst.starts_with(&src) {
         return Err("Destination is inside the source directory".into());
     }
-    copy_dir_recursive(src, dst)
+    copy_dir_recursive(&src, dst)
 }
 
 pub(crate) fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+    if dst.starts_with(src) {
+        return Err("Destination is inside the source directory".into());
+    }
     if fs::symlink_metadata(dst).is_ok() {
         return Err(occupied_error(dst));
     }
@@ -75,7 +82,7 @@ pub(crate) fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
     let mut files: Vec<(PathBuf, PathBuf)> = Vec::new();
     let mut error: Option<String> = None;
 
-    walk_dir_capped(src, 0, MAX_WALK_DEPTH, &mut |item| {
+    walk_dir(src, &mut |item| {
         if error.is_some() || item.is_symlink {
             return WalkAction::Skip;
         }
@@ -83,6 +90,10 @@ pub(crate) fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
             error = Some("Failed to resolve copy destination".into());
             return WalkAction::Skip;
         };
+        if rel.components().count() > MAX_WALK_DEPTH {
+            error = Some("Directory tree is too deep to copy".into());
+            return WalkAction::Skip;
+        }
         if item.is_dir {
             if let Err(e) = fs::create_dir_all(dst.join(rel)) {
                 error = Some(format!("Failed to create directory: {e}"));

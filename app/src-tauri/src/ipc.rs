@@ -24,14 +24,6 @@ pub(crate) fn header(request: &Request, key: &str) -> Result<String, String> {
     percent_decode(&raw).ok_or_else(|| format!("Invalid {key} header"))
 }
 
-pub(crate) fn key_header(request: &Request) -> Result<Vec<u8>, String> {
-    raw_header(request, "x-key")?
-        .split(',')
-        .map(|s| s.trim().parse::<u8>())
-        .collect::<Result<Vec<u8>, _>>()
-        .map_err(|e| format!("Invalid key header: {e}"))
-}
-
 pub(crate) fn percent_decode(raw: &str) -> Option<String> {
     percent_encoding::percent_decode_str(raw)
         .decode_utf8()

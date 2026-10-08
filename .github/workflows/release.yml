@@ -10,7 +10,7 @@ concurrency:
   cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   tauri-build:
@@ -64,7 +64,7 @@ jobs:
         env:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
-        run: bun run tauri build --target ${{ matrix.target }}
+        run: bun run tauri build --target ${{ matrix.target }} -- --locked
 
       - name: Collect artifacts into flat staging dir
         shell: bash
@@ -111,6 +111,8 @@ jobs:
     name: Publish GitHub Release
     needs: [tauri-build]
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
 
@@ -124,6 +126,15 @@ jobs:
         run: |
           echo "=== All downloaded artifacts ==="
           find artifacts -type f | sort
+
+      - name: Verify tag matches app version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          app="$(awk -F'"' '/^\[package\]/{p=1} p&&/^version/{print $2; exit}' app/src-tauri/Cargo.toml)"
+          if [ "$tag" != "$app" ]; then
+            echo "Tag ${GITHUB_REF_NAME} does not match app version ${app} in app/src-tauri/Cargo.toml" >&2
+            exit 1
+          fi
 
       - name: Generate updater manifest (latest.json)
         run: |

@@ -1,10 +1,11 @@
-import { loadManifest, computeSyncActionsNative, type SyncAction } from './bridge';
-import type { ManifestEntry, Manifest } from './s3sync-manifest';
 import {
-	buildLocalManifest,
-	isMissingRemoteManifestError,
-	loadRemoteManifest
-} from './s3sync-manifest';
+	loadManifest,
+	computeSyncActionsNative,
+	syncLoadRemoteManifest,
+	type SyncAction
+} from './bridge';
+import type { ManifestEntry, Manifest } from './s3sync-manifest';
+import { buildLocalManifest, nowSeconds } from './s3sync-manifest';
 import { checkAbort } from './s3sync-abort';
 
 export interface SyncPlan {
@@ -20,28 +21,25 @@ export interface SyncPlan {
 export async function planSync(
 	vaultPath: string,
 	s3Prefix: string,
-	encryptionKey: number[],
 	signal: AbortSignal
 ): Promise<SyncPlan> {
 	checkAbort(signal);
-	const baseManifest = await loadManifest(vaultPath, encryptionKey);
+	const baseManifest = await loadManifest(vaultPath);
 	const baseMap = new Map(baseManifest.files.map((e) => [e.path, e]));
 
 	checkAbort(signal);
 	const localManifest = await buildLocalManifest(vaultPath, baseMap);
 	checkAbort(signal);
 
+	// Rust returns null only for a real 404; a non-empty base with a missing remote re-uploads rather than deletes.
 	let remoteManifest: Manifest = { version: 3, files: [] };
 	try {
 		checkAbort(signal);
-		const loaded = await loadRemoteManifest(s3Prefix, encryptionKey);
+		const loaded = await syncLoadRemoteManifest(s3Prefix);
 		if (loaded) remoteManifest = loaded;
 	} catch (err) {
 		if (signal.aborted) throw new Error('Sync cancelled', { cause: err });
-		// An unreadable remote manifest with a non-empty base would wipe every file.
-		if (!isMissingRemoteManifestError(err) || baseManifest.files.length > 0) {
-			throw new Error(`Failed to download remote manifest: ${err}`, { cause: err });
-		}
+		throw new Error(`Failed to download remote manifest: ${err}`, { cause: err });
 	}
 
 	const localMap = new Map(localManifest.files.map((e) => [e.path, e]));
@@ -49,7 +47,8 @@ export async function planSync(
 	const actions = await computeSyncActionsNative(
 		baseManifest.files,
 		localManifest.files,
-		remoteManifest.files
+		remoteManifest.files,
+		nowSeconds()
 	);
 	checkAbort(signal);
 

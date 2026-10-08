@@ -128,6 +128,14 @@ pub fn upsert_path(root: &str, path: &Path) {
     }
 }
 
+pub fn upsert_dir(root: &str, dir: &Path) {
+    let mut md_paths = Vec::new();
+    crate::fs::collect_md_paths(dir, &mut md_paths);
+    for md in md_paths {
+        upsert_path(root, &md);
+    }
+}
+
 pub fn remove_path(root: &str, path: &Path) {
     let Some(path_str) = index_path_string(root, path) else {
         return;
@@ -141,7 +149,6 @@ pub fn remove_prefix(root: &str, dir: &Path) {
     let Some(prefix) = index_dir_prefix(root, dir) else {
         return;
     };
-    // `%` and `_` are LIKE wildcards and both occur in real filenames, so the escape character is escaped first.
     let escaped = prefix
         .replace('\\', r"\\")
         .replace('%', r"\%")
@@ -149,8 +156,9 @@ pub fn remove_prefix(root: &str, dir: &Path) {
     let pattern = format!("{escaped}%");
     if let Ok(conn) = open_db(root) {
         for sql in [
+            // notes_fts has no index on `path`, so its rows are removed through the notes rowid first.
+            r"DELETE FROM notes_fts WHERE rowid IN (SELECT rowid FROM notes WHERE path LIKE ?1 ESCAPE '\')",
             r"DELETE FROM notes WHERE path LIKE ?1 ESCAPE '\'",
-            r"DELETE FROM notes_fts WHERE path LIKE ?1 ESCAPE '\'",
             r"DELETE FROM tags WHERE path LIKE ?1 ESCAPE '\'",
             r"DELETE FROM links WHERE src LIKE ?1 ESCAPE '\'",
         ] {

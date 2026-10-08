@@ -132,7 +132,8 @@ bun run tauri dev
 bun run lint
 bun run check
 bun run check:invariants
-cd src-tauri && cargo clippy --all-targets -- -D warnings && cargo test
+bun run check:secrets
+cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
 ```
 
 Vedi [AGENTS.md](AGENTS.md) per le convenzioni di sviluppo, strumenti e verifica.

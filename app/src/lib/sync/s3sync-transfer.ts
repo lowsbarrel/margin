@@ -1,5 +1,3 @@
-import { decryptBlob } from '$lib/crypto/bridge';
-import { s3Download } from '$lib/s3/bridge';
 import {
 	createDirectory,
 	deleteEntry,
@@ -14,17 +12,16 @@ import type { ConflictStrategy } from './s3sync';
 import {
 	collectTombstonesNative,
 	mergeTombstonesNative,
-	pathToS3Key,
 	syncDeleteFiles,
 	syncDownloadFiles,
 	syncUploadFiles,
+	syncWriteRemoteCopy,
 	type SyncAction
 } from './bridge';
 
 export interface TransferContext {
 	vaultPath: string;
 	s3Prefix: string;
-	encryptionKey: number[];
 	conflictStrategy: ConflictStrategy;
 	signal: AbortSignal;
 	onProgress: (advance: number) => void;
@@ -64,32 +61,6 @@ async function ensureParentDir(vaultPath: string, relativePath: string): Promise
 	}
 }
 
-async function writeConflictCopy(
-	vaultPath: string,
-	path: string,
-	content: Uint8Array,
-	hash: string,
-	mergedFiles: Map<string, ManifestEntry>,
-	s3Prefix: string,
-	encryptionKey: number[]
-): Promise<string> {
-	const conflictPath = conflictCopyName(path);
-	const modified = nowSeconds();
-
-	await ensureParentDir(vaultPath, conflictPath);
-	await writeFileBytes(`${vaultPath}/${conflictPath}`, content);
-	await setMtime(`${vaultPath}/${conflictPath}`, modified);
-	await syncUploadFiles(vaultPath, s3Prefix, [conflictPath], encryptionKey);
-
-	mergedFiles.set(conflictPath, {
-		path: conflictPath,
-		hash,
-		modified
-	});
-
-	return conflictPath;
-}
-
 function markTombstone(
 	path: string,
 	tombstones: Map<string, ManifestEntry>,
@@ -109,7 +80,7 @@ export async function executeTransfer(
 	plan: SyncPlan,
 	ctx: TransferContext
 ): Promise<TransferResult> {
-	const { vaultPath, s3Prefix, encryptionKey, conflictStrategy, signal, onProgress } = ctx;
+	const { vaultPath, s3Prefix, conflictStrategy, signal, onProgress } = ctx;
 	const { baseManifest, localManifest, remoteManifest, baseMap, localMap, remoteMap, actions } =
 		plan;
 
@@ -166,20 +137,14 @@ export async function executeTransfer(
 
 	if (uploadPaths.length > 0) {
 		checkAbort(signal);
-		await syncUploadFiles(vaultPath, s3Prefix, uploadPaths, encryptionKey);
+		await syncUploadFiles(vaultPath, s3Prefix, uploadPaths);
 		for (const path of uploadPaths) tombstones.delete(path);
 		onProgress(uploadPaths.length);
 	}
 
 	if (downloadPaths.length > 0) {
 		checkAbort(signal);
-		const skipped = await syncDownloadFiles(
-			vaultPath,
-			s3Prefix,
-			downloadPaths,
-			downloadMtimes,
-			encryptionKey
-		);
+		const skipped = await syncDownloadFiles(vaultPath, s3Prefix, downloadPaths, downloadMtimes);
 		const skippedSet = new Set(skipped);
 		for (let i = 0; i < downloadPaths.length; i++) {
 			const path = downloadPaths[i];
@@ -203,9 +168,8 @@ export async function executeTransfer(
 
 	if (deleteRemotePaths.length > 0) {
 		checkAbort(signal);
-		try {
-			await syncDeleteFiles(s3Prefix, deleteRemotePaths, encryptionKey);
-		} catch {}
+		// A failed remote delete must fail the sync so it is retried; the tombstone is only written after it succeeds.
+		await syncDeleteFiles(s3Prefix, deleteRemotePaths);
 		for (const path of deleteRemotePaths) {
 			markTombstone(path, tombstones, mergedFiles, [baseMap]);
 		}
@@ -229,24 +193,26 @@ export async function executeTransfer(
 		const remoteWins =
 			conflictStrategy === 'keep_newer' && remoteEntry.modified > localEntry.modified;
 
+		const conflictPath = conflictCopyName(action.path);
+		const modified = nowSeconds();
+
 		if (remoteWins) {
 			const localData = await readFileBytes(`${vaultPath}/${action.path}`);
-			await writeConflictCopy(
-				vaultPath,
-				action.path,
-				localData,
-				localEntry.hash,
-				mergedFiles,
-				s3Prefix,
-				encryptionKey
-			);
+			await ensureParentDir(vaultPath, conflictPath);
+			await writeFileBytes(`${vaultPath}/${conflictPath}`, localData);
+			await setMtime(`${vaultPath}/${conflictPath}`, modified);
+			await syncUploadFiles(vaultPath, s3Prefix, [conflictPath]);
+			mergedFiles.set(conflictPath, {
+				path: conflictPath,
+				hash: localEntry.hash,
+				modified
+			});
 
 			const skipped = await syncDownloadFiles(
 				vaultPath,
 				s3Prefix,
 				[action.path],
-				[remoteEntry.modified],
-				encryptionKey
+				[remoteEntry.modified]
 			);
 
 			if (skipped.includes(action.path)) {
@@ -260,20 +226,16 @@ export async function executeTransfer(
 				});
 			}
 		} else {
-			const s3Key = await pathToS3Key(action.path, encryptionKey);
-			const encrypted = await s3Download(`${s3Prefix}files/${s3Key}.enc`);
-			const decrypted = await decryptBlob(encrypted, encryptionKey);
-			await writeConflictCopy(
-				vaultPath,
-				action.path,
-				decrypted,
-				remoteEntry.hash,
-				mergedFiles,
-				s3Prefix,
-				encryptionKey
-			);
+			// The remote blob is decrypted in Rust straight into the conflict copy, so plaintext stays out of JS.
+			await syncWriteRemoteCopy(vaultPath, s3Prefix, action.path, conflictPath, modified);
+			await syncUploadFiles(vaultPath, s3Prefix, [conflictPath]);
+			mergedFiles.set(conflictPath, {
+				path: conflictPath,
+				hash: remoteEntry.hash,
+				modified
+			});
 
-			await syncUploadFiles(vaultPath, s3Prefix, [action.path], encryptionKey);
+			await syncUploadFiles(vaultPath, s3Prefix, [action.path]);
 		}
 
 		tombstones.delete(action.path);

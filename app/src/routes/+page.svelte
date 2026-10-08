@@ -131,7 +131,7 @@
 		const _activePane = panes.activePaneIndex;
 		const _sidebarOpen = shellLayout.sidebarOpen;
 		const _sidebarWidth = shellLayout.sidebarWidth;
-		const _expanded = files.expandedFolders;
+		const _expanded = [...files.expandedFolders];
 		const _sort = files.sortOrder;
 		const _terminalOpen = terminals.open;
 		const _terminalHeight = terminals.height;

@@ -95,7 +95,7 @@ async fn for_each_payload(
             return Err(LlmError::Cancelled);
         }
         let chunk = chunk.map_err(|e| LlmError::Failed(format!("Stream failed: {e}")))?;
-        for payload in decoder.push(&String::from_utf8_lossy(&chunk)) {
+        for payload in decoder.push(&chunk) {
             if payload.trim() == "[DONE]" {
                 return Ok(());
             }

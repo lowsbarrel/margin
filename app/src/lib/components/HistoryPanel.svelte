@@ -94,12 +94,8 @@
 		try {
 			// Land the debounced edit first: the pre-restore snapshot must hold what the user sees.
 			await flushEditorWrites();
-			try {
-				const currentBytes = await readFileBytes(filePath);
-				await saveSnapshot(vault.vaultPath, filePath, currentBytes);
-			} catch (err) {
-				console.warn('Pre-restore snapshot failed:', err);
-			}
+			const currentBytes = await readFileBytes(filePath);
+			await saveSnapshot(vault.vaultPath, filePath, currentBytes);
 
 			const bytes = await readSnapshot(vault.vaultPath, filePath, snapshot.filename);
 			const content = new TextDecoder().decode(bytes);

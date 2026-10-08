@@ -1,11 +1,11 @@
-use crate::crypto;
-use crate::fs::normalise_slashes;
+use crate::crypto::{self, VaultId, VaultKeyState};
+use crate::fs::{VaultPathState, normalise_slashes};
 use rand::TryRng;
 use rand::rngs::SysRng;
 use serde::{Deserialize, Serialize};
 use std::fs;
-use std::path::PathBuf;
-use tauri::Manager;
+use std::path::{Path, PathBuf};
+use tauri::{Manager, State};
 
 #[derive(Serialize, Deserialize)]
 struct LegacySession {
@@ -13,17 +13,39 @@ struct LegacySession {
     vault_path: String,
 }
 
-#[derive(Serialize, Deserialize, Clone, specta::Type)]
-pub struct VaultProfile {
+// The stored form keeps the mnemonic; commands only ever hand back VaultProfileInfo.
+#[derive(Serialize, Deserialize, Clone)]
+struct VaultProfile {
+    name: String,
+    mnemonic: String,
+    vault_path: String,
+}
+
+#[derive(Serialize, Deserialize)]
+struct VaultProfiles {
+    profiles: Vec<VaultProfile>,
+    last_used: Option<String>,
+}
+
+#[derive(Serialize, specta::Type)]
+pub struct VaultProfileInfo {
     pub name: String,
-    pub mnemonic: String,
     pub vault_path: String,
 }
 
-#[derive(Serialize, Deserialize, specta::Type)]
-pub struct VaultProfiles {
-    pub profiles: Vec<VaultProfile>,
+#[derive(Serialize, specta::Type)]
+pub struct VaultProfilesInfo {
+    pub profiles: Vec<VaultProfileInfo>,
     pub last_used: Option<String>,
+}
+
+impl From<&VaultProfile> for VaultProfileInfo {
+    fn from(p: &VaultProfile) -> Self {
+        VaultProfileInfo {
+            name: p.name.clone(),
+            vault_path: p.vault_path.clone(),
+        }
+    }
 }
 
 // One key generation at a time: a concurrent caller could otherwise orphan whatever the discarded key encrypted.
@@ -45,7 +67,6 @@ fn get_device_key(app: &tauri::AppHandle) -> Result<Vec<u8>, String> {
         if key.len() == 32 {
             return Ok(key);
         }
-        // A previous write can leave the file read-only on Windows, which would fail the rewrite.
         #[cfg(windows)]
         {
             if let Ok(meta) = fs::metadata(&key_path) {
@@ -101,15 +122,33 @@ fn legacy_session_path(app: &tauri::AppHandle) -> Result<PathBuf, String> {
     Ok(data_dir.join("session.enc"))
 }
 
+fn quarantine_profiles(path: &Path, err: &str) -> Result<VaultProfiles, String> {
+    let bad = path.with_extension("enc.bad");
+    eprintln!(
+        "profiles.enc is unreadable ({err}); moving it to {}",
+        bad.display()
+    );
+    let _ = fs::rename(path, &bad);
+    Ok(VaultProfiles {
+        profiles: vec![],
+        last_used: None,
+    })
+}
+
 fn load_profiles_internal(app: &tauri::AppHandle) -> Result<VaultProfiles, String> {
     let key = get_device_key(app)?;
     let path = profiles_path(app)?;
 
     if path.exists() {
         let encrypted = fs::read(&path).map_err(|e| format!("Read failed: {e}"))?;
-        let decrypted = crypto::decrypt_blob(encrypted, key)?;
-        let mut profiles: VaultProfiles =
-            serde_json::from_slice(&decrypted).map_err(|e| format!("Deserialize failed: {e}"))?;
+        let decrypted = match crypto::decrypt_blob(encrypted, key.clone()) {
+            Ok(d) => d,
+            Err(e) => return quarantine_profiles(&path, &format!("Decrypt failed: {e}")),
+        };
+        let mut profiles: VaultProfiles = match serde_json::from_slice(&decrypted) {
+            Ok(p) => p,
+            Err(e) => return quarantine_profiles(&path, &format!("Deserialize failed: {e}")),
+        };
 
         let mut seen = std::collections::HashSet::new();
         for p in &mut profiles.profiles {
@@ -168,29 +207,58 @@ fn save_profiles_internal(app: &tauri::AppHandle, profiles: &VaultProfiles) -> R
 
 #[tauri::command]
 #[specta::specta]
-pub fn load_vault_profiles(app: tauri::AppHandle) -> Result<VaultProfiles, String> {
-    load_profiles_internal(&app)
+pub fn load_vault_profiles(app: tauri::AppHandle) -> Result<VaultProfilesInfo, String> {
+    let data = load_profiles_internal(&app)?;
+    Ok(VaultProfilesInfo {
+        profiles: data.profiles.iter().map(VaultProfileInfo::from).collect(),
+        last_used: data.last_used,
+    })
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn save_vault_profile(app: tauri::AppHandle, profile: VaultProfile) -> Result<(), String> {
+pub fn save_vault_profile(
+    app: tauri::AppHandle,
+    name: String,
+    vault_path: String,
+    mnemonic: String,
+) -> Result<(), String> {
     let mut data = load_profiles_internal(&app)?;
-    let norm = normalise_slashes(&profile.vault_path);
-    let mut profile = profile;
-    profile.vault_path = norm.clone();
+    let norm = normalise_slashes(&vault_path);
     if let Some(existing) = data
         .profiles
         .iter_mut()
         .find(|p| normalise_slashes(&p.vault_path) == norm)
     {
-        existing.name = profile.name;
-        existing.mnemonic = profile.mnemonic;
+        existing.name = name;
+        existing.mnemonic = mnemonic;
         existing.vault_path = norm.clone();
     } else {
-        data.profiles.push(profile);
+        data.profiles.push(VaultProfile {
+            name,
+            mnemonic,
+            vault_path: norm.clone(),
+        });
     }
     data.last_used = Some(norm);
+    save_profiles_internal(&app, &data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn rename_vault_profile(
+    app: tauri::AppHandle,
+    vault_path: String,
+    name: String,
+) -> Result<(), String> {
+    let mut data = load_profiles_internal(&app)?;
+    let norm = normalise_slashes(&vault_path);
+    let existing = data
+        .profiles
+        .iter_mut()
+        .find(|p| normalise_slashes(&p.vault_path) == norm)
+        .ok_or_else(|| "Vault profile not found".to_string())?;
+    existing.name = name;
     save_profiles_internal(&app, &data)
 }
 
@@ -230,17 +298,12 @@ pub fn save_session(
         .map(|p| p.name.clone())
         .unwrap_or(folder_name);
 
-    let profile = VaultProfile {
-        name,
-        mnemonic,
-        vault_path,
-    };
-    save_vault_profile(app, profile)
+    save_vault_profile(app, name, vault_path, mnemonic)
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, String> {
+pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfileInfo>, String> {
     let data = load_profiles_internal(&app)?;
     if let Some(last) = &data.last_used {
         let norm_last = normalise_slashes(last);
@@ -249,16 +312,69 @@ pub fn load_session(app: tauri::AppHandle) -> Result<Option<VaultProfile>, Strin
             .iter()
             .find(|p| normalise_slashes(&p.vault_path) == norm_last)
         {
-            return Ok(Some(profile.clone()));
+            return Ok(Some(VaultProfileInfo::from(profile)));
         }
     }
-    Ok(data.profiles.into_iter().next())
+    Ok(data.profiles.first().map(VaultProfileInfo::from))
 }
 
 #[tauri::command]
 #[specta::specta]
-pub fn clear_session(app: tauri::AppHandle) -> Result<(), String> {
+pub fn clear_session(
+    app: tauri::AppHandle,
+    key_state: State<'_, VaultKeyState>,
+    vault_path_state: State<'_, VaultPathState>,
+) -> Result<(), String> {
+    *key_state.0.lock().map_err(|e| e.to_string())? = None;
+    *vault_path_state.0.lock().map_err(|e| e.to_string())? = String::new();
     let mut data = load_profiles_internal(&app)?;
     data.last_used = None;
     save_profiles_internal(&app, &data)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn unlock_vault_profile(
+    app: tauri::AppHandle,
+    vault_path: String,
+    key_state: State<'_, VaultKeyState>,
+) -> Result<VaultId, String> {
+    let mut data = load_profiles_internal(&app)?;
+    let norm = normalise_slashes(&vault_path);
+    let mnemonic = data
+        .profiles
+        .iter()
+        .find(|p| normalise_slashes(&p.vault_path) == norm)
+        .map(|p| p.mnemonic.clone())
+        .ok_or_else(|| "Vault profile not found".to_string())?;
+    let vault_id = crypto::unlock_mnemonic(&mnemonic, &key_state)?;
+    data.last_used = Some(norm);
+    save_profiles_internal(&app, &data)?;
+    Ok(VaultId { vault_id })
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn reveal_mnemonic(
+    app: tauri::AppHandle,
+    vault_path: String,
+    key_state: State<'_, VaultKeyState>,
+    vault_path_state: State<'_, VaultPathState>,
+) -> Result<String, String> {
+    crypto::current_key(&key_state)?;
+    let norm = normalise_slashes(&vault_path);
+    let current = vault_path_state
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .clone();
+    if normalise_slashes(&current) != norm {
+        return Err("Vault is locked".to_string());
+    }
+    let data = load_profiles_internal(&app)?;
+    data.profiles
+        .iter()
+        .find(|p| normalise_slashes(&p.vault_path) == norm)
+        .map(|p| p.mnemonic.clone())
+        .ok_or_else(|| "Vault profile not found".to_string())
 }

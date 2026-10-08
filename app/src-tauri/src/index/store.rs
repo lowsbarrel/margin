@@ -1,7 +1,7 @@
 use rusqlite::{Connection, params};
 use std::path::Path;
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
 
 fn db_path(root: &str) -> std::path::PathBuf {
     Path::new(root).join(".margin").join("index.sqlite")
@@ -87,10 +87,15 @@ pub(super) fn upsert(
          ON CONFLICT(path) DO UPDATE SET name = ?2, mtime = ?3, size = ?4",
         params![path, name, mtime, size],
     )?;
-    conn.execute("DELETE FROM notes_fts WHERE path = ?1", params![path])?;
+    let rowid: i64 = conn.query_row(
+        "SELECT rowid FROM notes WHERE path = ?1",
+        params![path],
+        |r| r.get(0),
+    )?;
+    conn.execute("DELETE FROM notes_fts WHERE rowid = ?1", params![rowid])?;
     conn.execute(
-        "INSERT INTO notes_fts (path, name, body) VALUES (?1, ?2, ?3)",
-        params![path, name, body],
+        "INSERT INTO notes_fts (rowid, path, name, body) VALUES (?1, ?2, ?3, ?4)",
+        params![rowid, path, name, body],
     )?;
 
     conn.execute("DELETE FROM tags WHERE path = ?1", params![path])?;
@@ -112,8 +117,11 @@ pub(super) fn upsert(
 }
 
 pub(super) fn delete_note_rows(conn: &Connection, path: &str) -> rusqlite::Result<()> {
+    conn.execute(
+        "DELETE FROM notes_fts WHERE rowid IN (SELECT rowid FROM notes WHERE path = ?1)",
+        params![path],
+    )?;
     conn.execute("DELETE FROM notes WHERE path = ?1", params![path])?;
-    conn.execute("DELETE FROM notes_fts WHERE path = ?1", params![path])?;
     conn.execute("DELETE FROM tags WHERE path = ?1", params![path])?;
     conn.execute("DELETE FROM links WHERE src = ?1", params![path])?;
     Ok(())

@@ -2,7 +2,6 @@ import { WidgetType, type EditorView } from '@codemirror/view';
 import { resolveImage } from './assets';
 import { openHref } from './click';
 import { contextOf, staticPreview } from './context';
-import { sourcesOf } from './decorate';
 import { footnoteIndex } from './footnotes';
 import {
 	cellCoords,
@@ -150,8 +149,7 @@ class TableDom {
 	}
 
 	private readonly lookups: CellLookups = {
-		image: (target, embed, label) =>
-			resolveImage(target, embed, label, sourcesOf(contextOf(this.view.state))),
+		image: (target, embed, label) => resolveImage(target, embed, label, this.view.state),
 		footnote: (id) => footnoteIndex(this.view.state).numbers.get(id.toLowerCase())
 	};
 

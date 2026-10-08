@@ -332,7 +332,7 @@ export function renderMarkdownToHtml(markdown: string, options: PdfRenderOptions
 	md.renderer.rules.fence = (tokens, idx, renderOptions, env, self) => {
 		const token = tokens[idx];
 		const lang = token.info.trim().split(/\s+/)[0];
-		if (lang === 'mermaid')
+		if (lang.toLowerCase() === 'mermaid')
 			return `<div data-type="mermaid" data-mermaid="${escapeHtml(token.content)}"></div>\n`;
 		return defaultFence(tokens, idx, renderOptions, env, self);
 	};
