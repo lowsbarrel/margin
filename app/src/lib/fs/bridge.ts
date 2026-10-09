@@ -24,7 +24,7 @@ export async function readFileBytes(path: string): Promise<Uint8Array> {
 
 async function rawWriteFileBytes(path: string, content: Uint8Array): Promise<void> {
 	return invoke<void>('write_file_bytes', content, {
-		headers: { [X_PATH_HEADER]: path }
+		headers: { [X_PATH_HEADER]: encodeURIComponent(path) }
 	});
 }
 
@@ -49,7 +49,7 @@ export async function storeAttachmentBytes(
 
 export async function saveFileBytes(path: string, content: Uint8Array): Promise<void> {
 	return invoke<void>('save_file_bytes', content, {
-		headers: { [X_PATH_HEADER]: path }
+		headers: { [X_PATH_HEADER]: encodeURIComponent(path) }
 	});
 }
 
@@ -178,11 +178,8 @@ export async function onVaultFsChanged(callback: () => void): Promise<UnlistenFn
 	});
 }
 
-export async function hasUnsyncedChanges(
-	vaultPath: string,
-	encryptionKey: number[]
-): Promise<boolean> {
-	const r = await commands.hasUnsyncedChanges(vaultPath, encryptionKey);
+export async function hasUnsyncedChanges(vaultPath: string): Promise<boolean> {
+	const r = await commands.hasUnsyncedChanges(vaultPath);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
@@ -199,12 +196,6 @@ export async function searchIndex(
 	limit: number = 100
 ): Promise<SearchHit[]> {
 	const r = await commands.indexSearch(root, query, limit);
-	if (r.status === 'error') throw r.error;
-	return r.data;
-}
-
-export async function rebuildIndex(root: string): Promise<number> {
-	const r = await commands.indexRebuild(root);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }

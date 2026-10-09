@@ -58,6 +58,7 @@ pub fn run() {
         .manage(WatcherState(Mutex::new(None)))
         .manage(VaultWatcherState(Mutex::new(None)))
         .manage(VaultPathState(Mutex::new(String::new())))
+        .manage(crypto::VaultKeyState(Mutex::new(None)))
         .manage(terminal::TerminalState::new())
         .register_uri_scheme_protocol("localfile", |_app, request| {
             let decoded = ipc::percent_decode_lossy(request.uri().path());
@@ -160,7 +161,6 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             crypto::generate_mnemonic,
             crypto::derive_vault_keys,
-            crypto::decrypt_blob_cmd,
             fs::set_vault_directory,
             fs::read_file_bytes,
             fs::write_file_bytes,
@@ -205,7 +205,6 @@ pub fn run() {
             ai::llm_cancel,
             s3::s3_configure,
             s3::s3_test_connection,
-            s3::s3_download,
             settings::save_settings,
             settings::load_settings,
             settings::export_settings_string,
@@ -215,8 +214,11 @@ pub fn run() {
             session::save_session,
             session::load_session,
             session::clear_session,
+            session::unlock_vault_profile,
+            session::reveal_mnemonic,
             session::load_vault_profiles,
             session::save_vault_profile,
+            session::rename_vault_profile,
             session::delete_vault_profile,
             history::save_snapshot,
             history::list_snapshots,
@@ -236,7 +238,8 @@ pub fn run() {
             sync::sync_download_files,
             sync::sync_upload_manifest,
             sync::sync_delete_files,
-            sync::path_to_s3_key,
+            sync::sync_load_remote_manifest,
+            sync::sync_write_remote_copy,
             terminal::pty_spawn,
             terminal::pty_write,
             terminal::pty_resize,
@@ -308,8 +311,11 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         session::save_session,
         session::load_session,
         session::clear_session,
+        session::unlock_vault_profile,
+        session::reveal_mnemonic,
         session::load_vault_profiles,
         session::save_vault_profile,
+        session::rename_vault_profile,
         session::delete_vault_profile,
         history::save_snapshot,
         history::list_snapshots,
@@ -329,7 +335,8 @@ pub fn specta_builder() -> tauri_specta::Builder<tauri::Wry> {
         sync::sync_download_files,
         sync::sync_upload_manifest,
         sync::sync_delete_files,
-        sync::path_to_s3_key,
+        sync::sync_load_remote_manifest,
+        sync::sync_write_remote_copy,
         terminal::pty_spawn,
         terminal::pty_write,
         terminal::pty_resize,

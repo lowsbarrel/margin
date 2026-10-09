@@ -18,7 +18,7 @@ export interface SyncOptions {
 let activeSyncAbort: AbortController | null = null;
 let syncLock: Promise<void> = Promise.resolve();
 
-function cancelSync(): void {
+export function cancelSync(): void {
 	activeSyncAbort?.abort();
 	activeSyncAbort = null;
 }
@@ -34,13 +34,10 @@ function errorText(err: unknown): string {
 export function syncToS3(
 	vaultPath: string,
 	vaultId: string,
-	encryptionKey: number[],
 	s3Config: S3Config,
 	options?: SyncOptions
 ): Promise<void> {
-	const ticket = syncLock.then(() =>
-		doSyncToS3(vaultPath, vaultId, encryptionKey, s3Config, options)
-	);
+	const ticket = syncLock.then(() => doSyncToS3(vaultPath, vaultId, s3Config, options));
 	// Swallow so a failed sync never rejects the chain the next one waits on.
 	syncLock = ticket.catch(() => {});
 	return ticket;
@@ -49,7 +46,6 @@ export function syncToS3(
 async function doSyncToS3(
 	vaultPath: string,
 	vaultId: string,
-	encryptionKey: number[],
 	s3Config: S3Config,
 	options?: SyncOptions
 ): Promise<void> {
@@ -66,7 +62,7 @@ async function doSyncToS3(
 		await s3Configure(s3Config);
 		const s3Prefix = `${vaultId}/`;
 
-		const plan = await planSync(vaultPath, s3Prefix, encryptionKey, signal);
+		const plan = await planSync(vaultPath, s3Prefix, signal);
 		const actionsTotal = plan.actions.length;
 		let actionsDone = 0;
 		editor.setSyncProgress(actionsTotal > 0 ? { total: actionsTotal, done: 0 } : null);
@@ -74,7 +70,6 @@ async function doSyncToS3(
 		const result = await executeTransfer(plan, {
 			vaultPath,
 			s3Prefix,
-			encryptionKey,
 			conflictStrategy,
 			signal,
 			onProgress: (advance: number) => {
@@ -89,8 +84,8 @@ async function doSyncToS3(
 			result.tombstones,
 			result.missingRemoteBlobs
 		);
-		await syncUploadManifest(s3Prefix, encryptionKey, uploaded);
-		await saveManifest(vaultPath, encryptionKey, local);
+		await syncUploadManifest(s3Prefix, uploaded);
+		await saveManifest(vaultPath, local);
 
 		const hadFsChanges = plan.actions.some(
 			(a) =>
@@ -126,7 +121,6 @@ async function doSyncToS3(
 let syncCredentials: {
 	vaultPath: string;
 	vaultId: string;
-	encryptionKey: number[];
 	s3Config: S3Config;
 	options?: SyncOptions;
 } | null = null;
@@ -134,11 +128,10 @@ let syncCredentials: {
 export function setSyncCredentials(
 	vaultPath: string,
 	vaultId: string,
-	encryptionKey: number[],
 	s3Config: S3Config,
 	options?: SyncOptions
 ): void {
-	syncCredentials = { vaultPath, vaultId, encryptionKey, s3Config, options };
+	syncCredentials = { vaultPath, vaultId, s3Config, options };
 }
 
 export function clearSyncCredentials(): void {
@@ -150,13 +143,12 @@ let autoSyncInterval: ReturnType<typeof setInterval> | null = null;
 export function startAutoSync(
 	vaultPath: string,
 	vaultId: string,
-	encryptionKey: number[],
 	s3Config: S3Config,
 	intervalMs: number = 5 * 60 * 1000,
 	options?: SyncOptions
 ): void {
 	stopAutoSync();
-	syncCredentials = { vaultPath, vaultId, encryptionKey, s3Config, options };
+	syncCredentials = { vaultPath, vaultId, s3Config, options };
 
 	runQuietSync();
 
@@ -176,13 +168,7 @@ async function runQuietSync(): Promise<void> {
 	const creds = syncCredentials;
 	if (!creds || isSyncing()) return;
 	try {
-		await syncToS3(
-			creds.vaultPath,
-			creds.vaultId,
-			creds.encryptionKey,
-			creds.s3Config,
-			creds.options
-		);
+		await syncToS3(creds.vaultPath, creds.vaultId, creds.s3Config, creds.options);
 	} catch {}
 }
 
@@ -197,13 +183,7 @@ export async function runManualSync(): Promise<void> {
 		return;
 	}
 	try {
-		await syncToS3(
-			creds.vaultPath,
-			creds.vaultId,
-			creds.encryptionKey,
-			creds.s3Config,
-			creds.options
-		);
+		await syncToS3(creds.vaultPath, creds.vaultId, creds.s3Config, creds.options);
 		toast.success(m.toast_sync_complete());
 	} catch (err) {
 		toast.error(m.toast_sync_failed({ error: errorText(err) }));

@@ -27,7 +27,7 @@ let requestId: string | null = null;
 let configuredFor: string | null = null;
 
 async function ensureConfigured(): Promise<boolean> {
-	if (!vault.vaultPath || !vault.encryptionKey) {
+	if (!vault.vaultPath || !vault.isUnlocked) {
 		state.configured = false;
 		return false;
 	}
@@ -35,7 +35,7 @@ async function ensureConfigured(): Promise<boolean> {
 	if (state.configured === true && configuredFor === root) return true;
 
 	try {
-		const settings = await loadSettings(root, vault.encryptionKey);
+		const settings = await loadSettings(root);
 		if (vault.vaultPath !== root) return false;
 		if (!settings?.llm) {
 			state.configured = false;

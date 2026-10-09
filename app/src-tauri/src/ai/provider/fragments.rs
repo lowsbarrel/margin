@@ -15,15 +15,12 @@ pub(super) fn accumulate_reasoning(index: u64, fields: &Value, into: &mut Reason
         }
         let concatenates = matches!(key.as_str(), "text" | "summary" | "data" | "thinking");
         match (concatenates, value.as_str()) {
-            (true, Some(part)) => {
-                let mut joined = block
-                    .get(key)
-                    .and_then(Value::as_str)
-                    .unwrap_or_default()
-                    .to_string();
-                joined.push_str(part);
-                block.insert(key.clone(), json!(joined));
-            }
+            (true, Some(part)) => match block.get_mut(key) {
+                Some(Value::String(existing)) => existing.push_str(part),
+                _ => {
+                    block.insert(key.clone(), Value::String(part.to_string()));
+                }
+            },
             _ => {
                 block.insert(key.clone(), value.clone());
             }
@@ -46,7 +43,7 @@ pub(super) fn finish_calls(calls: PartialCalls) -> Vec<ToolCall> {
         .map(|call| ToolCall {
             id: call.id,
             name: call.name,
-            args: serde_json::from_str(&call.args).unwrap_or(Value::Null),
+            args: serde_json::from_str(&call.args).unwrap_or_else(|_| json!({})),
         })
         .collect()
 }

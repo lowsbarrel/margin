@@ -1,5 +1,5 @@
 use super::{VaultPathState, atomic_write, ensure_in_vault, vault_root};
-use crate::ipc::{body, header, raw_header};
+use crate::ipc::{body, header};
 use std::fs;
 use std::path::Path;
 use tauri::ipc::{Request, Response};
@@ -35,7 +35,7 @@ pub fn write_file_bytes(
 // The destination came from the native save dialog and is outside the vault by design.
 #[tauri::command]
 pub fn save_file_bytes(request: Request) -> Result<(), String> {
-    let path = raw_header(&request, "x-path")?;
+    let path = header(&request, "x-path")?;
     let data = body(&request)?;
     let dest = Path::new(&path);
     if let Some(parent) = dest.parent() {

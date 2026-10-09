@@ -35,7 +35,7 @@ A fact is defined once and imported everywhere else.
 | Tokens → Tailwind + shadcn               | `src/lib/styles/theme.css`                        |
 | User-facing copy                         | `messages/{en,it}.json` → `m.*()`                 |
 | Compiled copy                            | `src/lib/paraglide/` (generated, ignored)         |
-| Version                                  | `package.json` = `Cargo.toml` = `tauri.conf.json` |
+| Version                                  | `package.json` = `Cargo.toml`                     |
 | License                                  | `LICENSE`                                         |
 
 ## Where new code goes
@@ -203,7 +203,8 @@ sync and export skips hidden paths.
 - **Crypto lives in Rust.** Encryption, decryption and key derivation happen in
   Rust, and only Rust writes secrets to disk (encrypted). The session's vault
   key, mnemonic, S3 secret and AI key do reach JavaScript memory: never log
-  them and never persist them from JS (`localStorage` holds only the theme).
+  them and never persist them from JS (`localStorage` holds only the theme and
+  the UI locale).
 - Every `#[tauri::command]` is listed in `generate_handler!` in
   `src-tauri/src/lib.rs`, or it fails at runtime. `collect_commands!` is a
   deliberate subset: raw-byte commands aren't representable in specta and are
@@ -231,8 +232,8 @@ sync and export skips hidden paths.
 - Browser-only packages (editor extensions, KaTeX, Mermaid, xterm, PDF.js)
   load through dynamic `import()`. A top-level import crashes to a blank
   screen, because `ssr = false` hides it until runtime.
-- One version, three files. Bump `package.json`, `Cargo.toml` and
-  `tauri.conf.json` together, or the updater compares against the wrong number.
+- One version, two files. Bump `package.json` and `Cargo.toml` together, or the
+  updater compares against the wrong number.
 - The updater's public key is in `tauri.conf.json`; the private key exists only
   as a GitHub secret. Never commit a signing key, an S3 credential, or a
   mnemonic: that phrase _is_ the vault.

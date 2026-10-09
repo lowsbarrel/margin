@@ -25,7 +25,6 @@ function walk(dir, match, fn) {
 {
 	const versions = {
 		'package.json': JSON.parse(read('package.json')).version,
-		'src-tauri/tauri.conf.json': JSON.parse(read('src-tauri/tauri.conf.json')).version,
 		'src-tauri/Cargo.toml': read('src-tauri/Cargo.toml').match(/^version\s*=\s*"([^"]+)"/m)?.[1]
 	};
 	const distinct = [...new Set(Object.values(versions))];
@@ -59,8 +58,11 @@ const INVOKE_ALLOW = new Set([
 	'src/lib/s3/bridge.ts',
 	'src/lib/terminal/bridge.ts'
 ]);
-walk('src', ['.ts', '.svelte'], (p, c) => {
-	if (/@tauri-apps\/api\/core/.test(c) && !INVOKE_ALLOW.has(rel(p))) {
+walk('src', ['.ts', '.svelte', '.js'], (p, c) => {
+	if (
+		/@tauri-apps\/api(\/core)?['"]|__TAURI_INTERNALS__\s*[.[]/.test(c) &&
+		!INVOKE_ALLOW.has(rel(p))
+	) {
 		fail(
 			rel(p),
 			'raw invoke(): call the generated `commands` from $lib/bindings, or add a bridge seam and allowlist it in scripts/check-invariants.mjs'

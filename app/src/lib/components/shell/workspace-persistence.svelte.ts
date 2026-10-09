@@ -22,9 +22,9 @@ function cancelScheduledSave(): void {
 	saveTimer = null;
 }
 
-export function saveWorkspace(): void {
+export function saveWorkspace(): Promise<void> {
 	cancelScheduledSave();
-	if (!vault.vaultPath || !vault.encryptionKey) return;
+	if (!vault.vaultPath || !vault.isUnlocked) return Promise.resolve();
 	const state: WorkspaceState = {
 		panes: panes.list.map((p) => ({
 			tabs: p.tabs.map((t) => ({
@@ -45,13 +45,13 @@ export function saveWorkspace(): void {
 		terminal_open: terminals.open,
 		terminal_height: terminals.height
 	};
-	saveWorkspaceState(vault.vaultPath, vault.encryptionKey, state).catch((err) =>
+	return saveWorkspaceState(vault.vaultPath, state).catch((err) =>
 		console.warn('Failed to save workspace state:', err)
 	);
 }
 
 export function scheduleWorkspaceSave(): void {
-	if (!vault.isUnlocked || !vault.vaultPath || !vault.encryptionKey) return;
+	if (!vault.isUnlocked || !vault.vaultPath) return;
 	if (!restored) return;
 	cancelScheduledSave();
 	saveTimer = setTimeout(() => {
@@ -61,9 +61,9 @@ export function scheduleWorkspaceSave(): void {
 }
 
 export async function restoreWorkspace(): Promise<void> {
-	if (!vault.vaultPath || !vault.encryptionKey) return;
+	if (!vault.vaultPath || !vault.isUnlocked) return;
 	try {
-		const ws = await loadWorkspaceState(vault.vaultPath, vault.encryptionKey);
+		const ws = await loadWorkspaceState(vault.vaultPath);
 		if (!ws || ws.panes.length === 0) {
 			restored = true;
 			return;

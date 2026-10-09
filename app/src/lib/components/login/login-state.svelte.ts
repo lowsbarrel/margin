@@ -3,7 +3,7 @@ import { deleteVaultProfile, type VaultProfile } from '$lib/session/bridge';
 import { toast } from '$lib/stores/toast.svelte';
 import { open } from '@tauri-apps/plugin-dialog';
 import * as m from '$lib/paraglide/messages.js';
-import { loadVaultProfiles, unlockVault } from './vault-session';
+import { loadVaultProfiles, unlockSavedVault, unlockVault } from './vault-session';
 import { baseName } from '$lib/utils/path';
 
 export interface LoginState {
@@ -51,7 +51,7 @@ export function createLoginState(): LoginState {
 
 	async function autoLogin(profile: VaultProfile): Promise<void> {
 		try {
-			await unlockVault(profile.mnemonic, profile.vault_path, profile.name);
+			await unlockSavedVault(profile.vault_path, profile.name);
 		} catch (err) {
 			// `vault.lock()` clears the stored session, so a transient failure must not call it.
 			console.warn('Auto-login failed:', err);
@@ -64,7 +64,7 @@ export function createLoginState(): LoginState {
 		loading = true;
 		error = '';
 		try {
-			await unlockVault(profile.mnemonic, profile.vault_path, profile.name);
+			await unlockSavedVault(profile.vault_path, profile.name);
 		} catch (e) {
 			error = String(e);
 		} finally {

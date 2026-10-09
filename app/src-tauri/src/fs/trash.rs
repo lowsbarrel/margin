@@ -2,7 +2,7 @@ use super::MAX_WALK_DEPTH;
 use serde::Serialize;
 use std::fs;
 use std::io;
-use std::path::{Path, PathBuf};
+use std::path::{Component, Path, PathBuf};
 use std::sync::atomic::{AtomicU64, Ordering};
 
 pub(crate) mod commands;
@@ -139,9 +139,13 @@ pub struct TrashItem {
 
 fn item_rel(item: &Path) -> Result<PathBuf, String> {
     if let Ok(recorded) = fs::read_to_string(item.join(REL_FILE)) {
-        let rel = recorded.trim();
-        if !rel.is_empty() {
-            return Ok(PathBuf::from(rel));
+        // Leading/trailing spaces are legal in names, so the recorded path is not trimmed; only plain relative names are accepted.
+        if !recorded.is_empty() {
+            let rel = PathBuf::from(recorded);
+            if rel.components().all(|c| matches!(c, Component::Normal(_))) {
+                return Ok(rel);
+            }
+            return Err("Trash item has an invalid recorded path".into());
         }
     }
     let mut dir = item.join(FILES_DIR);
@@ -293,7 +297,9 @@ pub(crate) fn restore(root: &str, id: &str) -> Result<String, String> {
     }
 
     crate::index::tree::invalidate();
-    if !dest.is_dir() {
+    if dest.is_dir() {
+        crate::index::upsert_dir(root, &dest);
+    } else {
         crate::index::upsert_path(root, &dest);
     }
 

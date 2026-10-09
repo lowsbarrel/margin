@@ -1,5 +1,5 @@
 import { indentUnit } from '@codemirror/language';
-import { Compartment, EditorState, Transaction } from '@codemirror/state';
+import { Compartment, EditorState, Transaction, type Extension } from '@codemirror/state';
 import { EditorView } from '@codemirror/view';
 import type { ContextMenuItem } from '$lib/components/ContextMenu.svelte';
 import { liveContext, type LiveContext } from './context';
@@ -29,6 +29,7 @@ export interface LiveEditorHost {
 	onDocChange(text: () => string): void;
 	onCursor(line: number, col: number): void;
 	onSelection(): void;
+	extensions?: Extension[];
 }
 
 export interface LiveEditorHandle {
@@ -74,6 +75,7 @@ export async function createLiveEditor(host: LiveEditorHost): Promise<LiveEditor
 				highlighting.of(host.source ? [sourceHighlighting] : []),
 				indentUnit.of(detectIndentUnit(host.doc)),
 				...baseExtensions,
+				...(host.extensions ?? []),
 				EditorView.updateListener.of((update) => {
 					if (
 						update.docChanged &&

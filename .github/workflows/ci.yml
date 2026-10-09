@@ -14,7 +14,7 @@ permissions:
 
 jobs:
   conventions:
-    if: github.event_name == 'pull_request'
+    if: github.event_name == 'pull_request' && github.actor != 'dependabot[bot]'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
@@ -92,10 +92,16 @@ jobs:
         run: cargo fmt -- --check
 
       - name: Cargo clippy
-        run: cargo clippy --all-targets -- -D warnings
+        run: cargo clippy --all-targets --locked -- -D warnings
 
       - name: Cargo test
-        run: cargo test
+        run: cargo test --locked
+
+      - name: Bindings are up to date
+        if: runner.os == 'Linux'
+        run: |
+          cargo run --bin gen_bindings
+          git diff --exit-code ../src/lib/bindings.ts
 
   audit:
     runs-on: ubuntu-latest

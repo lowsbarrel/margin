@@ -7,12 +7,15 @@ use rand::TryRng;
 use rand::rngs::SysRng;
 use serde::Serialize;
 use sha2::{Digest, Sha256};
-use tauri::ipc::{Request, Response};
+use std::sync::Mutex;
+use tauri::State;
+
+// The derived vault key lives only here: no command returns it and the webview never holds it.
+pub struct VaultKeyState(pub Mutex<Option<([u8; 32], String)>>);
 
 #[derive(Serialize, specta::Type)]
-pub struct VaultKeys {
+pub struct VaultId {
     pub vault_id: String,
-    pub encryption_key: Vec<u8>,
 }
 
 #[tauri::command]
@@ -26,23 +29,54 @@ pub fn generate_mnemonic() -> Result<String, String> {
     Ok(mnemonic.to_string())
 }
 
-#[tauri::command]
-#[specta::specta]
-pub fn derive_vault_keys(mnemonic: &str) -> Result<VaultKeys, String> {
+pub(crate) fn unlock_mnemonic(mnemonic: &str, key_state: &VaultKeyState) -> Result<String, String> {
     let mnemonic: Mnemonic = mnemonic.parse().map_err(|e: bip39::Error| e.to_string())?;
     let seed = mnemonic.to_seed("");
 
-    let vault_id_raw = &seed[0..32];
-    let encryption_key = seed[32..64].to_vec();
+    let mut key = [0u8; 32];
+    key.copy_from_slice(&seed[32..64]);
 
     let mut hasher = Sha256::new();
-    hasher.update(vault_id_raw);
+    hasher.update(&seed[0..32]);
     let vault_id = hex::encode(hasher.finalize());
 
-    Ok(VaultKeys {
-        vault_id,
-        encryption_key,
+    *key_state.0.lock().map_err(|e| e.to_string())? = Some((key, vault_id.clone()));
+    Ok(vault_id)
+}
+
+#[tauri::command]
+#[specta::specta]
+pub fn derive_vault_keys(
+    mnemonic: &str,
+    key_state: State<'_, VaultKeyState>,
+) -> Result<VaultId, String> {
+    Ok(VaultId {
+        vault_id: unlock_mnemonic(mnemonic, &key_state)?,
     })
+}
+
+pub(crate) fn current_key(key_state: &State<'_, VaultKeyState>) -> Result<[u8; 32], String> {
+    key_state
+        .0
+        .lock()
+        .map_err(|e| e.to_string())?
+        .as_ref()
+        .map(|(key, _)| *key)
+        .ok_or_else(|| "Vault is locked".to_string())
+}
+
+pub(crate) fn current_key_for_prefix(
+    key_state: &State<'_, VaultKeyState>,
+    s3_prefix: &str,
+) -> Result<[u8; 32], String> {
+    let guard = key_state.0.lock().map_err(|e| e.to_string())?;
+    let (key, vault_id) = guard
+        .as_ref()
+        .ok_or_else(|| "Vault is locked".to_string())?;
+    if s3_prefix != format!("{vault_id}/") {
+        return Err("Vault changed mid-sync".to_string());
+    }
+    Ok(*key)
 }
 
 pub fn encrypt_blob(plaintext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String> {
@@ -81,14 +115,6 @@ pub fn decrypt_blob(ciphertext: Vec<u8>, key: Vec<u8>) -> Result<Vec<u8>, String
         .map_err(|e| format!("Decryption failed: {e}"))?;
 
     Ok(plaintext)
-}
-
-#[tauri::command]
-pub fn decrypt_blob_cmd(request: Request) -> Result<Response, String> {
-    let key = crate::ipc::key_header(&request)?;
-    let ciphertext = crate::ipc::body(&request)?;
-    let result = decrypt_blob(ciphertext, key)?;
-    Ok(Response::new(result))
 }
 
 #[cfg(test)]

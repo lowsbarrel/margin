@@ -95,6 +95,30 @@ fn message_shapes_are_translated_per_provider() {
 }
 
 #[test]
+fn tool_calls_with_empty_or_invalid_arguments_default_to_an_empty_object() {
+    let mut calls = super::fragments::PartialCalls::new();
+    calls.insert(
+        0,
+        super::fragments::PartialCall {
+            id: "call_1".into(),
+            name: "list_tags".into(),
+            args: String::new(),
+        },
+    );
+    calls.insert(
+        1,
+        super::fragments::PartialCall {
+            id: "call_2".into(),
+            name: "recent_notes".into(),
+            args: "not json".into(),
+        },
+    );
+    let calls = super::fragments::finish_calls(calls);
+    assert_eq!(calls[0].args, json!({}));
+    assert_eq!(calls[1].args, json!({}));
+}
+
+#[test]
 fn provider_error_message_prefers_the_nested_message() {
     assert_eq!(
         provider_error_message("{\"error\":{\"message\":\"bad key\"}}"),

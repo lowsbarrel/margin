@@ -200,6 +200,30 @@ fn merging_history_keeps_both_sets_and_never_overwrites() {
 }
 
 #[test]
+fn case_only_rename_keeps_every_snapshot() {
+    let vault = temp_vault("case-rename");
+    let root = vault.to_string_lossy().into_owned();
+    let dir = vault.join(".margin/history/Note.md");
+    fs::create_dir_all(&dir).unwrap();
+    fs::write(dir.join("1712928000000.md"), "one").unwrap();
+    fs::write(dir.join("1712928000001.md"), "two").unwrap();
+
+    rename_history(
+        &root,
+        &format!("{root}/Note.md"),
+        &format!("{root}/note.md"),
+    )
+    .unwrap();
+
+    assert_eq!(
+        names(&vault.join(".margin/history/note.md")),
+        ["1712928000000.md", "1712928000001.md"]
+    );
+
+    fs::remove_dir_all(&vault).ok();
+}
+
+#[test]
 fn merging_history_recurses_into_subdirectories() {
     let vault = temp_vault("merge-dir");
     let src = vault.join("old");

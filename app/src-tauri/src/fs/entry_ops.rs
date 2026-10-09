@@ -83,6 +83,7 @@ pub fn rename_entry(
     let root = vault_root(&vault_path_state);
     if was_dir {
         crate::index::remove_prefix(&root, &from_path);
+        crate::index::upsert_dir(&root, &to_path);
     } else {
         crate::index::remove_path(&root, &from_path);
         crate::index::upsert_path(&root, &to_path);

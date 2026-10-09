@@ -25,9 +25,9 @@
 	let copied = $state(false);
 
 	async function handleExport() {
-		if (!vault.encryptionKey) return;
+		if (!vault.isUnlocked) return;
 		try {
-			exportString = await exportSettingsString(vault.encryptionKey, getSettings());
+			exportString = await exportSettingsString(getSettings());
 		} catch (err) {
 			toast.error(m.toast_export_failed({ error: String(err) }));
 		}
@@ -41,14 +41,14 @@
 	}
 
 	async function handleImport() {
-		if (!vault.encryptionKey || !vault.vaultPath || !importString.trim()) return;
+		if (!vault.isUnlocked || !vault.vaultPath || !importString.trim()) return;
 		try {
-			const settings = await importSettingsString(vault.encryptionKey, importString.trim());
+			const settings = await importSettingsString(importString.trim());
 			if (settings.s3) await s3Configure(settings.s3);
-			await saveSettings(vault.vaultPath, vault.encryptionKey, settings);
+			await saveSettings(vault.vaultPath, settings);
 
-			if (settings.auto_sync && settings.s3 && vault.vaultId && vault.encryptionKey) {
-				startAutoSync(vault.vaultPath, vault.vaultId, vault.encryptionKey, settings.s3, undefined, {
+			if (settings.auto_sync && settings.s3 && vault.vaultId) {
+				startAutoSync(vault.vaultPath, vault.vaultId, settings.s3, undefined, {
 					conflictStrategy: (settings.conflict_strategy as ConflictStrategy) ?? 'local_wins'
 				});
 			} else {

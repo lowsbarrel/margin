@@ -11,6 +11,10 @@ pub(crate) fn atomic_write(dest: &Path, content: &[u8]) -> Result<(), String> {
 
     let write_result = (|| -> std::io::Result<()> {
         let mut f = fs::File::create(&tmp)?;
+        // The temp file replaces the destination, so a restricted note must keep its mode across the rename.
+        if let Ok(meta) = fs::metadata(dest) {
+            let _ = f.set_permissions(meta.permissions());
+        }
         f.write_all(content)?;
         f.sync_all()?;
         Ok(())

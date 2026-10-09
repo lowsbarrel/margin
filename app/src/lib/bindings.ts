@@ -5,17 +5,17 @@ import { invoke as __TAURI_INVOKE, Channel } from "@tauri-apps/api/core";
 /** Commands */
 export const commands = {
 	generateMnemonic: () => typedError<string, string>(__TAURI_INVOKE("generate_mnemonic")),
-	deriveVaultKeys: (mnemonic: string) => typedError<VaultKeys, string>(__TAURI_INVOKE("derive_vault_keys", { mnemonic })),
+	deriveVaultKeys: (mnemonic: string) => typedError<VaultId, string>(__TAURI_INVOKE("derive_vault_keys", { mnemonic })),
 	setVaultDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("set_vault_directory", { path })),
 	listDirectory: (path: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("list_directory", { path })),
 	walkDirectory: (root: string, includeHidden: boolean) => typedError<FsEntry[], string>(__TAURI_INVOKE("walk_directory", { root, includeHidden })),
 	buildVisibleTree: (root: string, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_visible_tree", { root, expanded, sortBy, hidden })),
 	buildSubtree: (folder: string, depthOffset: number, expanded: string[], sortBy: string, hidden: string[]) => typedError<TreeEntry[], string>(__TAURI_INVOKE("build_subtree", { folder, depthOffset, expanded, sortBy, hidden })),
 	deleteEntry: (path: string) => typedError<null, string>(__TAURI_INVOKE("delete_entry", { path })),
-	trashList: (vaultPath: string) => typedError<TrashItem[], string>(__TAURI_INVOKE("trash_list", { vaultPath })),
-	trashRestore: (vaultPath: string, id: string) => typedError<string, string>(__TAURI_INVOKE("trash_restore", { vaultPath, id })),
-	trashDelete: (vaultPath: string, id: string) => typedError<null, string>(__TAURI_INVOKE("trash_delete", { vaultPath, id })),
-	trashEmpty: (vaultPath: string) => typedError<number, string>(__TAURI_INVOKE("trash_empty", { vaultPath })),
+	trashList: () => typedError<TrashItem[], string>(__TAURI_INVOKE("trash_list")),
+	trashRestore: (id: string) => typedError<string, string>(__TAURI_INVOKE("trash_restore", { id })),
+	trashDelete: (id: string) => typedError<null, string>(__TAURI_INVOKE("trash_delete", { id })),
+	trashEmpty: () => typedError<number, string>(__TAURI_INVOKE("trash_empty")),
 	renameEntry: (from: string, to: string) => typedError<null, string>(__TAURI_INVOKE("rename_entry", { from, to })),
 	createDirectory: (path: string) => typedError<null, string>(__TAURI_INVOKE("create_directory", { path })),
 	fileExists: (path: string) => __TAURI_INVOKE<boolean>("file_exists", { path }),
@@ -35,7 +35,7 @@ export const commands = {
 	searchFiles: (root: string, query: string) => typedError<FsEntry[], string>(__TAURI_INVOKE("search_files", { root, query })),
 	replaceInFile: (path: string, search: string, replace: string, caseSensitive: boolean) => typedError<number, string>(__TAURI_INVOKE("replace_in_file", { path, search, replace, caseSensitive })),
 	exportVaultZip: (vaultPath: string, destPath: string) => typedError<null, string>(__TAURI_INVOKE("export_vault_zip", { vaultPath, destPath })),
-	hasUnsyncedChanges: (vaultPath: string, encryptionKey: number[]) => typedError<boolean, string>(__TAURI_INVOKE("has_unsynced_changes", { vaultPath, encryptionKey })),
+	hasUnsyncedChanges: (vaultPath: string) => typedError<boolean, string>(__TAURI_INVOKE("has_unsynced_changes", { vaultPath })),
 	indexSearch: (root: string, query: string, limit: number) => typedError<SearchHit[], string>(__TAURI_INVOKE("index_search", { root, query, limit })),
 	indexRebuild: (root: string) => typedError<number, string>(__TAURI_INVOKE("index_rebuild", { root })),
 	indexTags: (root: string) => typedError<TagInfo[], string>(__TAURI_INVOKE("index_tags", { root })),
@@ -46,18 +46,18 @@ export const commands = {
 	llmCancel: (requestId: string) => typedError<null, string>(__TAURI_INVOKE("llm_cancel", { requestId })),
 	s3Configure: (config: S3Config) => typedError<null, string>(__TAURI_INVOKE("s3_configure", { config })),
 	s3TestConnection: () => typedError<string, string>(__TAURI_INVOKE("s3_test_connection")),
-	saveSettings: (vaultPath: string, encryptionKey: number[], settings: AppSettings) => typedError<null, string>(__TAURI_INVOKE("save_settings", { vaultPath, encryptionKey, settings })),
-	loadSettings: (vaultPath: string, encryptionKey: number[]) => typedError<{
+	saveSettings: (vaultPath: string, settings: AppSettings) => typedError<null, string>(__TAURI_INVOKE("save_settings", { vaultPath, settings })),
+	loadSettings: (vaultPath: string) => typedError<{
 	s3: S3Config | null,
 	attachment_folder?: string | null,
 	auto_sync?: boolean | null,
 	conflict_strategy?: string | null,
 	llm?: LlmConfig | null,
-} | null, string>(__TAURI_INVOKE("load_settings", { vaultPath, encryptionKey })),
-	exportSettingsString: (encryptionKey: number[], settings: AppSettings) => typedError<string, string>(__TAURI_INVOKE("export_settings_string", { encryptionKey, settings })),
-	importSettingsString: (encryptionKey: number[], encoded: string) => typedError<AppSettings, string>(__TAURI_INVOKE("import_settings_string", { encryptionKey, encoded })),
-	saveWorkspaceState: (vaultPath: string, encryptionKey: number[], state: WorkspaceState) => typedError<null, string>(__TAURI_INVOKE("save_workspace_state", { vaultPath, encryptionKey, state })),
-	loadWorkspaceState: (vaultPath: string, encryptionKey: number[]) => typedError<{
+} | null, string>(__TAURI_INVOKE("load_settings", { vaultPath })),
+	exportSettingsString: (settings: AppSettings) => typedError<string, string>(__TAURI_INVOKE("export_settings_string", { settings })),
+	importSettingsString: (encoded: string) => typedError<AppSettings, string>(__TAURI_INVOKE("import_settings_string", { encoded })),
+	saveWorkspaceState: (vaultPath: string, state: WorkspaceState) => typedError<null, string>(__TAURI_INVOKE("save_workspace_state", { vaultPath, state })),
+	loadWorkspaceState: (vaultPath: string) => typedError<{
 	panes: WorkspacePane[],
 	pane_flexes: (number | null)[],
 	active_pane_index: number,
@@ -67,16 +67,18 @@ export const commands = {
 	sort_order: string,
 	terminal_open?: boolean,
 	terminal_height?: number | null,
-} | null, string>(__TAURI_INVOKE("load_workspace_state", { vaultPath, encryptionKey })),
+} | null, string>(__TAURI_INVOKE("load_workspace_state", { vaultPath })),
 	saveSession: (mnemonic: string, vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("save_session", { mnemonic, vaultPath })),
 	loadSession: () => typedError<{
 	name: string,
-	mnemonic: string,
 	vault_path: string,
 } | null, string>(__TAURI_INVOKE("load_session")),
 	clearSession: () => typedError<null, string>(__TAURI_INVOKE("clear_session")),
-	loadVaultProfiles: () => typedError<VaultProfiles, string>(__TAURI_INVOKE("load_vault_profiles")),
-	saveVaultProfile: (profile: VaultProfile) => typedError<null, string>(__TAURI_INVOKE("save_vault_profile", { profile })),
+	unlockVaultProfile: (vaultPath: string) => typedError<VaultId, string>(__TAURI_INVOKE("unlock_vault_profile", { vaultPath })),
+	revealMnemonic: (vaultPath: string) => typedError<string, string>(__TAURI_INVOKE("reveal_mnemonic", { vaultPath })),
+	loadVaultProfiles: () => typedError<VaultProfilesInfo, string>(__TAURI_INVOKE("load_vault_profiles")),
+	saveVaultProfile: (name: string, vaultPath: string, mnemonic: string) => typedError<null, string>(__TAURI_INVOKE("save_vault_profile", { name, vaultPath, mnemonic })),
+	renameVaultProfile: (vaultPath: string, name: string) => typedError<null, string>(__TAURI_INVOKE("rename_vault_profile", { vaultPath, name })),
 	deleteVaultProfile: (vaultPath: string) => typedError<null, string>(__TAURI_INVOKE("delete_vault_profile", { vaultPath })),
 	saveSnapshot: (vaultPath: string, filePath: string, content: number[]) => typedError<string, string>(__TAURI_INVOKE("save_snapshot", { vaultPath, filePath, content })),
 	listSnapshots: (vaultPath: string, filePath: string) => typedError<Snapshot[], string>(__TAURI_INVOKE("list_snapshots", { vaultPath, filePath })),
@@ -86,17 +88,21 @@ export const commands = {
 	renameHistory: (vaultPath: string, oldPath: string, newPath: string) => typedError<null, string>(__TAURI_INVOKE("rename_history", { vaultPath, oldPath, newPath })),
 	fuzzyFilterFiles: (files: FuzzyEntry[], query: string, limit: number) => __TAURI_INVOKE<FuzzyEntry[]>("fuzzy_filter_files", { files, query, limit }),
 	hashFilesBatch: (vaultPath: string, paths: string[]) => typedError<string[], string>(__TAURI_INVOKE("hash_files_batch", { vaultPath, paths })),
-	loadManifest: (vaultPath: string, encryptionKey: number[]) => typedError<Manifest_Serialize, string>(__TAURI_INVOKE("load_manifest", { vaultPath, encryptionKey })),
-	saveManifest: (vaultPath: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("save_manifest", { vaultPath, encryptionKey, manifest })),
-	computeSyncActions: (baseFiles: ManifestEntry_Deserialize[], localFiles: ManifestEntry_Deserialize[], remoteFiles: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<SyncAction[]>("compute_sync_actions", { baseFiles, localFiles, remoteFiles }),
+	loadManifest: (vaultPath: string) => typedError<Manifest_Serialize, string>(__TAURI_INVOKE("load_manifest", { vaultPath })),
+	saveManifest: (vaultPath: string, manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("save_manifest", { vaultPath, manifest })),
+	computeSyncActions: (baseFiles: ManifestEntry_Deserialize[], localFiles: ManifestEntry_Deserialize[], remoteFiles: ManifestEntry_Deserialize[], nowSeconds: number) => __TAURI_INVOKE<SyncAction[]>("compute_sync_actions", { baseFiles, localFiles, remoteFiles, nowSeconds }),
 	collectTombstones: (files: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("collect_tombstones", { files }),
 	mergeTombstones: (a: ManifestEntry_Deserialize[], b: ManifestEntry_Deserialize[]) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("merge_tombstones", { a, b }),
 	pruneTombstones: (tombstones: ManifestEntry_Deserialize[], nowSeconds: number) => __TAURI_INVOKE<ManifestEntry_Serialize[]>("prune_tombstones", { tombstones, nowSeconds }),
-	syncUploadFiles: (vaultPath: string, s3Prefix: string, paths: string[], encryptionKey: number[]) => typedError<null, string>(__TAURI_INVOKE("sync_upload_files", { vaultPath, s3Prefix, paths, encryptionKey })),
-	syncDownloadFiles: (vaultPath: string, s3Prefix: string, paths: string[], mtimes: number[], encryptionKey: number[]) => typedError<string[], string>(__TAURI_INVOKE("sync_download_files", { vaultPath, s3Prefix, paths, mtimes, encryptionKey })),
-	syncUploadManifest: (s3Prefix: string, encryptionKey: number[], manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("sync_upload_manifest", { s3Prefix, encryptionKey, manifest })),
-	syncDeleteFiles: (s3Prefix: string, paths: string[], encryptionKey: number[]) => typedError<null, string>(__TAURI_INVOKE("sync_delete_files", { s3Prefix, paths, encryptionKey })),
-	pathToS3Key: (relPath: string, encryptionKey: number[]) => __TAURI_INVOKE<string>("path_to_s3_key", { relPath, encryptionKey }),
+	syncUploadFiles: (vaultPath: string, s3Prefix: string, paths: string[]) => typedError<null, string>(__TAURI_INVOKE("sync_upload_files", { vaultPath, s3Prefix, paths })),
+	syncDownloadFiles: (vaultPath: string, s3Prefix: string, paths: string[], mtimes: number[]) => typedError<string[], string>(__TAURI_INVOKE("sync_download_files", { vaultPath, s3Prefix, paths, mtimes })),
+	syncUploadManifest: (s3Prefix: string, manifest: Manifest_Deserialize) => typedError<null, string>(__TAURI_INVOKE("sync_upload_manifest", { s3Prefix, manifest })),
+	syncDeleteFiles: (s3Prefix: string, paths: string[]) => typedError<null, string>(__TAURI_INVOKE("sync_delete_files", { s3Prefix, paths })),
+	syncLoadRemoteManifest: (s3Prefix: string) => typedError<{
+	version: number,
+	files: ManifestEntry_Serialize[],
+} | null, string>(__TAURI_INVOKE("sync_load_remote_manifest", { s3Prefix })),
+	syncWriteRemoteCopy: (vaultPath: string, s3Prefix: string, relPath: string, destPath: string, modified: number) => typedError<null, string>(__TAURI_INVOKE("sync_write_remote_copy", { vaultPath, s3Prefix, relPath, destPath, modified })),
 	ptySpawn: (id: number, cols: number, rows: number, onOutput: Channel<string>, onExit: Channel<number>) => typedError<null, string>(__TAURI_INVOKE("pty_spawn", { id, cols, rows, onOutput, onExit })),
 	ptyWrite: (id: number, data: string) => typedError<null, string>(__TAURI_INVOKE("pty_write", { id, data })),
 	ptyResize: (id: number, cols: number, rows: number) => typedError<null, string>(__TAURI_INVOKE("pty_resize", { id, cols, rows })),
@@ -225,19 +231,17 @@ export type TreeEntry = {
 	depth: number,
 };
 
-export type VaultKeys = {
+export type VaultId = {
 	vault_id: string,
-	encryption_key: number[],
 };
 
-export type VaultProfile = {
+export type VaultProfileInfo = {
 	name: string,
-	mnemonic: string,
 	vault_path: string,
 };
 
-export type VaultProfiles = {
-	profiles: VaultProfile[],
+export type VaultProfilesInfo = {
+	profiles: VaultProfileInfo[],
 	last_used: string | null,
 };
 

@@ -7,7 +7,7 @@ import { webHref } from '$lib/utils/web-link';
 import { toast } from '$lib/stores/toast.svelte';
 import * as m from '$lib/paraglide/messages.js';
 import { contextOf } from './context';
-import { decodeDestination } from './resolve';
+import { decodeDestination, normalizeRel } from './resolve';
 import { WIKI_LINK } from './syntax';
 
 interface LinkTarget {
@@ -63,6 +63,13 @@ export function openHref(href: string, vaultPath: string | null): void {
 	const abs = isLocalfileUrl(href)
 		? toOsPath(decodeDestination(stripLocalfilePrefix(href) ?? ''))
 		: toOsPath(`${vaultPath}/${decodeDestination(href)}`);
+	// A pasted or synced link can point at any file on disk; only open what resolves inside the vault.
+	const root = normalizeRel(vaultPath);
+	const target = normalizeRel(abs);
+	if (target !== root && !target.startsWith(`${root}/`)) {
+		toast.error(m.toast_link_outside_vault());
+		return;
+	}
 	openPath(abs).catch((err) => toast.error(m.toast_cannot_open_file({ error: String(err) })));
 }
 

@@ -67,7 +67,8 @@
 
 	onMount(async () => {
 		try {
-			loadingTask = pdfjsLib.getDocument({ data });
+			// pdf.js transfers the buffer to its worker, detaching the tab's stored copy.
+			loadingTask = pdfjsLib.getDocument({ data: data.slice() });
 			pdf = await loadingTask.promise;
 			const first = await pdf.getPage(1);
 			const viewport = first.getViewport({ scale: 1 });
@@ -246,7 +247,6 @@
 </div>
 
 <style>
-	/* PDF.js positions the text layer absolutely and reads --total-scale-factor. */
 	.pdf-text-layer {
 		position: absolute;
 		inset: 0;

@@ -1,25 +1,37 @@
 <script lang="ts">
 	import { vault } from '$lib/stores/vault.svelte';
 	import { toast } from '$lib/stores/toast.svelte';
-	import { saveVaultProfile } from '$lib/session/bridge';
+	import { renameVaultProfile, revealMnemonic } from '$lib/session/bridge';
 	import { Button, Input, Field, Section } from '$lib/ui';
 	import { KeyRound, Eye, EyeOff, FolderOpen } from '@lucide/svelte';
 	import * as m from '$lib/paraglide/messages.js';
 
 	let showPassphrase = $state(false);
+	let passphrase = $state('');
 	let editingVaultName = $derived(vault.profileName ?? '');
 
 	async function handleSaveVaultName() {
-		if (!vault.vaultPath || !vault.mnemonic) return;
+		if (!vault.vaultPath) return;
 		const name = editingVaultName.trim() || 'Vault';
 		try {
-			await saveVaultProfile({
-				name,
-				mnemonic: vault.mnemonic,
-				vault_path: vault.vaultPath
-			});
+			await renameVaultProfile(vault.vaultPath, name);
 			vault.profileName = name;
 			toast.success(m.toast_settings_saved());
+		} catch (err) {
+			toast.error(String(err));
+		}
+	}
+
+	async function togglePassphrase() {
+		if (showPassphrase) {
+			showPassphrase = false;
+			passphrase = '';
+			return;
+		}
+		if (!vault.vaultPath) return;
+		try {
+			passphrase = await revealMnemonic(vault.vaultPath);
+			showPassphrase = true;
 		} catch (err) {
 			toast.error(String(err));
 		}
@@ -43,7 +55,7 @@
 			<div class="flex-1 overflow-hidden">
 				{#if showPassphrase}
 					<span class="font-mono text-sm leading-[1.6] text-foreground [word-spacing:0.3em]"
-						>{vault.mnemonic ?? ''}</span
+						>{passphrase}</span
 					>
 				{:else}
 					<span class="font-mono text-sm tracking-widest text-subtle-foreground"
@@ -53,7 +65,7 @@
 			</div>
 			<button
 				class="flex size-7 shrink-0 cursor-pointer items-center justify-center rounded-xs border-none bg-transparent p-0 text-subtle-foreground transition-colors duration-150 ease-out hover:text-foreground"
-				onclick={() => (showPassphrase = !showPassphrase)}
+				onclick={togglePassphrase}
 				title={showPassphrase ? m.settings_vault_hide() : m.settings_vault_show()}
 			>
 				{#if showPassphrase}

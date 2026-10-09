@@ -26,7 +26,7 @@ const PATTERNS = [
 		/(?:TAURI_SIGNING_PRIVATE_KEY|TAURI_PRIVATE_KEY)\s*[:=]\s*["']?(?!\s*$)(?!\$\{\{)[^\s"']{16,}/,
 		'Tauri updater signing key'
 	],
-	[/(?:aws_)?secret_access_key\s*[:=]\s*["'][A-Za-z0-9/+=]{30,}["']/i, 'S3 secret access key']
+	[/(?:aws_)?secret_access_key\s*[:=]\s*["']?[A-Za-z0-9/+=]{30,}["']?/i, 'S3 secret access key']
 ];
 
 for (const f of files) {

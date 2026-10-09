@@ -1,7 +1,4 @@
-package-lock.json
-yarn.lock
 bun.lock
-bun.lockb
 /static/
 /build/
 /.svelte-kit/

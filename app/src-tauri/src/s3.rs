@@ -4,7 +4,6 @@ use serde::{Deserialize, Serialize};
 use std::fmt;
 use std::sync::Mutex;
 use tauri::State;
-use tauri::ipc::Response;
 
 #[derive(Serialize, Deserialize, Clone, specta::Type)]
 pub struct S3Config {
@@ -82,21 +81,4 @@ pub async fn s3_test_connection(state: State<'_, S3State>) -> Result<String, Str
         .map_err(|e| format!("Connection failed: {e}"))?;
 
     Ok(format!("Connected. {} prefixes found.", results.len()))
-}
-
-#[tauri::command]
-pub async fn s3_download(key: String, state: State<'_, S3State>) -> Result<Response, String> {
-    let bucket = get_bucket(&state)?;
-    let response = bucket
-        .get_object(&key)
-        .await
-        .map_err(|e| format!("Download failed: {e}"))?;
-
-    // rust-s3 returns Ok for HTTP error statuses too, handing back the provider's XML error page as the body, which would reach decrypt_blob and surface as "Decryption failed".
-    let status = response.status_code();
-    if !(200..300).contains(&status) {
-        return Err(format!("Download failed: HTTP {status} for {key}"));
-    }
-
-    Ok(Response::new(response.to_vec()))
 }

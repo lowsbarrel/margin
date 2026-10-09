@@ -62,15 +62,15 @@ pub(super) async fn delete_files(
         );
         tasks.spawn(async move {
             match bucket.delete_object(&key).await {
-                Ok(_) => Ok(()),
-                Err(e) => {
-                    let err_str = format!("{e}");
-                    if err_str.contains("NoSuchKey") || err_str.contains("404") {
+                Ok(response) => {
+                    let status = response.status_code();
+                    if status == 404 || (200..300).contains(&status) {
                         Ok(())
                     } else {
-                        Err(format!("Delete failed for {rel}: {e}"))
+                        Err(format!("Delete failed for {rel}: HTTP {status}"))
                     }
                 }
+                Err(e) => Err(format!("Delete failed for {rel}: {e}")),
             }
         });
     })
@@ -98,10 +98,14 @@ pub(super) async fn upload_files(
                 .await
                 .map_err(|e| format!("Failed to read {}: {e}", full.display()))?;
             let enc = crate::crypto::encrypt_blob(data, encryption_key)?;
-            bucket
+            let response = bucket
                 .put_object(&key, &enc)
                 .await
                 .map_err(|e| format!("Upload failed for {rel}: {e}"))?;
+            let status = response.status_code();
+            if !(200..300).contains(&status) {
+                return Err(format!("Upload failed for {rel}: HTTP {status}"));
+            }
             Ok(())
         });
     })
@@ -142,28 +146,40 @@ pub(super) async fn download_files(
             }
             let dec = crate::crypto::decrypt_blob(response.bytes().to_vec(), encryption_key)?;
 
-            if let Some(parent) = dest.parent() {
-                tokio::fs::create_dir_all(parent)
-                    .await
-                    .map_err(|e| format!("Failed to create directory: {e}"))?;
+            if let Some(parent) = dest.parent()
+                && let Err(e) = tokio::fs::create_dir_all(parent).await
+            {
+                eprintln!("Failed to create directory for {rel}: {e}");
+                return Ok(Some(rel));
             }
 
             // This write discards a local version the user did not ask to lose, so the bytes it replaces are snapshotted first.
             if dest.exists() {
-                let local = tokio::fs::read(&dest).await.unwrap_or_default();
+                let local = tokio::fs::read(&dest).await.map_err(|e| {
+                    format!("Failed to read {} before overwrite: {e}", dest.display())
+                })?;
                 if local != dec {
                     let vault = vault.clone();
                     let history_path = history_path.clone();
-                    let _ = tokio::task::spawn_blocking(move || {
+                    tokio::task::spawn_blocking(move || {
                         crate::history::save_snapshot_inner(&vault, &history_path, &local)
                     })
-                    .await;
+                    .await
+                    .map_err(|e| format!("Snapshot task failed for {rel}: {e}"))??;
                 }
             }
 
-            tokio::fs::write(&dest, &dec)
-                .await
-                .map_err(|e| format!("Failed to write {}: {e}", dest.display()))?;
+            let write_dest = dest.clone();
+            let write_data = dec;
+            if let Err(e) = tokio::task::spawn_blocking(move || {
+                crate::fs::atomic_write(&write_dest, &write_data)
+            })
+            .await
+            .map_err(|e| format!("Write task failed for {rel}: {e}"))?
+            {
+                eprintln!("Failed to write {rel}: {e}");
+                return Ok(Some(rel));
+            }
 
             filetime::set_file_mtime(&dest, filetime::FileTime::from_unix_time(mtime as i64, 0))
                 .map_err(|e| format!("Failed to set mtime for {}: {e}", dest.display()))?;
@@ -184,10 +200,14 @@ pub(super) async fn upload_manifest(
     let json = serde_json::to_vec(manifest).map_err(|e| format!("JSON serialize failed: {e}"))?;
     let enc = crate::crypto::encrypt_blob(json, encryption_key.to_vec())?;
     let key = format!("{}manifest.enc", s3_prefix);
-    bucket
+    let response = bucket
         .put_object(&key, &enc)
         .await
         .map_err(|e| format!("Manifest upload failed: {e}"))?;
+    let status = response.status_code();
+    if !(200..300).contains(&status) {
+        return Err(format!("Manifest upload failed: HTTP {status}"));
+    }
 
     Ok(())
 }

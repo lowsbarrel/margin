@@ -2,15 +2,19 @@ use crate::fs::VaultPathState;
 use portable_pty::{ChildKiller, CommandBuilder, MasterPty, PtyPair, PtySize, native_pty_system};
 use std::collections::HashMap;
 use std::io::{Read, Write};
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use tauri::ipc::Channel;
 
 const MAX_MESSAGE: usize = 4096;
 
+static NEXT_GENERATION: AtomicU64 = AtomicU64::new(1);
+
 pub(crate) struct Session {
     master: Box<dyn MasterPty + Send>,
-    writer: Box<dyn Write + Send>,
+    writer: std::sync::mpsc::Sender<Vec<u8>>,
     killer: Box<dyn ChildKiller + Send + Sync>,
+    generation: u64,
 }
 
 pub struct TerminalState(pub(crate) Arc<Mutex<HashMap<u32, Session>>>);
@@ -36,7 +40,6 @@ fn size(cols: u16, rows: u16) -> PtySize {
     }
 }
 
-// On unix this runs $SHELL as a login shell (argv0 prefixed with `-`), which is what gives a GUI-launched app the PATH path_helper builds.
 fn default_shell() -> CommandBuilder {
     CommandBuilder::new_default_prog()
 }
@@ -116,6 +119,21 @@ fn spawn_session(
         .take_writer()
         .map_err(|e| format!("Failed to write to the PTY: {e}"))?;
     let killer = child.clone_killer();
+    let generation = NEXT_GENERATION.fetch_add(1, Ordering::Relaxed);
+
+    let (tx, rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    std::thread::spawn(move || {
+        let mut writer = writer;
+        while let Ok(data) = rx.recv() {
+            if writer
+                .write_all(&data)
+                .and_then(|_| writer.flush())
+                .is_err()
+            {
+                break;
+            }
+        }
+    });
 
     let replaced = sessions
         .lock()
@@ -124,11 +142,14 @@ fn spawn_session(
             id,
             Session {
                 master,
-                writer,
+                writer: tx,
                 killer,
+                generation,
             },
         );
-    drop(replaced);
+    if let Some(mut replaced) = replaced {
+        let _ = replaced.killer.kill();
+    }
 
     std::thread::spawn(move || pump(reader, |text| on_output.send(text.to_owned()).is_ok()));
 
@@ -136,7 +157,9 @@ fn spawn_session(
     std::thread::spawn(move || {
         let code = child.wait().map_or(-1, |status| status.exit_code() as i32);
         let _ = on_exit.send(code);
-        if let Ok(mut map) = owned.lock() {
+        if let Ok(mut map) = owned.lock()
+            && map.get(&id).map(|session| session.generation) == Some(generation)
+        {
             map.remove(&id);
         }
     });
@@ -173,18 +196,17 @@ pub fn pty_write(
     data: String,
     state: tauri::State<'_, TerminalState>,
 ) -> Result<(), String> {
-    let mut sessions = state
+    let sessions = state
         .0
         .lock()
         .map_err(|_| "Terminal state is poisoned".to_string())?;
     let session = sessions
-        .get_mut(&id)
+        .get(&id)
         .ok_or_else(|| format!("Terminal {id} is not running"))?;
     session
         .writer
-        .write_all(data.as_bytes())
-        .and_then(|_| session.writer.flush())
-        .map_err(|e| format!("Failed to write to the terminal: {e}"))
+        .send(data.into_bytes())
+        .map_err(|_| format!("Terminal {id} is not running"))
 }
 
 #[tauri::command]
@@ -208,7 +230,7 @@ pub fn pty_resize(
         .map_err(|e| format!("Failed to resize the terminal: {e}"))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 #[specta::specta]
 pub fn pty_kill(id: u32, state: tauri::State<'_, TerminalState>) -> Result<(), String> {
     let session = state

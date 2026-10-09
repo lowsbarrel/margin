@@ -53,25 +53,25 @@ export async function renameHistory(
 	if (r.status === 'error') throw r.error;
 }
 
-export async function listTrash(vaultPath: string): Promise<TrashItem[]> {
-	const r = await commands.trashList(vaultPath);
+export async function listTrash(): Promise<TrashItem[]> {
+	const r = await commands.trashList();
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-export async function restoreTrash(vaultPath: string, id: string): Promise<string> {
-	const r = await commands.trashRestore(vaultPath, id);
+export async function restoreTrash(id: string): Promise<string> {
+	const r = await commands.trashRestore(id);
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }
 
-export async function deleteTrash(vaultPath: string, id: string): Promise<void> {
-	const r = await commands.trashDelete(vaultPath, id);
+export async function deleteTrash(id: string): Promise<void> {
+	const r = await commands.trashDelete(id);
 	if (r.status === 'error') throw r.error;
 }
 
-export async function emptyTrash(vaultPath: string): Promise<number> {
-	const r = await commands.trashEmpty(vaultPath);
+export async function emptyTrash(): Promise<number> {
+	const r = await commands.trashEmpty();
 	if (r.status === 'error') throw r.error;
 	return r.data;
 }

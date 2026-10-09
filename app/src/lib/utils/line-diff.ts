@@ -8,6 +8,7 @@ export interface DiffLine {
 }
 
 const MAX_DIFF_LINES = 20_000;
+const MAX_EDIT_DISTANCE = 2_000;
 
 function toLines(text: string): string[] {
 	return text.split('\n').map((line) => (line.endsWith('\r') ? line.slice(0, -1) : line));
@@ -18,17 +19,19 @@ interface Edit {
 	text: string;
 }
 
-function editScript(a: string[], b: string[]): Edit[] {
+function editScript(a: string[], b: string[]): Edit[] | null {
 	const n = a.length;
 	const m = b.length;
 	const max = n + m;
 	const offset = max;
+	// Backtracking only ever reads diagonals in [-d, d], so each step stores just that slice.
 	const trace: number[][] = [];
 	const v = new Int32Array(2 * max + 1);
 
 	let found = -1;
 	outer: for (let d = 0; d <= max; d++) {
-		trace.push(Array.from(v));
+		if (d > MAX_EDIT_DISTANCE) return null;
+		trace.push(Array.from(v.slice(offset - d, offset + d + 1)));
 		for (let k = -d; k <= d; k += 2) {
 			let x: number;
 			if (k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])) {
@@ -48,7 +51,7 @@ function editScript(a: string[], b: string[]): Edit[] {
 			}
 		}
 	}
-	if (found < 0) return [];
+	if (found < 0) return null;
 
 	const edits: Edit[] = [];
 	let x = n;
@@ -64,9 +67,9 @@ function editScript(a: string[], b: string[]): Edit[] {
 			break;
 		}
 		const k = x - y;
-		const down = k === -d || (k !== d && prev[offset + k - 1] < prev[offset + k + 1]);
+		const down = k === -d || (k !== d && prev[k + d - 1] < prev[k + d + 1]);
 		const prevK = down ? k + 1 : k - 1;
-		const prevX = prev[offset + prevK];
+		const prevX = prev[prevK + d];
 		const prevY = prevX - prevK;
 
 		while (x > prevX && y > prevY) {
@@ -92,6 +95,7 @@ export function diffLines(before: string, after: string): DiffLine[] | null {
 	if (a.length > MAX_DIFF_LINES || b.length > MAX_DIFF_LINES) return null;
 
 	const edits = editScript(a, b);
+	if (edits === null) return null;
 	const lines: DiffLine[] = [];
 	let beforeNo = 1;
 	let afterNo = 1;

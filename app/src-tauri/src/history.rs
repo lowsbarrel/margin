@@ -10,7 +10,6 @@ mod tests;
 
 use retention::{now_millis, prune_snapshots, snapshot_files, snapshot_millis};
 
-// A `..` component would escape .margin/history through the string concatenation in `history_dir`.
 fn reject_parent_dir(rel: &str) -> Result<(), String> {
     if Path::new(rel)
         .components()
@@ -216,6 +215,15 @@ pub fn rename_history(vault_path: &str, old_path: &str, new_path: &str) -> Resul
     let old_p = Path::new(&old_history);
     if !old_p.exists() {
         return Ok(());
+    }
+
+    // On a case-insensitive filesystem a case-only rename points at the same history entry, so merging would delete every snapshot.
+    if old_rel.to_lowercase() == new_rel.to_lowercase() {
+        if old_history == new_history {
+            return Ok(());
+        }
+        return fs::rename(old_p, Path::new(&new_history))
+            .map_err(|e| format!("Failed to rename history dir: {e}"));
     }
 
     merge_history_dirs(old_p, Path::new(&new_history))

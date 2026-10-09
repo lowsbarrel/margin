@@ -1,29 +1,22 @@
-import type { VaultKeys } from '$lib/crypto/bridge';
 import {
-	saveSession,
-	loadSession,
 	clearSession,
+	saveSession,
 	loadVaultProfiles,
 	saveVaultProfile,
-	type VaultProfile,
 	type VaultProfiles
 } from '$lib/session/bridge';
 
 interface VaultState {
 	isUnlocked: boolean;
 	vaultId: string | null;
-	encryptionKey: number[] | null;
 	vaultPath: string | null;
-	mnemonic: string | null;
 	profileName: string | null;
 }
 
 const state = $state<VaultState>({
 	isUnlocked: false,
 	vaultId: null,
-	encryptionKey: null,
 	vaultPath: null,
-	mnemonic: null,
 	profileName: null
 });
 
@@ -34,30 +27,24 @@ export const vault = {
 	get vaultId() {
 		return state.vaultId;
 	},
-	get encryptionKey() {
-		return state.encryptionKey;
-	},
 	get vaultPath() {
 		return state.vaultPath;
 	},
 
-	unlock(keys: VaultKeys, vaultPath: string, mnemonic?: string, profileName?: string) {
+	// mnemonicToSave is the value the user just typed; it is forwarded to Rust, never kept here.
+	unlock(vaultId: string, vaultPath: string, profileName?: string, mnemonicToSave?: string) {
 		const normalised = vaultPath.replaceAll('\\', '/');
 		state.isUnlocked = true;
-		state.vaultId = keys.vault_id;
-		state.encryptionKey = keys.encryption_key;
+		state.vaultId = vaultId;
 		state.vaultPath = normalised;
 		state.profileName = profileName ?? null;
-		if (mnemonic) {
-			state.mnemonic = mnemonic;
+		if (mnemonicToSave) {
 			if (profileName) {
-				saveVaultProfile({
-					name: profileName,
-					mnemonic,
-					vault_path: normalised
-				}).catch((err) => console.warn('Failed to save vault profile:', err));
+				saveVaultProfile(profileName, normalised, mnemonicToSave).catch((err) =>
+					console.warn('Failed to save vault profile:', err)
+				);
 			} else {
-				saveSession(mnemonic, normalised).catch((err) =>
+				saveSession(mnemonicToSave, normalised).catch((err) =>
 					console.warn('Failed to save session:', err)
 				);
 			}
@@ -67,19 +54,10 @@ export const vault = {
 	lock() {
 		state.isUnlocked = false;
 		state.vaultId = null;
-		state.encryptionKey = null;
 		state.vaultPath = null;
-		state.mnemonic = null;
 		state.profileName = null;
+		// Also clears the Rust key and vault path.
 		clearSession().catch((err) => console.warn('Failed to clear session:', err));
-	},
-
-	setMnemonic(m: string) {
-		state.mnemonic = m;
-	},
-
-	get mnemonic() {
-		return state.mnemonic;
 	},
 
 	get profileName() {
@@ -88,15 +66,6 @@ export const vault = {
 
 	set profileName(name: string | null) {
 		state.profileName = name;
-	},
-
-	async getSavedSession(): Promise<VaultProfile | null> {
-		try {
-			return await loadSession();
-		} catch (err) {
-			console.warn('Failed to load saved session:', err);
-			return null;
-		}
 	},
 
 	async getVaultProfiles(): Promise<VaultProfiles> {

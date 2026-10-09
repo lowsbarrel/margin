@@ -20,9 +20,11 @@ pub fn parse_wiki_links(text: &str) -> Vec<String> {
                     .any(|&b| b == b'[' || b == b']' || b == b'\n')
                     && let Ok(title) = std::str::from_utf8(title_bytes)
                 {
-                    let title = title.trim();
-                    if !title.is_empty() {
-                        results.push(title.to_string());
+                    // `[[Target|alias]]` and `[[Target#heading]]` both link to Target; a table-escaped `\|` leaves a trailing backslash.
+                    let target = title.split(['|', '#']).next().unwrap_or(title).trim();
+                    let target = target.strip_suffix('\\').unwrap_or(target).trim();
+                    if !target.is_empty() {
+                        results.push(target.to_string());
                     }
                 }
                 i = close + 2;
@@ -60,5 +62,11 @@ mod tests {
     fn image_embeds_are_not_wiki_links() {
         let links = parse_wiki_links("![[image.png]] and [[real link]]");
         assert_eq!(links.as_slice(), ["real link"]);
+    }
+
+    #[test]
+    fn aliases_headings_and_escaped_pipes_reduce_to_the_target() {
+        let links = parse_wiki_links("[[Project|the plan]] [[Project#Goals]] [[Project\\|x]]");
+        assert_eq!(links.as_slice(), ["Project", "Project", "Project"]);
     }
 }

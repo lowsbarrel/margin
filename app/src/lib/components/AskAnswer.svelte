@@ -24,17 +24,25 @@
 	onMount(() => {
 		let alive = true;
 		void (async () => {
-			const [{ createLiveEditor }, { EditorState, StateEffect }, { EditorView }] =
-				await Promise.all([
-					import('$lib/editor/live/editor-factory'),
-					import('@codemirror/state'),
-					import('@codemirror/view')
-				]);
+			const [{ createLiveEditor }, { EditorState }, { EditorView }] = await Promise.all([
+				import('$lib/editor/live/editor-factory'),
+				import('@codemirror/state'),
+				import('@codemirror/view')
+			]);
 			if (!alive || !host) return;
 			const editor = await createLiveEditor({
 				parent: host,
 				doc: markdown,
 				source: false,
+				extensions: [
+					staticPreview.of(true),
+					EditorState.readOnly.of(true),
+					EditorView.editable.of(false),
+					EditorView.theme({
+						'.cm-content': { padding: '0', margin: '0', maxWidth: 'none' },
+						'.cm-scroller': { overflow: 'visible' }
+					})
+				],
 				vaultPath: () => vault.vaultPath,
 				notePath: () => '',
 				attachmentFolder: () => '',
@@ -53,17 +61,6 @@
 				editor.destroy();
 				return;
 			}
-			editor.view.dispatch({
-				effects: StateEffect.appendConfig.of([
-					staticPreview.of(true),
-					EditorState.readOnly.of(true),
-					EditorView.editable.of(false),
-					EditorView.theme({
-						'.cm-content': { padding: '0', margin: '0', maxWidth: 'none' },
-						'.cm-scroller': { overflow: 'visible' }
-					})
-				])
-			});
 			handle = editor;
 		})();
 		return () => {

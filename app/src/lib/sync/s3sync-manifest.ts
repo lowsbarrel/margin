@@ -1,5 +1,3 @@
-import { s3Download } from '$lib/s3/bridge';
-import { decryptBlob } from '$lib/crypto/bridge';
 import { walkDirectory } from '$lib/fs/bridge';
 import { hashFilesBatch, pruneTombstonesNative } from './bridge';
 
@@ -11,23 +9,6 @@ export type { ManifestEntry_Serialize as ManifestEntry } from '$lib/bindings';
 export type { Manifest_Serialize as Manifest } from '$lib/bindings';
 import type { ManifestEntry_Serialize as ManifestEntry } from '$lib/bindings';
 import type { Manifest_Serialize as Manifest } from '$lib/bindings';
-
-function validateManifest(obj: unknown): Manifest {
-	if (typeof obj !== 'object' || obj === null) throw new Error('Manifest is not an object');
-	const m = obj as Record<string, unknown>;
-	if (typeof m.version !== 'number') throw new Error('Manifest missing version');
-	if (!Array.isArray(m.files)) throw new Error('Manifest missing files array');
-	for (const entry of m.files) {
-		if (typeof entry !== 'object' || entry === null) throw new Error('Invalid manifest entry');
-		const e = entry as Record<string, unknown>;
-		if (typeof e.path !== 'string') throw new Error('Manifest entry missing path');
-		if (typeof e.hash !== 'string') throw new Error('Manifest entry missing hash');
-		if (typeof e.modified !== 'number') throw new Error('Manifest entry missing modified');
-		if (e.deleted_at !== undefined && typeof e.deleted_at !== 'number')
-			throw new Error('Manifest entry has invalid deleted_at');
-	}
-	return obj as Manifest;
-}
 
 interface LocalFile {
 	path: string;
@@ -74,22 +55,6 @@ export async function buildLocalManifest(
 		});
 	}
 	return manifest;
-}
-
-export function isMissingRemoteManifestError(err: unknown): boolean {
-	const message = String(err);
-	return message.includes('NoSuchKey') || message.includes('Not Found') || message.includes('404');
-}
-
-export async function loadRemoteManifest(
-	s3Prefix: string,
-	encryptionKey: number[]
-): Promise<Manifest | null> {
-	const encManifest = await s3Download(`${s3Prefix}manifest.enc`);
-	const decManifest = await decryptBlob(encManifest, encryptionKey);
-	const parsed = validateManifest(JSON.parse(new TextDecoder().decode(decManifest)));
-	// A v2 manifest keyed plaintext paths; absent forces re-upload under HMAC keys.
-	return parsed.version >= 3 ? parsed : null;
 }
 
 export async function buildManifests(

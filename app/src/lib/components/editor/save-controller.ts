@@ -46,6 +46,8 @@ export class SaveController {
 			.catch((err) => {
 				console.error('Save failed:', err);
 				toast.error(m.toast_save_file_failed());
+				// Keep the text queued so the next flush/close retries instead of losing the edit.
+				this.pendingText ??= () => text;
 			});
 	}
 
