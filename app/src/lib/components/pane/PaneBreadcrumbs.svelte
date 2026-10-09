@@ -229,7 +229,7 @@
 					{/if}
 					<span class="min-w-0 flex-1 truncate">{rowName(row)}</span>
 					{#if folder}
-						<span class="shrink-0 text-xs text-subtle-foreground">{folder}</span>
+						<span class="max-w-1/2 min-w-0 truncate text-xs text-subtle-foreground">{folder}</span>
 					{/if}
 				</button>
 			{:else}
