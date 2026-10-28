@@ -1,0 +1,21 @@
+[package]
+name = "margin-search"
+description = "Full-text index, tags, backlinks and fuzzy file filtering."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+margin-kernel.workspace = true
+nucleo-matcher.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+
+[lints]
+workspace = true

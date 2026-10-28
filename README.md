@@ -12,7 +12,7 @@ English | [Italiano](README-IT.md)
 
 Margin is a desktop note app for people who want their notes to outlive the app. Every note is an ordinary Markdown file in a directory you pick: readable by any editor, greppable by any tool, and still yours the day you stop using Margin.
 
-It runs on macOS, Windows and Linux, is written in Rust and Svelte on top of Tauri, and has no account, no server and no telemetry. Anything that leaves your machine for sync is encrypted in Rust first, under a key derived from a 12-word passphrase that never leaves your device.
+It runs on macOS, Windows and Linux, is written entirely in Rust with a native GPU interface, and has no account, no server and no telemetry. Anything that leaves your machine for sync is encrypted in Rust first, under a key derived from a 12-word passphrase that never leaves your device.
 
 Download the latest version from the [releases page](https://github.com/lowsbarrel/margin/releases/latest).
 
@@ -117,43 +117,40 @@ Open **Settings → S3 Storage** and enter your bucket's endpoint, name, region 
 
 ## Building from Source
 
-Building requires Bun 1.3 or later, a Rust toolchain and the [Tauri v2 prerequisites](https://v2.tauri.app/start/prerequisites/) for your platform.
+Building needs [mise](https://mise.jdx.dev), which installs the pinned Rust toolchain helpers and dev tools, plus the platform build tools: Visual Studio Build Tools (C++) on Windows, Xcode Command Line Tools on macOS, and on Linux `gcc g++ clang libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libzstd-dev libasound2-dev libvulkan1`.
 
 ```bash
 git clone https://github.com/lowsbarrel/margin.git
-cd margin/app
-bun install
-bun run tauri dev
+cd margin
+mise install
+mise run setup
+mise run dev
 ```
 
-`bun run tauri build` produces a release bundle for the current platform. Before opening a pull request, run the checks from `app/`:
+`mise run bundle` builds the installers for the current platform. Before opening a pull request, run every check CI runs:
 
 ```bash
-bun run lint
-bun run check
-bun run check:invariants
-bun run check:secrets
-cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+mise run gate
 ```
 
-See [AGENTS.md](AGENTS.md) for engineering, tooling and verification conventions.
+See [AGENTS.md](AGENTS.md) for engineering conventions and [DESIGN.md](DESIGN.md) for the design rules.
 
 ## Architecture
 
 ```mermaid
 flowchart LR
-  UI["SvelteKit UI<br/>editor, Spotlight, panels"] -->|typed IPC| Rust["Rust commands"]
-  Rust --> Vault["Your vault<br/>plain .md files"]
-  Rust --> Local[".margin/<br/>search index, history, trash"]
-  Rust --> Crypto["AES-256-GCM-SIV"]
+  UI["GPUI interface<br/>editor, Spotlight, panels"] --> Core["Rust core<br/>use cases"]
+  Core --> Vault["Your vault<br/>plain .md files"]
+  Core --> Local[".margin/<br/>search index, history, trash"]
+  Core --> Crypto["AES-256-GCM-SIV"]
   Crypto --> Bucket[("Your S3 bucket<br/>ciphertext only")]
-  Rust --> AI["Your AI endpoint<br/>optional"]
-  Rust --> Shells["Terminal shells"]
+  Core --> AI["Your AI endpoint<br/>optional"]
+  Core --> Shells["Terminal shells"]
 ```
 
-Margin is a Tauri 2 app: a SvelteKit 5 interface running in the system webview, and a Rust core that owns the filesystem, encryption, the S3 client, the search index, history and the terminal. Every call from the interface goes through generated, typed bindings to a thin Rust command that delegates to a module.
+Margin is a native Rust app. The interface is drawn on the GPU with [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui), Zed's UI framework, and talks to a hexagonal core: use cases that know nothing about disks, databases or networks, and adapters that implement them. No web view, no JavaScript.
 
-Your notes stay as files on disk. Derived data (the SQLite full-text index, note history and the trash) lives in the vault's hidden `.margin/` folder and never leaves the machine. More detail is in [AGENTS.md](AGENTS.md).
+Your notes stay as files on disk. Derived data (the SQLite full-text index, note history and the trash) lives in the vault's hidden `.margin/` folder and never leaves the machine. More detail is in [docs/architecture.md](docs/architecture.md).
 
 ## Contributing
 

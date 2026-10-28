@@ -12,7 +12,7 @@
 
 Margin è un'app desktop per le note, pensata per chi vuole che le proprie note sopravvivano all'app. Ogni nota è un normale file Markdown in una cartella che scegli tu: leggibile da qualsiasi editor, ricercabile da qualsiasi strumento, e ancora tua il giorno in cui smetti di usare Margin.
 
-Funziona su macOS, Windows e Linux, è scritta in Rust e Svelte su Tauri, e non ha account, server né telemetria. Tutto ciò che lascia il tuo computer per la sincronizzazione viene prima cifrato in Rust, con una chiave derivata da una passphrase di 12 parole che non lascia mai il tuo dispositivo.
+Funziona su macOS, Windows e Linux, è scritta interamente in Rust con un'interfaccia nativa su GPU, e non ha account, server né telemetria. Tutto ciò che lascia il tuo computer per la sincronizzazione viene prima cifrato in Rust, con una chiave derivata da una passphrase di 12 parole che non lascia mai il tuo dispositivo.
 
 Scarica l'ultima versione dalla [pagina delle release](https://github.com/lowsbarrel/margin/releases/latest).
 
@@ -117,43 +117,40 @@ Apri **Impostazioni → Archiviazione S3** e inserisci endpoint, nome, regione e
 
 ## Compilare dai sorgenti
 
-Servono Bun 1.3 o successivo, una toolchain Rust e i [prerequisiti di Tauri v2](https://v2.tauri.app/start/prerequisites/) per la tua piattaforma.
+Serve [mise](https://mise.jdx.dev), che installa gli strumenti di sviluppo alle versioni fissate, più gli strumenti di build della piattaforma: Visual Studio Build Tools (C++) su Windows, Xcode Command Line Tools su macOS e, su Linux, `gcc g++ clang libfontconfig-dev libwayland-dev libxkbcommon-x11-dev libx11-xcb-dev libzstd-dev libasound2-dev libvulkan1`.
 
 ```bash
 git clone https://github.com/lowsbarrel/margin.git
-cd margin/app
-bun install
-bun run tauri dev
+cd margin
+mise install
+mise run setup
+mise run dev
 ```
 
-`bun run tauri build` produce un pacchetto di release per la piattaforma corrente. Prima di aprire una pull request, esegui i controlli da `app/`:
+`mise run bundle` produce gli installer per la piattaforma corrente. Prima di aprire una pull request, esegui tutti i controlli della CI:
 
 ```bash
-bun run lint
-bun run check
-bun run check:invariants
-bun run check:secrets
-cd src-tauri && cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test
+mise run gate
 ```
 
-Vedi [AGENTS.md](AGENTS.md) per le convenzioni di sviluppo, strumenti e verifica.
+Vedi [AGENTS.md](AGENTS.md) per le convenzioni di sviluppo e [DESIGN.md](DESIGN.md) per le regole di design.
 
 ## Architettura
 
 ```mermaid
 flowchart LR
-  UI["Interfaccia SvelteKit<br/>editor, Spotlight, pannelli"] -->|IPC tipizzato| Rust["Comandi Rust"]
-  Rust --> Vault["Il tuo vault<br/>file .md semplici"]
-  Rust --> Local[".margin/<br/>indice, cronologia, cestino"]
-  Rust --> Crypto["AES-256-GCM-SIV"]
+  UI["Interfaccia GPUI<br/>editor, Spotlight, pannelli"] --> Core["Nucleo Rust<br/>casi d'uso"]
+  Core --> Vault["Il tuo vault<br/>file .md semplici"]
+  Core --> Local[".margin/<br/>indice, cronologia, cestino"]
+  Core --> Crypto["AES-256-GCM-SIV"]
   Crypto --> Bucket[("Il tuo bucket S3<br/>solo dati cifrati")]
-  Rust --> AI["Il tuo endpoint IA<br/>facoltativo"]
-  Rust --> Shells["Shell del terminale"]
+  Core --> AI["Il tuo endpoint IA<br/>facoltativo"]
+  Core --> Shells["Shell del terminale"]
 ```
 
-Margin è un'app Tauri 2: un'interfaccia SvelteKit 5 che gira nella webview di sistema e un nucleo Rust che gestisce file system, cifratura, client S3, indice di ricerca, cronologia e terminale. Ogni chiamata dall'interfaccia passa da binding tipizzati generati a un comando Rust sottile che delega a un modulo.
+Margin è un'app Rust nativa. L'interfaccia è disegnata sulla GPU con [GPUI](https://github.com/zed-industries/zed/tree/main/crates/gpui), il framework UI di Zed, e parla con un nucleo esagonale: casi d'uso che non sanno nulla di dischi, database o rete, e adattatori che li implementano. Nessuna webview, nessun JavaScript.
 
-Le note restano file su disco. I dati derivati (l'indice a testo pieno SQLite, la cronologia delle note e il cestino) stanno nella cartella nascosta `.margin/` del vault e non lasciano mai il computer. Maggiori dettagli in [AGENTS.md](AGENTS.md).
+Le note restano file su disco. I dati derivati (l'indice a testo pieno SQLite, la cronologia delle note e il cestino) stanno nella cartella nascosta `.margin/` del vault e non lasciano mai il computer. Maggiori dettagli in [docs/architecture.md](docs/architecture.md).
 
 ## Contribuire
 

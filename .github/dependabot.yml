@@ -10,18 +10,8 @@ updates:
       prefix: chore
       include: scope
 
-  - package-ecosystem: npm
-    directory: /app
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    commit-message:
-      prefix: chore
-      include: scope
-
   - package-ecosystem: cargo
-    directory: /app/src-tauri
+    directory: /
     schedule:
       interval: weekly
     cooldown:
@@ -29,3 +19,5 @@ updates:
     commit-message:
       prefix: chore
       include: scope
+    ignore:
+      - dependency-name: gpui-kit

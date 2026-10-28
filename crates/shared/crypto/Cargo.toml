@@ -1,0 +1,23 @@
+[package]
+name = "margin-crypto"
+description = "Margin's key derivation, encrypted blob format and S3 object keys, bit-exact with every release."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+aes-gcm-siv.workspace = true
+bip39.workspace = true
+hex.workspace = true
+hmac.workspace = true
+margin-kernel.workspace = true
+rand.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[lints]
+workspace = true

@@ -1,0 +1,24 @@
+[package]
+name = "margin-fs"
+description = "File system, app data, clock and watcher adapters over the operating system."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+dirs.workspace = true
+filetime.workspace = true
+margin-kernel.workspace = true
+notify.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+tempfile.workspace = true

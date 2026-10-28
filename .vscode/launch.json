@@ -1,29 +1,40 @@
 {
-	"version": "0.2.0",
-	"configurations": [
-		{
-			"name": "Tauri: debug Rust",
-			"type": "lldb",
-			"request": "launch",
-			"cargo": {
-				"args": [
-					"build",
-					"--manifest-path=./app/src-tauri/Cargo.toml",
-					"--no-default-features",
-					"--bin=app"
-				]
-			},
-			"cwd": "${workspaceFolder}/app/src-tauri",
-			"preLaunchTask": "bun: dev"
-		},
-		{
-			"name": "Debug current Node script",
-			"type": "node",
-			"request": "launch",
-			"program": "${file}",
-			"cwd": "${workspaceFolder}/app",
-			"console": "integratedTerminal",
-			"skipFiles": ["<node_internals>/**", "**/node_modules/**"]
-		}
-	]
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Margin: debug",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--package", "margin-desktop", "--bin", "margin"]
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "Margin: debug tests in crate",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["test", "--no-run", "--package", "${input:crate}"]
+      },
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "xtask: check",
+      "type": "lldb",
+      "request": "launch",
+      "cargo": {
+        "args": ["build", "--package", "xtask"]
+      },
+      "args": ["check"],
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "inputs": [
+    {
+      "id": "crate",
+      "type": "promptString",
+      "description": "Package to test, e.g. margin-sync"
+    }
+  ]
 }

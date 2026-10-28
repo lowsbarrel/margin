@@ -1,0 +1,23 @@
+[package]
+name = "margin-sqlite"
+description = "SQLite FTS5 implementation of the search index port."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+margin-kernel.workspace = true
+margin-search.workspace = true
+parking_lot.workspace = true
+rusqlite.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+tempfile.workspace = true
+
+[lints]
+workspace = true

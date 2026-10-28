@@ -3,7 +3,7 @@
 ## Checklist
 
 - [ ] Title is Conventional Commits (`type(scope): summary`, ≤72 chars); it becomes the squash subject
-- [ ] `bun run lint && bun run check && bun run check:invariants && bun run check:secrets` pass in `app/`
-- [ ] `cargo fmt --check && cargo clippy --all-targets -- -D warnings && cargo test` pass in `app/src-tauri`
-- [ ] Paraglide messages (`app/messages/`) updated if copy changed; bindings regenerated (`bun run gen:bindings`) if a Rust command signature changed
-- [ ] Verified the change in a local `bun run tauri dev` run
+- [ ] `mise run gate` passes
+- [ ] Copy changes are in every `messages/<locale>.json`
+- [ ] A visible change follows DESIGN.md and was checked in the running app (`mise run dev`) in light and dark
+- [ ] Docs (`AGENTS.md`, `DESIGN.md`, `docs/`) updated if a rule, design or decision changed

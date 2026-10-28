@@ -1,41 +1,29 @@
 {
-	"editor.defaultFormatter": "esbenp.prettier-vscode",
-	"editor.formatOnSave": true,
-	"editor.codeActionsOnSave": {
-		"source.fixAll.eslint": "explicit"
-	},
-	"[svelte]": {
-		"editor.defaultFormatter": "esbenp.prettier-vscode"
-	},
-	"[rust]": {
-		"editor.defaultFormatter": "rust-lang.rust-analyzer"
-	},
-	"eslint.validate": ["javascript", "typescript", "svelte"],
-	"eslint.workingDirectories": ["app"],
-
-	"js/ts.tsdk.path": "app/node_modules/typescript/lib",
-	"js/ts.tsdk.promptToUseWorkspaceVersion": true,
-	"js/ts.tsserver.experimental.enableProjectDiagnostics": true,
-	"svelte.enable-ts-plugin": true,
-	"tailwindCSS.rootFontSize": 14,
-
-	"rust-analyzer.linkedProjects": ["app/src-tauri/Cargo.toml"],
-	"rust-analyzer.check.command": "clippy",
-	"rust-analyzer.check.extraArgs": ["--", "-D", "warnings"],
-
-	"npm.packageManager": "bun",
-	"files.exclude": {
-		"**/.svelte-kit": true,
-		"**/src-tauri/target": true
-	},
-	"search.exclude": {
-		"**/node_modules": true,
-		"**/src-tauri/target": true,
-		"**/src/lib/paraglide": true
-	},
-	"files.readonlyInclude": {
-		"app/src/lib/bindings.ts": true,
-		"app/src/lib/paraglide/**": true
-	},
-	"files.eol": "\n"
+  "editor.formatOnSave": true,
+  "files.eol": "\n",
+  "files.insertFinalNewline": true,
+  "files.trimTrailingWhitespace": true,
+  "[rust]": {
+    "editor.defaultFormatter": "rust-lang.rust-analyzer"
+  },
+  "[toml]": {
+    "editor.defaultFormatter": "tamasfe.even-better-toml"
+  },
+  "rust-analyzer.check.command": "clippy",
+  "rust-analyzer.check.allTargets": true,
+  "rust-analyzer.check.extraArgs": ["--", "-D", "warnings"],
+  "rust-analyzer.cargo.features": "all",
+  "rust-analyzer.rustfmt.extraArgs": ["+nightly-2026-10-27"],
+  "rust-analyzer.imports.granularity.group": "module",
+  "rust-analyzer.imports.prefix": "crate",
+  "rust-analyzer.completion.autoimport.enable": true,
+  "evenBetterToml.formatter.columnWidth": 100,
+  "evenBetterToml.formatter.indentString": "  ",
+  "files.exclude": {
+    "**/target": true
+  },
+  "search.exclude": {
+    "**/target": true,
+    "Cargo.lock": true
+  }
 }

@@ -1,0 +1,30 @@
+absolute-paths-max-segments = 2
+allow-unwrap-in-tests = true
+allow-expect-in-tests = true
+allow-print-in-tests = true
+avoid-breaking-exported-api = false
+too-many-lines-threshold = 100
+cognitive-complexity-threshold = 20
+max-fn-params-bools = 1
+doc-valid-idents = [
+  "GPUI",
+  "SQLite",
+  "OpenAI",
+  "macOS",
+  "DirectX",
+  "WebView2",
+  "BIP-39",
+  "AES-GCM-SIV",
+  "HMAC-SHA256",
+  "FTS5",
+  "..",
+  "PTYs",
+  "PTY",
+  "RaTeX",
+  "KaTeX",
+  "GitHub",
+]
+disallowed-types = [
+  { path = "std::sync::Mutex", reason = "use parking_lot::Mutex, which never poisons" },
+  { path = "std::sync::RwLock", reason = "use parking_lot::RwLock, which never poisons" },
+]

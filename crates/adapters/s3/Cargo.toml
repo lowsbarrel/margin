@@ -1,0 +1,25 @@
+[package]
+name = "margin-s3"
+description = "S3-compatible implementation of the blob store port."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+hex.workspace = true
+hmac.workspace = true
+margin-kernel.workspace = true
+margin-sync.workspace = true
+reqwest.workspace = true
+sha2.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

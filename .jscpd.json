@@ -1,0 +1,10 @@
+{
+  "threshold": 1,
+  "minTokens": 70,
+  "format": ["rust"],
+  "path": ["crates", "xtask"],
+  "ignore": ["**/target/**", "**/tests/**"],
+  "reporters": ["console"],
+  "absolute": false,
+  "gitignore": true
+}

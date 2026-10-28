@@ -1,4 +1,0 @@
-# `channel = "stable"` rather than a pinned patch: pinning forces a second toolchain download per clone.
-[toolchain]
-channel = "stable"
-components = ["rustfmt", "clippy"]

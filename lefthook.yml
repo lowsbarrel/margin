@@ -1,0 +1,28 @@
+pre-commit:
+  parallel: true
+  jobs:
+    - name: rustfmt
+      glob: "*.rs"
+      run: mise run fmt:check
+    - name: taplo
+      glob: "*.toml"
+      run: taplo fmt --check {staged_files}
+    - name: typos
+      run: typos {staged_files}
+    - name: xtask
+      run: cargo xtask check
+
+commit-msg:
+  jobs:
+    - name: conventional-commits
+      run: |
+        subject="$(head -n1 {1})"
+        case "$subject" in Merge\ *|fixup!\ *|squash!\ *) exit 0 ;; esac
+        echo "$subject" | grep -qE '^(feat|fix|docs|refactor|perf|test|build|ci|chore|revert)(\([a-z0-9./-]+\))?!?: .+' \
+          || { echo "not Conventional Commits: $subject"; exit 1; }
+        [ "${#subject}" -le 72 ] || { echo "subject over 72 characters"; exit 1; }
+
+pre-push:
+  jobs:
+    - name: gate
+      run: mise run gate

@@ -1,0 +1,27 @@
+[package]
+name = "margin-sync"
+description = "End-to-end encrypted synchronization of a vault with an object store."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+hex.workspace = true
+margin-crypto.workspace = true
+margin-dates.workspace = true
+margin-kernel.workspace = true
+margin-retry.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+
+[lints]
+workspace = true

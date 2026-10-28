@@ -1,0 +1,44 @@
+[package]
+name = "margin-desktop"
+description = "Margin, a local-first Markdown editor."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[[bin]]
+name = "margin"
+path = "src/main.rs"
+
+[dependencies]
+gpui-kit.workspace = true
+margin-ask.workspace = true
+margin-attachments.workspace = true
+margin-crypto.workspace = true
+margin-files.workspace = true
+margin-fs.workspace = true
+margin-history.workspace = true
+margin-i18n.workspace = true
+margin-kernel.workspace = true
+margin-llm.workspace = true
+margin-pty.workspace = true
+margin-s3.workspace = true
+margin-search.workspace = true
+margin-settings.workspace = true
+margin-sqlite.workspace = true
+margin-sync.workspace = true
+margin-terminals.workspace = true
+margin-theme.workspace = true
+margin-trash.workspace = true
+margin-vaults.workspace = true
+margin-workbench.workspace = true
+parking_lot.workspace = true
+regex.workspace = true
+thiserror.workspace = true
+tokio.workspace = true
+
+[lints]
+workspace = true

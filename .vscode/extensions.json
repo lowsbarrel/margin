@@ -1,13 +1,12 @@
 {
-	"recommendations": [
-		"svelte.svelte-vscode",
-		"bradlc.vscode-tailwindcss",
-		"rust-lang.rust-analyzer",
-		"vadimcn.vscode-lldb",
-		"tauri-apps.tauri-vscode",
-		"esbenp.prettier-vscode",
-		"dbaeumer.vscode-eslint",
-		"github.vscode-github-actions",
-		"redhat.vscode-yaml"
-	]
+  "recommendations": [
+    "rust-lang.rust-analyzer",
+    "vadimcn.vscode-lldb",
+    "tamasfe.even-better-toml",
+    "tekumara.typos-vscode",
+    "editorconfig.editorconfig",
+    "github.vscode-github-actions",
+    "redhat.vscode-yaml",
+    "hverlin.mise-vscode"
+  ]
 }

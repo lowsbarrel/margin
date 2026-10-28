@@ -1,0 +1,20 @@
+[package]
+name = "margin-retry"
+description = "Retry with exponential backoff for transient failures."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+margin-kernel.workspace = true
+rand.workspace = true
+
+[dev-dependencies]
+parking_lot.workspace = true
+
+[lints]
+workspace = true

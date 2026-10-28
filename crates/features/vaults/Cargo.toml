@@ -1,0 +1,24 @@
+[package]
+name = "margin-vaults"
+description = "Vault profiles: mnemonic generation, key derivation, unlock, rename and delete."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+margin-crypto.workspace = true
+margin-kernel.workspace = true
+parking_lot.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+
+[dev-dependencies]
+margin-test-support.workspace = true
+
+[lints]
+workspace = true
