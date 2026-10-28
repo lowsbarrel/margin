@@ -9,5 +9,20 @@ authors.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[dependencies]
+alacritty_terminal.workspace = true
+futures-channel.workspace = true
+futures-util.workspace = true
+gpui-kit.workspace = true
+margin-i18n.workspace = true
+margin-terminals.workspace = true
+margin-theme.workspace = true
+margin-workbench.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+margin-test-support.workspace = true
+
 [lints]
 workspace = true

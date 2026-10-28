@@ -6,7 +6,7 @@ use gpui_kit::{App, Global, Task};
 use margin_kernel::BoxFuture;
 
 pub trait NetworkRuntime: Send + Sync {
-    fn block_on<'future>(&self, future: BoxFuture<'future, ()>);
+    fn block_on(&self, future: BoxFuture<'_, ()>);
 }
 
 struct NetworkRuntimeGlobal(Arc<dyn NetworkRuntime>);
@@ -28,7 +28,7 @@ where
     T: Send + 'static,
     Work: FnOnce() -> T + Send + 'static,
 {
-    cx.background_spawn(async move { work() })
+    cx.background_executor().spawn(async move { work() })
 }
 
 pub fn run_async<T, Work>(cx: &App, work: Work) -> Task<T>
@@ -37,7 +37,7 @@ where
     Work: Future<Output = T> + Send + 'static,
 {
     let runtime = Arc::clone(&cx.global::<NetworkRuntimeGlobal>().0);
-    cx.background_spawn(async move {
+    cx.background_executor().spawn(async move {
         let mut output = None;
         runtime.block_on(Box::pin(async {
             output = Some(work.await);

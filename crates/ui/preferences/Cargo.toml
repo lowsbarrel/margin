@@ -1,0 +1,35 @@
+[package]
+name = "margin-preferences"
+description = "The settings dialog: vault, sync, AI, appearance, language, export and updates."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+margin-ask.workspace = true
+margin-i18n.workspace = true
+margin-kernel.workspace = true
+margin-settings.workspace = true
+margin-sync.workspace = true
+margin-theme.workspace = true
+margin-workbench.workspace = true
+parking_lot.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+margin-attachments.workspace = true
+margin-crypto.workspace = true
+margin-files.workspace = true
+margin-history.workspace = true
+margin-search.workspace = true
+margin-terminals.workspace = true
+margin-test-support.workspace = true
+margin-trash.workspace = true
+
+[lints]
+workspace = true

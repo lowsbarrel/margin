@@ -25,6 +25,14 @@ impl FileKind {
     }
 }
 
+#[must_use]
+pub fn file_title(path: &RelativePath) -> &str {
+    let name = path.file_name();
+    name.strip_suffix(".md")
+        .or_else(|| name.strip_suffix(".canvas"))
+        .unwrap_or(name)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -41,5 +49,14 @@ mod tests {
         assert_eq!(kind("paper.pdf"), FileKind::Pdf);
         assert_eq!(kind("archive.zip"), FileKind::Other);
         assert_eq!(kind("Makefile"), FileKind::Other);
+    }
+
+    #[test]
+    fn titles_hide_only_note_and_canvas_extensions() {
+        let title =
+            |path: &str| file_title(&RelativePath::new(path).expect("valid path")).to_owned();
+        assert_eq!(title("Projects/Roadmap.md"), "Roadmap");
+        assert_eq!(title("Board.canvas"), "Board");
+        assert_eq!(title("attachments/photo.png"), "photo.png");
     }
 }

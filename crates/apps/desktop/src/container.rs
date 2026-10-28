@@ -1,3 +1,4 @@
+use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -14,7 +15,7 @@ use margin_s3::S3BlobStore;
 use margin_search::SearchService;
 use margin_settings::{S3Config, Settings};
 use margin_sqlite::SqliteIndex;
-use margin_sync::SyncService;
+use margin_sync::{SnapshotStore, SyncService};
 use margin_terminals::Terminals;
 use margin_trash::TrashService;
 use margin_vaults::VaultService;
@@ -30,35 +31,42 @@ const INDEX_DATABASE: &str = ".margin/index.sqlite";
 const DOCS_FOLDER: &str = ".margin/docs";
 
 #[derive(Debug, Error)]
-pub(crate) enum ContainerError {
+pub enum ContainerError {
     #[error(transparent)]
     Store(#[from] StoreError),
     #[error(transparent)]
     Settings(#[from] margin_settings::Error),
 }
 
-pub(crate) fn app_services() -> Result<AppServices, ContainerError> {
-    let data_dir = margin_fs::app_data_dir()?;
+#[must_use]
+pub fn app_services(data_dir: PathBuf) -> AppServices {
     let app_data: Arc<dyn FileSystem> = Arc::new(StdFileSystem::new(data_dir.clone()));
-    app_data.create_dir_all(&RelativePath::root())?;
-    Ok(AppServices {
+    AppServices {
         vaults: Arc::new(VaultService::new(app_data)),
         host_files: Arc::new(StdHostFiles::new()),
         clock: Arc::new(SystemClock::new()),
         data_dir,
-    })
+    }
 }
 
-pub(crate) struct OpenedVault {
-    pub(crate) services: Arc<VaultServices>,
-    pub(crate) watcher: Arc<dyn Watcher>,
+pub struct OpenedVault {
+    pub services: Arc<VaultServices>,
+    pub watcher: Arc<dyn Watcher>,
 }
 
-pub(crate) fn open_vault(
+impl fmt::Debug for OpenedVault {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("OpenedVault")
+            .field("services", &self.services)
+            .finish_non_exhaustive()
+    }
+}
+
+pub fn open_vault(
     app: &AppServices,
     name: String,
     root: &Path,
-    vault: DerivedVault,
+    vault: &DerivedVault,
 ) -> Result<OpenedVault, ContainerError> {
     let root = root.to_path_buf();
     let files: Arc<dyn FileSystem> = Arc::new(StdFileSystem::new(root.clone()));
@@ -68,7 +76,7 @@ pub(crate) fn open_vault(
     )?;
     let clock: Arc<dyn Clock> = Arc::new(SystemClock::new());
     let history = Arc::new(History::new(Arc::clone(&files), Arc::clone(&clock)));
-    let history_store: Arc<dyn HistoryStore> = Arc::clone(&history) as Arc<dyn HistoryStore>;
+    let history_store: Arc<dyn HistoryStore> = Arc::<History>::clone(&history);
     let trash = Arc::new(TrashService::new(
         Arc::clone(&files),
         Arc::clone(&history_store),
@@ -124,7 +132,7 @@ pub(crate) fn open_vault(
         sync: Arc::new(RwLock::new(None)),
         sync_factory: factory,
         ask,
-        terminals: Terminals::new(Arc::new(NativePtyHost::default())),
+        terminals: Terminals::new(Arc::new(NativePtyHost)),
         root: root.clone(),
     });
     services.configure_sync();
@@ -137,7 +145,7 @@ pub(crate) fn open_vault(
 struct S3SyncFactory {
     files: Arc<dyn FileSystem>,
     clock: Arc<dyn Clock>,
-    snapshots: Arc<HistorySnapshots>,
+    snapshots: Arc<dyn SnapshotStore>,
     vault: DerivedVault,
 }
 
@@ -155,19 +163,8 @@ impl SyncFactory for S3SyncFactory {
             Arc::new(store),
             Arc::clone(&self.clock),
             Arc::new(TokioTimer),
-            Arc::clone(&self.snapshots) as Arc<dyn margin_sync::SnapshotStore>,
+            Arc::clone(&self.snapshots),
             self.vault.clone(),
         ))
     }
-}
-
-pub(crate) fn vault_name(root: &Path) -> String {
-    root.file_name().map_or_else(
-        || root.display().to_string(),
-        |name| name.to_string_lossy().into_owned(),
-    )
-}
-
-pub(crate) fn path_buf(raw: &str) -> PathBuf {
-    PathBuf::from(raw)
 }

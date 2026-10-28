@@ -1,1 +1,23 @@
+mod backlinks_panel;
+mod confirm_dialog;
+mod diff_view;
+mod history_list;
+mod history_panel;
+mod history_tasks;
+mod line_diff;
+mod list_key;
+mod panel_event;
+mod panel_header;
+mod snapshot_row;
+mod sync_status;
+mod trash_dialog;
+mod trash_filter;
+mod trash_row;
+mod trash_view;
+mod when;
 
+pub use backlinks_panel::BacklinksPanel;
+pub use history_panel::HistoryPanel;
+pub use panel_event::PanelEvent;
+pub use sync_status::SyncStatus;
+pub use trash_dialog::open_trash_dialog;

@@ -23,7 +23,7 @@ impl TokioNetwork {
 }
 
 impl NetworkRuntime for TokioNetwork {
-    fn block_on<'future>(&self, future: BoxFuture<'future, ()>) {
+    fn block_on(&self, future: BoxFuture<'_, ()>) {
         self.runtime.block_on(future);
     }
 }

@@ -22,6 +22,7 @@ margin-search.workspace = true
 margin-settings.workspace = true
 margin-sync.workspace = true
 margin-terminals.workspace = true
+margin-theme.workspace = true
 margin-trash.workspace = true
 margin-vaults.workspace = true
 parking_lot.workspace = true

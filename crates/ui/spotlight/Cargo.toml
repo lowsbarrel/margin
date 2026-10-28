@@ -9,5 +9,29 @@ authors.workspace = true
 repository.workspace = true
 publish.workspace = true
 
+[dependencies]
+futures-channel.workspace = true
+futures-util.workspace = true
+gpui-kit.workspace = true
+margin-ask.workspace = true
+margin-files.workspace = true
+margin-i18n.workspace = true
+margin-kernel.workspace = true
+margin-search.workspace = true
+margin-theme.workspace = true
+margin-workbench.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+margin-attachments.workspace = true
+margin-crypto.workspace = true
+margin-history.workspace = true
+margin-settings.workspace = true
+margin-sync.workspace = true
+margin-terminals.workspace = true
+margin-test-support.workspace = true
+margin-trash.workspace = true
+parking_lot.workspace = true
+
 [lints]
 workspace = true

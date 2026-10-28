@@ -1,0 +1,17 @@
+[package]
+name = "margin-editor-actions"
+description = "Note editor actions and their key bindings."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+margin-workbench.workspace = true
+
+[lints]
+workspace = true

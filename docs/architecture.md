@@ -120,22 +120,36 @@ Integration tests live in `tests/` and drive the service through fakes from
 
 Inbound adapters, one surface each, all built on `gpui-kit`:
 
-| Crate                | Owns                                                                 |
-| -------------------- | -------------------------------------------------------------------- |
-| `margin-theme`       | The light/dark token table and its projection onto the GPUI Kit theme |
-| `margin-i18n`        | Message lookup over `messages/{en,it}.json`, locale switching         |
-| `margin-editor`      | The live-preview/raw Markdown editor element and its commands         |
-| `margin-file-tree`   | Sidebar tree: virtualized rows, selection, rename, drag and drop      |
-| `margin-spotlight`   | The palette: files, full text, tags, ask, replace                     |
-| `margin-terminal`    | Terminal dock: `alacritty_terminal` grid element, tabs                |
-| `margin-viewers`     | Image, PDF and unknown-file views                                     |
-| `margin-canvas`      | The drawing canvas                                                    |
-| `margin-panels`      | Backlinks, history, trash, settings, sync status                      |
-| `margin-onboarding`  | Intro, vault picker and vault wizard                                  |
+| Crate                    | Owns                                                                 |
+| ------------------------ | -------------------------------------------------------------------- |
+| `margin-theme`           | The light/dark token table, the original type scale, its projection onto the GPUI Kit theme |
+| `margin-i18n`            | Message lookup over `messages/{en,it}.json`, locale switching         |
+| `margin-workbench`       | Shared UI vocabulary: vault services handle, actions, open requests, `TabContent`, the `DraggedFiles` drag payload |
+| `margin-panes`           | Panes and tab strips: splits, tab drag between panes, drop zones, closed-tab history |
+| `margin-breadcrumbs`     | The breadcrumb row above each tab and its folder menus                |
+| `margin-editor`          | The note editor view: input, selection, mouse, drop targets, saving   |
+| `margin-text-buffer`     | Text plus selections and grouped undo over a parsed `Document`        |
+| `margin-editor-commands` | Editing commands: lists, marks, autopair, slash items, paste rules, block moves |
+| `margin-editor-actions`  | Editor actions and their key bindings                                 |
+| `margin-editor-overlays` | Completion and slash menus, selection bubble, context menu, lightbox  |
+| `margin-editor-assets`   | Code highlighting, math and diagram images, embeds, link resolution   |
+| `margin-live-preview`    | Row planning for live preview and raw mode: hidden markup, inline styles |
+| `margin-table-editing`   | Table operations, cell navigation and the table menus                 |
+| `margin-find-bar`        | Find and replace in a note                                            |
+| `margin-properties`      | The frontmatter properties panel                                      |
+| `margin-diagrams`        | TeX math (RaTeX) and Mermaid rendered to theme-coloured SVG, pure functions |
+| `margin-file-tree`       | Sidebar tree: virtualized rows, selection, rename, drag and drop      |
+| `margin-spotlight`       | The palette: files, full text, tags, ask, replace                     |
+| `margin-terminal`        | Terminal dock: `alacritty_terminal` grid element, tabs                |
+| `margin-viewers`         | Image, PDF and unknown-file views                                     |
+| `margin-canvas`          | The drawing canvas                                                    |
+| `margin-panels`          | Backlinks, history, trash, sync status                                |
+| `margin-preferences`     | The settings dialog: vault, sync, AI, appearance, language, export, updates |
+| `margin-onboarding`      | Intro, vault picker and vault wizard                                  |
 
 `margin-desktop` (`crates/apps/desktop`) builds the services from adapters in
-`container.rs`, owns the window, the pane/tab shell, global actions, workspace
-persistence, drag and drop from the OS, and the updater.
+`container.rs`, owns the window, the shell layout (sidebar, panes, terminal,
+right panel, status bar), global actions, workspace persistence and the updater.
 
 ### Ports and adapters
 

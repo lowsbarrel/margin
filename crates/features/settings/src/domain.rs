@@ -1,9 +1,12 @@
 use std::fmt;
 
 use margin_ask::LlmConfig;
+use margin_kernel::RelativePath;
 use serde::{Deserialize, Serialize};
 
 use crate::error::Error;
+
+const DEFAULT_ATTACHMENT_FOLDER: &str = "attachments";
 
 #[derive(Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct S3Config {
@@ -26,7 +29,7 @@ impl fmt::Debug for S3Config {
     }
 }
 
-#[derive(Clone, Debug, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
 pub struct AppSettings {
     pub s3: Option<S3Config>,
     #[serde(default)]
@@ -41,6 +44,20 @@ pub struct AppSettings {
     pub locale: Option<String>,
     #[serde(default)]
     pub theme: Option<String>,
+}
+
+impl AppSettings {
+    #[must_use]
+    pub fn attachment_folder(&self) -> RelativePath {
+        self.attachment_folder
+            .as_deref()
+            .and_then(|folder| RelativePath::new(folder.trim()).ok())
+            .filter(|folder| !folder.is_root())
+            .unwrap_or_else(|| {
+                RelativePath::new(DEFAULT_ATTACHMENT_FOLDER)
+                    .expect("the default attachment folder is a valid relative path")
+            })
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
@@ -243,5 +260,28 @@ mod tests {
         assert_eq!(state.panes[0].tabs[0].cursor_pos, Some(3));
         assert!(!state.terminal_open);
         assert!(state.terminal_height.abs() < f64::EPSILON);
+    }
+
+    #[test]
+    fn attachment_folder_trims_and_falls_back_to_the_default() {
+        let folder = |raw: &str| {
+            serde_json::from_str::<AppSettings>(raw)
+                .expect("settings decode")
+                .attachment_folder()
+        };
+
+        assert_eq!(
+            folder(r#"{"attachment_folder":" media/img "}"#).as_str(),
+            "media/img"
+        );
+        assert_eq!(
+            folder(r#"{"attachment_folder":"  "}"#).as_str(),
+            "attachments"
+        );
+        assert_eq!(
+            folder(r#"{"attachment_folder":"../x"}"#).as_str(),
+            "attachments"
+        );
+        assert_eq!(folder("{}").as_str(), "attachments");
     }
 }

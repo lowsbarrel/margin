@@ -15,21 +15,57 @@ publish = false
 
 [workspace.dependencies]
 aes-gcm-siv = "0.11"
+alacritty_terminal = { version = "=0.26.0", default-features = false }
+async-channel = "2.5"
 base64 = "0.22"
 bip39 = "2"
+chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 dirs = "6"
 filetime = "0.2"
+flate2 = { version = "1.1", default-features = false, features = ["rust_backend"] }
+futures-channel = { version = "0.3", default-features = false, features = ["std"] }
 futures-util = { version = "0.3", default-features = false, features = ["std"] }
-gpui-kit = { version = "=0.8.1", default-features = false, features = ["component", "assets"] }
+gpui-kit = { version = "=0.8.1", default-features = false, features = [
+  "component",
+  "assets",
+  "tree-sitter-bash",
+  "tree-sitter-c",
+  "tree-sitter-cpp",
+  "tree-sitter-css",
+  "tree-sitter-go",
+  "tree-sitter-html",
+  "tree-sitter-java",
+  "tree-sitter-javascript",
+  "tree-sitter-python",
+  "tree-sitter-rust",
+  "tree-sitter-sql",
+  "tree-sitter-toml",
+  "tree-sitter-tsx",
+  "tree-sitter-typescript",
+  "tree-sitter-yaml",
+] }
+hayro = { version = "=0.8.0", default-features = false, features = ["embed-fonts", "simd"] }
 hex = "0.4"
 hmac = "0.12"
+html5ever = "0.38"
+htmd = "0.5.6"
+image = { version = "0.25", default-features = false }
 margin-ask = { path = "crates/features/ask" }
 margin-attachments = { path = "crates/features/attachments" }
+margin-breadcrumbs = { path = "crates/ui/breadcrumbs" }
 margin-canvas = { path = "crates/ui/canvas" }
 margin-crypto = { path = "crates/shared/crypto" }
 margin-dates = { path = "crates/shared/dates" }
-margin-desktop = { path = "crates/apps/desktop" }
+margin-diagrams = { path = "crates/ui/diagrams" }
 margin-editor = { path = "crates/ui/editor" }
+margin-editor-actions = { path = "crates/ui/editor-actions" }
+margin-editor-assets = { path = "crates/ui/editor-assets" }
+margin-editor-commands = { path = "crates/ui/editor-commands" }
+margin-editor-overlays = { path = "crates/ui/editor-overlays" }
+margin-find-bar = { path = "crates/ui/find-bar" }
+margin-live-preview = { path = "crates/ui/live-preview" }
+margin-table-editing = { path = "crates/ui/table-editing" }
+margin-text-buffer = { path = "crates/ui/text-buffer" }
 margin-file-tree = { path = "crates/ui/file-tree" }
 margin-files = { path = "crates/features/files" }
 margin-fs = { path = "crates/adapters/fs" }
@@ -40,6 +76,9 @@ margin-llm = { path = "crates/adapters/llm" }
 margin-markdown = { path = "crates/shared/markdown" }
 margin-onboarding = { path = "crates/ui/onboarding" }
 margin-panels = { path = "crates/ui/panels" }
+margin-panes = { path = "crates/ui/panes" }
+margin-preferences = { path = "crates/ui/preferences" }
+margin-properties = { path = "crates/ui/properties" }
 margin-pty = { path = "crates/adapters/pty" }
 margin-s3 = { path = "crates/adapters/s3" }
 margin-retry = { path = "crates/shared/retry" }
@@ -56,22 +95,43 @@ margin-trash = { path = "crates/features/trash" }
 margin-vaults = { path = "crates/features/vaults" }
 margin-viewers = { path = "crates/ui/viewers" }
 margin-workbench = { path = "crates/ui/workbench" }
+markup5ever_rcdom = "0.38"
+mermaid-rs-renderer = { version = "=0.3.1", default-features = false }
+minisign-verify = "=0.2.5"
 notify = { version = "8", default-features = false, features = ["macos_fsevent"] }
 nucleo-matcher = "0.3"
 parking_lot = "0.12"
 portable-pty = "0.9"
 rand = "0.10"
+ratex-layout = "=0.1.15"
+ratex-parser = "=0.1.15"
+ratex-svg = { version = "=0.1.15", features = ["embed-fonts"] }
+ratex-types = "=0.1.15"
 regex = "1.12"
-reqwest = { version = "0.12", default-features = false, features = ["json", "stream", "rustls-tls"] }
+reqwest = { version = "0.12", default-features = false, features = [
+  "json",
+  "stream",
+  "rustls-tls",
+] }
+resvg = { version = "0.46", default-features = false }
 rusqlite = { version = "0.40", features = ["bundled"] }
+semver = "1.0"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 sha2 = "0.10"
+similar = { version = "2.7", default-features = false }
 sys-locale = "0.3.2"
+tar = { version = "0.4", default-features = false }
 tempfile = "3"
 thiserror = "2.0"
-tokio = { version = "1", default-features = false, features = ["rt-multi-thread", "time", "sync", "macros"] }
+tokio = { version = "1", default-features = false, features = [
+  "rt-multi-thread",
+  "time",
+  "sync",
+  "macros",
+] }
 toml = "0.9"
+unicode-segmentation = { version = "1", default-features = false }
 zip = { version = "9", default-features = false, features = ["deflate"] }
 
 [workspace.lints.rust]
@@ -182,5 +242,9 @@ opt-level = 3
 panic = "abort"
 strip = true
 
+[profile.dev]
+debug = "line-tables-only"
+
 [profile.dev.package."*"]
 opt-level = 1
+debug = false

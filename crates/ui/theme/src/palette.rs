@@ -39,7 +39,7 @@ pub enum HighlightTone {
     Orange,
 }
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Palette {
     pub dark: bool,
     pub text_primary: Hsla,
@@ -65,6 +65,10 @@ pub struct Palette {
     pub border_strong: Hsla,
     pub canvas_grid: Hsla,
     pub canvas_ink: Hsla,
+    pub lightbox_backdrop: Hsla,
+    pub lightbox_control: Hsla,
+    pub lightbox_control_hover: Hsla,
+    pub logo_mark: Hsla,
     pub syntax: [Hsla; 6],
     pub callouts: [Hsla; 13],
     pub highlights: [Hsla; 6],
@@ -104,6 +108,10 @@ impl Palette {
             border_strong: hsl_alpha(0.0, 0.0, 25.0, 16.0),
             canvas_grid: hsl_alpha(0.0, 0.0, 25.0, 12.0),
             canvas_ink: neutral(95),
+            lightbox_backdrop: hsl_alpha(0.0, 0.0, 0.0, 85.0),
+            lightbox_control: hsl_alpha(0.0, 0.0, 100.0, 70.0),
+            lightbox_control_hover: hsl_alpha(0.0, 0.0, 100.0, 10.0),
+            logo_mark: orange(50),
             syntax: [
                 purple(70),
                 green(70),
@@ -164,6 +172,10 @@ impl Palette {
             border_strong: hsl_alpha(0.0, 0.0, 100.0, 16.0),
             canvas_grid: hsl_alpha(0.0, 0.0, 100.0, 14.0),
             canvas_ink: neutral(5),
+            lightbox_backdrop: hsl_alpha(0.0, 0.0, 0.0, 85.0),
+            lightbox_control: hsl_alpha(0.0, 0.0, 100.0, 70.0),
+            lightbox_control_hover: hsl_alpha(0.0, 0.0, 100.0, 10.0),
+            logo_mark: orange(50),
             syntax: [
                 hsl(286.0, 60.0, 67.0),
                 hsl(95.0, 38.0, 62.0),
@@ -259,7 +271,7 @@ mod tests {
                 .map(|level| (palette.surface(level).l - page).abs())
                 .collect();
             assert!(
-                distances.windows(2).all(|pair| pair[0] < pair[1]),
+                distances.is_sorted_by(|lower, higher| lower < higher),
                 "surfaces must order by elevation"
             );
         }

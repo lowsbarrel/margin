@@ -65,6 +65,7 @@ Primitives are never used directly by views; only roles are.
 | `callout.*`         | The 13 callout kinds (note, abstract, info, todo, tip, success, question, warning, failure, danger, bug, example, quote) | see tokens | see tokens |
 | `highlight.*`       | `==highlight==` and coloured marks: yellow, blue, green, purple, red, orange | at 38–45% | same |
 | `canvas.grid` / `canvas.ink` | Canvas background grid and default ink       | see tokens     | see tokens      |
+| `lightbox.backdrop` / `lightbox.control` / `lightbox.control.hover` | Image lightbox backdrop, its icons and text, their hover fill | black 85% / white 70% / white 10% | same |
 
 Rules:
 

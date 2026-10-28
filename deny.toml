@@ -24,8 +24,12 @@ allow = [
   "Zlib",
 ]
 exceptions = [
-  { crate = "enum-iterator", allow = ["0BSD"] },
-  { crate = "enum-iterator-derive", allow = ["0BSD"] },
+  { crate = "enum-iterator", allow = [
+    "0BSD",
+  ] },
+  { crate = "enum-iterator-derive", allow = [
+    "0BSD",
+  ] },
 ]
 
 [licenses.private]

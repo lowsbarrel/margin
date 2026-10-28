@@ -1,6 +1,6 @@
 [package]
 name = "margin-panels"
-description = "Backlinks, history, trash, settings and sync panels."
+description = "Backlinks and history panels, the trash dialog and the sync status item."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -8,6 +8,32 @@ license.workspace = true
 authors.workspace = true
 repository.workspace = true
 publish.workspace = true
+
+[dependencies]
+chrono.workspace = true
+gpui-kit.workspace = true
+margin-dates.workspace = true
+margin-history.workspace = true
+margin-i18n.workspace = true
+margin-kernel.workspace = true
+margin-search.workspace = true
+margin-sync.workspace = true
+margin-theme.workspace = true
+margin-trash.workspace = true
+margin-workbench.workspace = true
+parking_lot.workspace = true
+similar.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+margin-ask.workspace = true
+margin-attachments.workspace = true
+margin-crypto.workspace = true
+margin-files.workspace = true
+margin-settings.workspace = true
+margin-terminals.workspace = true
+margin-test-support.workspace = true
+margin-vaults.workspace = true
 
 [lints]
 workspace = true

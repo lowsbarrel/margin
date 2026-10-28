@@ -1,1 +1,26 @@
+mod actions;
+mod art_scenes;
+mod art_scenes_more;
+mod background;
+mod brand;
+mod intro_art;
+mod intro_view;
+mod logo_mark;
+mod onboarding;
+mod onboarding_event;
+mod passphrase;
+mod picker_view;
+mod profile_dialogs;
+mod sketch;
+mod spot;
+mod step_dots;
+mod steps;
+mod timeline;
+mod vault_picker;
+mod vault_session;
+mod vault_wizard;
+mod wizard;
+mod wizard_view;
 
+pub use onboarding::Onboarding;
+pub use onboarding_event::OnboardingEvent;

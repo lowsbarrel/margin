@@ -13,4 +13,5 @@ pub enum WorkbenchEvent {
     Saved(RelativePath),
     TagSelected(String),
     TreeChanged,
+    Reveal(RelativePath),
 }

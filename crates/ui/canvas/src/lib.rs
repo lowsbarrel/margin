@@ -1,1 +1,20 @@
+mod board;
+mod camera;
+mod canvas_panel;
+mod canvas_scene;
+mod canvas_state;
+mod canvas_view;
+mod color;
+mod controls;
+mod erased;
+mod gesture;
+mod history;
+mod menu;
+mod model;
+mod paint;
+mod serialization;
+mod snapping;
+mod tool;
+mod toolbar;
 
+pub use canvas_view::CanvasView;

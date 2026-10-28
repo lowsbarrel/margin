@@ -1,0 +1,22 @@
+[package]
+name = "margin-properties"
+description = "The note properties panel: typed frontmatter editing above the note body."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+margin-i18n.workspace = true
+margin-markdown.workspace = true
+margin-theme.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

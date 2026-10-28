@@ -66,5 +66,5 @@ description = "Everything CI runs"
 depends = ["lint", "check", "test", "doc"]
 
 [tasks.bundle]
-description = "Build installers for the host target"
-run = "cargo packager --release -p margin-desktop"
+description = "Build installers and, with CARGO_PACKAGER_SIGN_PRIVATE_KEY set, signed updater artifacts for the host target"
+run = "cargo packager --release -p margin-desktop --formats {% if os() == 'macos' %}app,dmg{% elif os() == 'windows' %}nsis,wix{% else %}deb,appimage{% endif %}"

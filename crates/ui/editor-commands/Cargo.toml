@@ -1,0 +1,20 @@
+[package]
+name = "margin-editor-commands"
+description = "Markdown editing commands: lists, marks, lines, autopair, slash items and HTML paste."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+html5ever.workspace = true
+htmd.workspace = true
+margin-markdown.workspace = true
+margin-text-buffer.workspace = true
+markup5ever_rcdom.workspace = true
+
+[lints]
+workspace = true

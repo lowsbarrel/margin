@@ -1,0 +1,29 @@
+[package]
+name = "margin-editor-overlays"
+description = "Editor popovers: slash menu, completion, selection toolbar, context menu and image lightbox."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+authors.workspace = true
+repository.workspace = true
+publish.workspace = true
+
+[dependencies]
+gpui-kit.workspace = true
+margin-editor-actions.workspace = true
+margin-editor-commands.workspace = true
+margin-i18n.workspace = true
+margin-kernel.workspace = true
+margin-markdown.workspace = true
+margin-search.workspace = true
+margin-table-editing.workspace = true
+margin-theme.workspace = true
+margin-viewers.workspace = true
+margin-workbench.workspace = true
+
+[dev-dependencies]
+gpui-kit = { workspace = true, features = ["test-support"] }
+
+[lints]
+workspace = true

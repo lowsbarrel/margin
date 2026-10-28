@@ -1,3 +1,4 @@
+use std::cmp::Reverse;
 use std::sync::Arc;
 
 use margin_ask::{Error, LineMatch, RecentNote, SearchHit, SearchMode, TagSummary, VaultReader};
@@ -6,7 +7,6 @@ use margin_kernel::{FileSystem, RelativePath, StoreError, UnixMillis};
 use margin_search::{SearchMode as IndexMode, SearchService};
 use regex::Regex;
 
-#[derive(Debug)]
 pub(crate) struct VaultBridge {
     files: Arc<dyn FileSystem>,
     listing: Arc<FilesService>,
@@ -42,6 +42,10 @@ impl VaultBridge {
     }
 }
 
+#[expect(
+    clippy::needless_pass_by_value,
+    reason = "used directly as a map_err adapter, which hands the error over by value"
+)]
 fn store(error: impl ToString) -> Error {
     Error::Store(StoreError::Other(error.to_string()))
 }
@@ -144,7 +148,7 @@ impl VaultReader for VaultBridge {
                 modified: note.modified,
             })
             .collect();
-        recent.sort_by(|left, right| right.modified.cmp(&left.modified));
+        recent.sort_by_key(|note| Reverse(note.modified));
         Ok(recent)
     }
 }
