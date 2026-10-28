@@ -1,0 +1,140 @@
+use std::borrow::Cow;
+
+use gpui_kit::assets::{Assets, icon_assets};
+use gpui_kit::{AssetSource, Result, SharedString};
+
+icon_assets!(
+    UsedIcons,
+    [
+        Archive,
+        ArrowDownAZ,
+        ArrowDownToLine,
+        ArrowDownWideNarrow,
+        ArrowLeft,
+        ArrowLeftRight,
+        ArrowRight,
+        ArrowUpRight,
+        ArrowUpZA,
+        Binary,
+        Bold,
+        Bug,
+        Calendar,
+        CaseSensitive,
+        Check,
+        ChevronDown,
+        ChevronLeft,
+        ChevronRight,
+        ChevronUp,
+        ChevronsDownUp,
+        Circle,
+        CircleAlert,
+        CircleCheck,
+        CircleQuestionMark,
+        ClipboardList,
+        Clock,
+        Cloud,
+        CloudOff,
+        Code,
+        Copy,
+        Download,
+        Eraser,
+        Expand,
+        ExternalLink,
+        Eye,
+        EyeOff,
+        FileCode,
+        FileDown,
+        FilePlus,
+        FileQuestionMark,
+        FileText,
+        FileType,
+        Flame,
+        Folder,
+        FolderOpen,
+        FolderPlus,
+        FolderSearch,
+        Forward,
+        Globe,
+        Hand,
+        Hash,
+        Heading,
+        Heading1,
+        Heading2,
+        Heading3,
+        Highlighter,
+        Image,
+        Info,
+        Italic,
+        KeyRound,
+        Lightbulb,
+        Link,
+        Link2,
+        List,
+        ListOrdered,
+        ListTodo,
+        Loader,
+        LogOut,
+        Maximize,
+        Minus,
+        Moon,
+        Palette,
+        PanelLeft,
+        Paperclip,
+        PenLine,
+        Pencil,
+        Pin,
+        Play,
+        Plus,
+        Quote,
+        RefreshCw,
+        Replace,
+        ReplaceAll,
+        RotateCcw,
+        RotateCcwClock,
+        Search,
+        SearchX,
+        Settings,
+        Sigma,
+        Sparkles,
+        Square,
+        SquareCheck,
+        SquareCode,
+        SquareTerminal,
+        Strikethrough,
+        Sun,
+        Table,
+        Tags,
+        TestTube,
+        TextAlignStart,
+        Trash,
+        TriangleAlert,
+        Type,
+        Upload,
+        Workflow,
+        Wrench,
+        X,
+        Zap,
+        ZoomIn,
+        ZoomOut,
+    ]
+);
+
+#[derive(Clone, Copy, Debug, Default)]
+pub(crate) struct AppAssets;
+
+impl AssetSource for AppAssets {
+    fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        match UsedIcons.load(path)? {
+            Some(bytes) => Ok(Some(bytes)),
+            None => Assets.load(path),
+        }
+    }
+
+    fn list(&self, path: &str) -> Result<Vec<SharedString>> {
+        let mut paths = Assets.list(path)?;
+        paths.extend(UsedIcons.list(path)?);
+        paths.sort();
+        paths.dedup();
+        Ok(paths)
+    }
+}

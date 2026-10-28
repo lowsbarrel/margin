@@ -12,8 +12,8 @@ use margin_editor_assets::{LinkRef, Resolved, VaultIndex, resolve_link};
 use margin_i18n::t;
 use margin_kernel::RelativePath;
 use margin_live_preview::{
-    CodeLinePosition, LineView, LinkHit, LinkKind, ListDecor, ListMarker, Mode, OffsetMap,
-    SyntaxRole,
+    AtomKind, CodeLinePosition, LineView, LinkHit, LinkKind, ListDecor, ListMarker, Mode,
+    OffsetMap, SyntaxRole,
 };
 use margin_markdown::Fold;
 
@@ -22,6 +22,7 @@ use crate::metrics::{self, TypeScale};
 use crate::row_context::{RowAction, RowContext};
 use crate::segment::text_segment;
 use crate::text_style::{Face, RunContext, code_runs, inline_runs};
+use crate::word_chunks;
 
 pub(crate) struct LineParts {
     view: LineView,
@@ -165,30 +166,34 @@ pub(crate) fn inline_pieces(
     let mut cursor = 0;
     let mut atoms = atoms.into_iter();
     let mut pieces: Vec<AnyElement> = Vec::new();
-    for atom in &view.atoms {
-        let at = atom.display.min(view.text.len());
-        if at > cursor {
+    let wraps_by_word = !view.atoms.is_empty();
+    let push_text = |pieces: &mut Vec<AnyElement>, range: Range<usize>| {
+        let chunks = if wraps_by_word {
+            word_chunks::word_chunks(&view.text, range)
+        } else {
+            vec![range]
+        };
+        for chunk in chunks {
             pieces.push(segment(
                 &view.text,
-                cursor..at,
-                text_runs(cursor..at),
+                chunk.clone(),
+                text_runs(chunk),
                 (&map, &links),
                 context,
             ));
+        }
+    };
+    for atom in &view.atoms {
+        let at = atom.display.min(view.text.len());
+        if at > cursor {
+            push_text(&mut pieces, cursor..at);
         }
         if let Some(element) = atoms.next() {
             pieces.push(element);
         }
         cursor = at;
     }
-    let end = view.text.len();
-    pieces.push(segment(
-        &view.text,
-        cursor..end,
-        text_runs(cursor..end),
-        (&map, &links),
-        context,
-    ));
+    push_text(&mut pieces, cursor..view.text.len());
     pieces
 }
 
@@ -333,6 +338,15 @@ fn list_frame(inner: Div, list: &ListDecor, view: &LineView, context: &RowContex
             .w(px(1.0))
             .bg(palette.border_secondary)
     });
+    let checkbox_leads = view
+        .atoms
+        .first()
+        .is_some_and(|atom| atom.display == 0 && matches!(atom.kind, AtomKind::Checkbox { .. }));
+    let body = if checkbox_leads {
+        inner.pl(step)
+    } else {
+        inner
+    };
     h_flex()
         .relative()
         .w_full()
@@ -340,7 +354,7 @@ fn list_frame(inner: Div, list: &ListDecor, view: &LineView, context: &RowContex
         .pl(rems(step.0 * f32::from(depth)))
         .children(guides)
         .children(gutter)
-        .child(inner.flex_1())
+        .child(body.flex_1())
 }
 
 fn link_missing(kind: &LinkKind, note: &RelativePath, cx: &gpui_kit::App) -> bool {

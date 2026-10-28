@@ -1,13 +1,14 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui_kit::assets::AllAssets;
 use gpui_kit::component::TitleBar;
 use gpui_kit::{App, AppContext, Bounds, TitlebarOptions, WindowBounds, WindowOptions, px, size};
 use margin_i18n::{Translator, t};
 use margin_theme::{Appearance, MarginTheme};
 use margin_workbench::{Platform, Quit, Updates, bind_keys, install_network_runtime};
 
+use crate::http_client::ReqwestHttpClient;
+use crate::icons::AppAssets;
 #[cfg(target_os = "macos")]
 use crate::menus;
 use crate::network::TokioNetwork;
@@ -18,7 +19,7 @@ const APP_ID: &str = "com.lowsbarrel.margin";
 
 pub fn run() {
     gpui_kit::application()
-        .with_assets(AllAssets)
+        .with_assets(AppAssets)
         .run(move |cx| {
             init(cx);
             cx.on_action(|_: &Quit, cx| cx.quit());
@@ -45,7 +46,9 @@ pub fn init_with_data_dir(data_dir: PathBuf, cx: &mut App) {
     gpui_kit::init(cx);
     MarginTheme::init(Appearance::System, cx);
     Translator::init(None, cx);
-    install_network_runtime(Arc::new(TokioNetwork::start()), cx);
+    let network = TokioNetwork::start();
+    cx.set_http_client(Arc::new(ReqwestHttpClient::new(network.handle())));
+    install_network_runtime(Arc::new(network), cx);
     Platform::install(
         Arc::new(margin_fs::reveal_in_file_manager),
         Arc::new(margin_fs::open_with_default_app),

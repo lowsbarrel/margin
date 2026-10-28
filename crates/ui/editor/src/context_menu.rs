@@ -2,10 +2,12 @@ use std::rc::Rc;
 
 use gpui_kit::component::menu::PopupMenu;
 use gpui_kit::{
-    App, ClipboardItem, Context, DismissEvent, Entity, Focusable, ImageSource, Pixels, Point,
-    SharedString, Subscription, Window,
+    App, ClipboardItem, Context, DismissEvent, Entity, Focusable, Pixels, Point, SharedString,
+    Subscription, Window,
 };
-use margin_editor_assets::{Embed, ImageLocation, VaultIndex, resolve_embed, resolve_image};
+use margin_editor_assets::{
+    Embed, ImageLocation, VaultIndex, cached_image, image_resource, resolve_embed, resolve_image,
+};
 use margin_editor_overlays::{
     ContextCommand, ContextImage, ContextLink, ContextTarget, LightboxImage, OnContextCommand,
     editor_context_menu,
@@ -165,7 +167,10 @@ fn run(
         ContextCommand::ViewImage(image) => {
             if let Some(path) = image.absolute_path {
                 let images = vec![LightboxImage {
-                    source: ImageSource::from(path),
+                    source: cached_image(
+                        image_resource(&ImageLocation::Local(path)),
+                        editor.render_state().images(),
+                    ),
                     alt: SharedString::from(image.alt),
                 }];
                 surfaces::open_lightbox(editor, images, 0, window, cx);

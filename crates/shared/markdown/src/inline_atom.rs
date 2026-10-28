@@ -384,12 +384,12 @@ pub(crate) fn wiki_link(text: &str, base: usize, at: usize, embed: bool) -> Opti
         let size = alias.as_deref().and_then(|value| value.parse::<u32>().ok());
         InlineKind::Embed(EmbedTarget { target, size })
     } else {
-        InlineKind::WikiLink(WikiLink {
+        InlineKind::WikiLink(Box::new(WikiLink {
             target,
             heading,
             block,
             alias,
-        })
+        }))
     };
     Some((
         node(kind, Span::new(base + at, base + end), content, markers),

@@ -1,6 +1,7 @@
 mod comments;
 mod dependency_rules;
 mod findings;
+mod icons;
 mod invariants;
 mod messages;
 mod repository;
@@ -26,11 +27,15 @@ fn main() -> ExitCode {
         "check" => {
             dependency_rules::check(&repository, &mut findings);
             invariants::check(&repository, &mut findings);
+            icons::check(&repository, &mut findings);
             messages::check(&repository, &mut findings);
             secrets::check(&repository, &mut findings);
         }
         "check-deps" => dependency_rules::check(&repository, &mut findings),
-        "check-invariants" => invariants::check(&repository, &mut findings),
+        "check-invariants" => {
+            invariants::check(&repository, &mut findings);
+            icons::check(&repository, &mut findings);
+        }
         "check-messages" => messages::check(&repository, &mut findings),
         "check-secrets" => secrets::check(&repository, &mut findings),
         _ => return findings::fail(USAGE),

@@ -41,7 +41,6 @@ impl Entry {
 
 #[derive(Debug)]
 pub(crate) struct Restored {
-    pub document: Document,
     pub changed: Span,
     pub selections: Normalized,
 }
@@ -98,14 +97,13 @@ impl History {
         !self.redo.is_empty()
     }
 
-    pub(crate) fn undo(&mut self, document: &Document) -> Option<Restored> {
+    pub(crate) fn undo(&mut self, document: &mut Document) -> Option<Restored> {
         let mut entry = self.undo.pop_back()?;
         let span = Span::new(entry.start, entry.start + entry.new.len());
         let edit = TextEdit::new(span, mem::take(&mut entry.old));
-        let document = document.reparse(&edit);
+        *document = mem::take(document).reparsed(&edit).0;
         entry.old = edit.insert;
         let restored = Restored {
-            document,
             changed: Span::new(entry.start, entry.start + entry.old.len()),
             selections: entry.before.clone(),
         };
@@ -114,14 +112,13 @@ impl History {
         Some(restored)
     }
 
-    pub(crate) fn redo(&mut self, document: &Document) -> Option<Restored> {
+    pub(crate) fn redo(&mut self, document: &mut Document) -> Option<Restored> {
         let mut entry = self.redo.pop()?;
         let span = Span::new(entry.start, entry.start + entry.old.len());
         let edit = TextEdit::new(span, mem::take(&mut entry.new));
-        let document = document.reparse(&edit);
+        *document = mem::take(document).reparsed(&edit).0;
         entry.new = edit.insert;
         let restored = Restored {
-            document,
             changed: Span::new(entry.start, entry.start + entry.new.len()),
             selections: entry.after.clone(),
         };

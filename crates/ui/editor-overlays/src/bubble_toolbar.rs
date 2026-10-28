@@ -102,6 +102,7 @@ pub struct BubbleToolbar {
     editor_focus: FocusHandle,
     state: BubbleState,
     link: Option<(Entity<InputState>, Subscription)>,
+    menu_open: bool,
 }
 
 impl fmt::Debug for BubbleToolbar {
@@ -109,6 +110,7 @@ impl fmt::Debug for BubbleToolbar {
         f.debug_struct("BubbleToolbar")
             .field("state", &self.state)
             .field("editing_link", &self.link.is_some())
+            .field("menu_open", &self.menu_open)
             .finish_non_exhaustive()
     }
 }
@@ -122,6 +124,7 @@ impl BubbleToolbar {
             editor_focus,
             state: BubbleState::default(),
             link: None,
+            menu_open: false,
         }
     }
 
@@ -133,8 +136,8 @@ impl BubbleToolbar {
     }
 
     #[must_use]
-    pub const fn is_editing_link(&self) -> bool {
-        self.link.is_some()
+    pub const fn is_in_use(&self) -> bool {
+        self.link.is_some() || self.menu_open
     }
 
     pub fn open_link(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
@@ -214,6 +217,7 @@ impl BubbleToolbar {
     fn render_block_menu(&self, cx: &Context<'_, Self>) -> impl IntoElement {
         let current = self.state.block;
         let toolbar = cx.entity().downgrade();
+        let opener = toolbar.clone();
         Button::new("bubble-block-type")
             .ghost()
             .small()
@@ -235,6 +239,14 @@ impl BubbleToolbar {
                     menu = menu.item(item);
                 }
                 menu
+            })
+            .on_open_change(move |open, _, cx| {
+                opener
+                    .update(cx, |toolbar, cx| {
+                        toolbar.menu_open = *open;
+                        cx.notify();
+                    })
+                    .unwrap_or_default();
             })
     }
 
@@ -274,6 +286,7 @@ impl Render for BubbleToolbar {
         let palette = MarginTheme::palette(cx);
         let bar = h_flex()
             .id("bubble-toolbar")
+            .occlude()
             .role(Role::Toolbar)
             .gap_0p5()
             .px_1()

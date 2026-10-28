@@ -20,6 +20,10 @@ pub(crate) fn render(
     let focus = editor.focus_handle_ref().clone();
     let entity = cx.entity();
     let list_state = editor.session().list().clone();
+    editor.render_state().tables().borrow_mut().remember_scroll(
+        list_state.logical_scroll_top(),
+        list_state.viewport_bounds().size.height,
+    );
     let rows = list(list_state.clone(), cx.processor(rows::render_row)).size_full();
     let input_focus = focus.clone();
     let grabbing = editor.block_drag().is_moving();
@@ -93,15 +97,15 @@ pub(crate) fn render(
                 .bottom_0()
                 .child(Scrollbar::vertical(&list_state)),
         );
-    let (body, unplaced) = surfaces::render_overlays(editor, body, window, cx);
+    let (body, anchors) = surfaces::render_overlays(editor, body, window, cx);
     let (painted, editor_id) = (editor.hits(), cx.entity_id());
     let body = body.child(canvas(
         |_, _, _| {},
         move |_, (), _, cx| {
-            let placeable = unplaced
+            let moved = anchors
                 .iter()
-                .all(|offset| painted.caret_bounds(*offset).is_some());
-            if !unplaced.is_empty() && placeable {
+                .any(|(offset, used)| painted.caret_bounds(*offset) != *used);
+            if moved {
                 cx.notify(editor_id);
             }
         },

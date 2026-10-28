@@ -15,7 +15,7 @@ pub use attachment_store::{AttachmentFailure, AttachmentSource, store_attachment
 pub use code_highlight::highlight_code;
 pub use diagram_cache::{DiagramCache, DiagramImage, DiagramState, math, mermaid};
 pub use diagram_element::{DiagramKind, diagram_element};
-pub use embed_image::{EmbedImage, embed_image};
+pub use embed_image::{EmbedImage, cached_image, embed_image, image_resource};
 pub use embed_resolution::{
     Embed, EmbedSize, ImageLocation, MAX_EMBED_DEPTH, ResolvedImage, embed_size, resolve_embed,
     resolve_image,

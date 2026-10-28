@@ -6,6 +6,7 @@ use std::mem;
 pub(crate) struct Generations<K, V> {
     current: HashMap<K, V>,
     previous: HashMap<K, V>,
+    evicted: Vec<V>,
     capacity: usize,
 }
 
@@ -14,6 +15,7 @@ impl<K: Hash + Eq + Clone, V> Generations<K, V> {
         Self {
             current: HashMap::new(),
             previous: HashMap::new(),
+            evicted: Vec::new(),
             capacity,
         }
     }
@@ -33,9 +35,18 @@ impl<K: Hash + Eq + Clone, V> Generations<K, V> {
 
     pub(crate) fn insert(&mut self, key: K, value: V) {
         if self.current.len() >= self.capacity && !self.current.contains_key(&key) {
-            self.previous = mem::take(&mut self.current);
+            let dropped = mem::replace(&mut self.previous, mem::take(&mut self.current));
+            self.evicted.extend(dropped.into_values());
         }
         self.current.insert(key, value);
+    }
+
+    pub(crate) const fn has_evicted(&self) -> bool {
+        !self.evicted.is_empty()
+    }
+
+    pub(crate) fn take_evicted(&mut self) -> Vec<V> {
+        mem::take(&mut self.evicted)
     }
 }
 
@@ -54,5 +65,16 @@ mod tests {
         cache.insert("e", 5);
         assert_eq!(cache.get_mut(&"b").copied(), None);
         assert_eq!(cache.get_mut(&"d").copied(), Some(4));
+    }
+
+    #[test]
+    fn dropped_generations_are_handed_back_once() {
+        let mut cache = Generations::with_capacity(1);
+        cache.insert("a", 1);
+        cache.insert("b", 2);
+        assert!(cache.take_evicted().is_empty());
+        cache.insert("c", 3);
+        assert_eq!(cache.take_evicted(), vec![1]);
+        assert!(cache.take_evicted().is_empty());
     }
 }

@@ -1,6 +1,8 @@
 mod app;
 mod container;
 mod history_snapshots;
+mod http_client;
+mod icons;
 mod lifecycle;
 #[cfg(target_os = "macos")]
 mod menus;

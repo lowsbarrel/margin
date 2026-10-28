@@ -102,10 +102,12 @@ fn zone<T: PaneItem>(
     };
     element
         .on_drop(cx.listener(move |this, payload: &DraggedTab, window, cx| {
+            cx.stop_propagation();
             this.drop_tab_on_zone(payload, pane, zone, window, cx);
         }))
         .on_drop(
             cx.listener(move |this, payload: &DraggedFiles, window, cx| {
+                cx.stop_propagation();
                 this.drop_files_on_zone(payload, pane, zone, window, cx);
             }),
         )

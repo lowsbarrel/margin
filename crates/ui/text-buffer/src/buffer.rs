@@ -101,21 +101,19 @@ impl Buffer {
             before,
             after: self.selections.clone(),
         };
-        self.history.record(entry, origin, now, previous.text());
+        self.history.record(entry, origin, now, &previous);
         Some(changed)
     }
 
     pub fn undo(&mut self) -> Option<Span> {
-        let restored = self.history.undo(&self.document)?;
-        self.document = restored.document;
+        let restored = self.history.undo(&mut self.document)?;
         self.selections = restored.selections;
         self.revision += 1;
         Some(restored.changed)
     }
 
     pub fn redo(&mut self) -> Option<Span> {
-        let restored = self.history.redo(&self.document)?;
-        self.document = restored.document;
+        let restored = self.history.redo(&mut self.document)?;
         self.selections = restored.selections;
         self.revision += 1;
         Some(restored.changed)
@@ -176,10 +174,11 @@ impl Buffer {
             .collect()
     }
 
-    fn replace_document(&mut self, edit: &TextEdit) -> Document {
-        let document = self.document.reparse(edit);
+    fn replace_document(&mut self, edit: &TextEdit) -> String {
+        let (document, previous) = mem::take(&mut self.document).reparsed(edit);
+        self.document = document;
         self.revision += 1;
-        mem::replace(&mut self.document, document)
+        previous
     }
 }
 

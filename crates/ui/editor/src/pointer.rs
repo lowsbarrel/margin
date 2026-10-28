@@ -50,6 +50,7 @@ pub(crate) struct PointerState {
     goal_x: Option<Pixels>,
     position: Option<Point<Pixels>>,
     autoscroll: Option<Task<()>>,
+    last_press: Option<(Point<Pixels>, usize)>,
 }
 
 impl PointerState {
@@ -86,9 +87,14 @@ pub(crate) fn mouse_down(
     let focus = editor.focus_handle_ref().clone();
     window.focus(&focus, cx);
     let hits = editor.hits();
-    let Some(mut offset) = hits.offset_at(event.position) else {
+    let Some(hit) = hits.offset_at(event.position) else {
         return;
     };
+    let mut offset = match editor.pointer().last_press {
+        Some((at, first)) if event.click_count > 1 && !moved_far(at, event.position) => first,
+        _ => hit,
+    };
+    editor.pointer_mut().last_press = Some((event.position, offset));
     let mode = editor.session().mode();
     let granularity = match event.click_count {
         0 | 1 => Granularity::Character,

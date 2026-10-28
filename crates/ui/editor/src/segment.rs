@@ -11,6 +11,9 @@ use margin_text_buffer::Selection;
 
 use crate::hit_map::{HitMap, Segment};
 
+const CARET_WIDTH: Pixels = px(1.2);
+const CARET_HEIGHT_EM: f32 = 1.2;
+
 pub(crate) struct Overlay {
     selections: Vec<Selection>,
     primary: usize,
@@ -160,8 +163,15 @@ fn paint_caret(
     let Some(origin) = layout.position_for_index(index) else {
         return;
     };
+    let line_height = layout.line_height();
+    let font_size = window.text_style().font_size.to_pixels(window.rem_size());
+    let height = (font_size * CARET_HEIGHT_EM).min(line_height);
+    let top = origin.y + (line_height - height) / 2.0;
     window.paint_quad(fill(
-        Bounds::new(origin, size(px(2.0), layout.line_height())),
+        Bounds::new(
+            point(origin.x - CARET_WIDTH / 2.0, top),
+            size(CARET_WIDTH, height),
+        ),
         color,
     ));
 }

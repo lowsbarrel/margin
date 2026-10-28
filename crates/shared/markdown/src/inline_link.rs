@@ -100,9 +100,9 @@ fn link(ctx: &Ctx<'_>, text: &str, base: usize, at: usize, image: bool) -> Optio
                 Span::new(base + destination.close, base + destination.close + 1),
             ];
             let kind = if image {
-                InlineKind::Image(destination.target)
+                InlineKind::Image(Box::new(destination.target))
             } else {
-                InlineKind::Link(destination.target)
+                InlineKind::Link(Box::new(destination.target))
             };
             let node = Inline::new(
                 kind,
@@ -127,9 +127,9 @@ fn link(ctx: &Ctx<'_>, text: &str, base: usize, at: usize, image: bool) -> Optio
                 Span::new(base + label_end, base + reference_end + 1),
             ];
             let kind = if image {
-                InlineKind::Image(target)
+                InlineKind::Image(Box::new(target))
             } else {
-                InlineKind::Link(target)
+                InlineKind::Link(Box::new(target))
             };
             let node = Inline::new(
                 kind,
@@ -148,9 +148,9 @@ fn link(ctx: &Ctx<'_>, text: &str, base: usize, at: usize, image: bool) -> Optio
                 Span::new(base + label_end, base + label_end + 1),
             ];
             let kind = if image {
-                InlineKind::Image(target)
+                InlineKind::Image(Box::new(target))
             } else {
-                InlineKind::Link(target)
+                InlineKind::Link(Box::new(target))
             };
             let node = Inline::new(
                 kind,

@@ -1,7 +1,7 @@
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, div, px,
+    SharedString, StatefulInteractiveElement, Styled, div, px, rems,
 };
 use margin_editor_assets::{
     DiagramKind, DiagramState, Embed, EmbedSize, MathMode, VaultIndex, diagram_element,
@@ -85,11 +85,14 @@ fn render_atom(
         AtomKind::Checkbox { checked } => {
             let handler = context.handler();
             let marker = atom.source;
+            let step = metrics::list_step();
+            let hang = if atom.display == 0 { -step } else { rems(0.0) };
             div()
                 .flex()
                 .flex_none()
                 .items_center()
-                .w(metrics::list_step())
+                .w(step)
+                .ml(hang)
                 .h(TypeScale::Body.line_rems())
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(
@@ -157,6 +160,7 @@ fn render_embed(
                 &image.location,
                 image.size.or_else(|| atom.size.as_ref().map(embed_size)),
                 max_width,
+                context.images(),
             )),
             element_id("embed-image", id),
             RowAction::OpenImage {
@@ -206,6 +210,7 @@ fn render_image(
                 &image.location,
                 image.size.or_else(|| atom.size.as_ref().map(embed_size)),
                 max_width,
+                context.images(),
             )),
             element_id("image", id),
             RowAction::OpenImage {

@@ -3,7 +3,7 @@ use crate::callout::{CalloutKind, Fold, capitalize_type};
 use crate::link_ref::LinkDefinitions;
 use crate::parse::parse_blocks;
 use crate::span::Span;
-use crate::text::{Line, is_blank, leading_spaces};
+use crate::text::{Line, leading_spaces};
 
 fn quote_prefix(text: &str) -> Option<(usize, usize)> {
     let indent = leading_spaces(text);
@@ -100,14 +100,6 @@ pub(crate) fn blockquote(
             at += 1;
             continue;
         }
-        if is_blank(text) && next_has_prefix(source, lines, at) {
-            content.push(Line {
-                start: line.start,
-                end: line.start,
-            });
-            at += 1;
-            continue;
-        }
         break;
     }
     let span = Span::new(first.start, end);
@@ -141,21 +133,6 @@ pub(crate) fn blockquote(
         .with_markers(markers)
         .with_children(children);
     Some((block, at))
-}
-
-fn next_has_prefix(source: &str, lines: &[Line], at: usize) -> bool {
-    let mut probe = at + 1;
-    while let Some(next) = lines.get(probe) {
-        let text = next.text(source);
-        if quote_prefix(text).is_some() {
-            return true;
-        }
-        if !is_blank(text) {
-            return false;
-        }
-        probe += 1;
-    }
-    false
 }
 
 fn colon_header(text: &str) -> Option<(String, usize, String)> {

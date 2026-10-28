@@ -1,3 +1,5 @@
+use std::mem;
+
 use crate::block::{Block, BlockKind};
 use crate::footnotes::{self, FootnoteIndex};
 use crate::frontmatter::Frontmatter;
@@ -8,7 +10,7 @@ use crate::span::{Span, TextEdit};
 use crate::table::TableModel;
 use crate::text::{Line, is_blank, line_at, lines_of};
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct Document {
     text: String,
     blocks: Vec<Block>,
@@ -119,7 +121,7 @@ impl Document {
     }
 
     #[must_use]
-    pub fn reparse(&self, edit: &TextEdit) -> Self {
+    pub fn reparsed(mut self, edit: &TextEdit) -> (Self, String) {
         let text = edit.applied(&self.text);
         let old_start = edit.span.start.min(self.text.len());
         let old_end = edit.span.end.min(self.text.len());
@@ -201,23 +203,19 @@ impl Document {
             changed = true;
         }
         if changed {
-            return Self::parse(&text);
+            return (Self::parse(&text), self.text);
         }
-        let mut blocks: Vec<Block> = self.blocks.get(..from).unwrap_or_default().to_vec();
-        blocks.extend(parsed.blocks);
-        for block in self.blocks.get(to..).unwrap_or_default() {
-            let mut block = block.clone();
+        let suffix = self.blocks.split_off(to.max(from).min(self.blocks.len()));
+        self.blocks.truncate(from);
+        self.blocks.extend(parsed.blocks);
+        for mut block in suffix {
             block.shift(delta);
-            blocks.push(block);
+            self.blocks.push(block);
         }
-        let kinds = line_kind::build(&text, &new_lines, &blocks);
-        Self {
-            text,
-            blocks,
-            lines: new_lines,
-            kinds,
-            definitions: self.definitions.clone(),
-        }
+        self.kinds = line_kind::build(&text, &new_lines, &self.blocks);
+        self.lines = new_lines;
+        let previous = mem::replace(&mut self.text, text);
+        (self, previous)
     }
 }
 

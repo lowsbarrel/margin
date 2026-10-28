@@ -62,23 +62,29 @@ fn drag_hover(
     }
 }
 
-fn place_at_drop(editor: &mut NoteEditor, window: &Window) -> bool {
+fn place_at_drop(
+    editor: &mut NoteEditor,
+    window: &mut Window,
+    cx: &mut Context<'_, NoteEditor>,
+) -> bool {
     if !editor.is_loaded() {
         return false;
     }
     if let Some(offset) = editor.hits().offset_at(window.mouse_position()) {
         editor.session_mut().select(Selection::cursor(offset));
     }
+    let focus = editor.focus_handle_ref().clone();
+    window.focus(&focus, cx);
     true
 }
 
 fn drop_files(
     editor: &mut NoteEditor,
     paths: &ExternalPaths,
-    window: &Window,
-    cx: &Context<'_, NoteEditor>,
+    window: &mut Window,
+    cx: &mut Context<'_, NoteEditor>,
 ) {
-    if place_at_drop(editor, window) {
+    if place_at_drop(editor, window, cx) {
         clipboard::drop_paths(editor, paths.paths().to_vec(), cx);
     }
 }
@@ -86,10 +92,10 @@ fn drop_files(
 fn drop_vault_files(
     editor: &mut NoteEditor,
     dragged: &DraggedFiles,
-    window: &Window,
-    cx: &Context<'_, NoteEditor>,
+    window: &mut Window,
+    cx: &mut Context<'_, NoteEditor>,
 ) {
-    if dragged.has_folder || !place_at_drop(editor, window) {
+    if dragged.has_folder || !place_at_drop(editor, window, cx) {
         return;
     }
     let root = editor.services().root.clone();

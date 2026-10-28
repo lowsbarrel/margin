@@ -1,7 +1,7 @@
 use std::rc::Rc;
 
 use gpui_kit::component::{Theme, ThemeConfig, ThemeMode, ThemeRegistry};
-use gpui_kit::{App, Global, Window, WindowAppearance};
+use gpui_kit::{Anchor, App, Global, Window, WindowAppearance, px};
 
 use crate::palette::Palette;
 use crate::{fonts, kit_theme};
@@ -118,6 +118,9 @@ impl MarginTheme {
             ThemeMode::Light
         };
         Theme::change(mode, None, cx);
+        let notification = &mut Theme::global_mut(cx).notification;
+        notification.placement = Anchor::BottomRight;
+        notification.margins.bottom = px(44.0);
     }
 }
 

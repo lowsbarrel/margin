@@ -2,7 +2,7 @@ use std::time::Duration;
 
 use margin_kernel::{BoxFuture, Timer};
 use margin_workbench::NetworkRuntime;
-use tokio::runtime::{Builder, Runtime};
+use tokio::runtime::{Builder, Handle, Runtime};
 use tokio::time;
 
 #[derive(Debug)]
@@ -19,6 +19,10 @@ impl TokioNetwork {
             .build()
             .expect("the operating system provides threads and timers for the network runtime");
         Self { runtime }
+    }
+
+    pub(crate) fn handle(&self) -> Handle {
+        self.runtime.handle().clone()
     }
 }
 

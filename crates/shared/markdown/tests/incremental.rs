@@ -1,7 +1,7 @@
 use margin_markdown::{Document, Span, TextEdit};
 
 fn assert_matches_full_parse(previous: &Document, edit: &TextEdit) {
-    let edited = previous.reparse(edit);
+    let edited = previous.clone().reparsed(edit).0;
     let full = Document::parse(edited.text());
     assert_eq!(
         edited.blocks(),
@@ -111,7 +111,9 @@ fn reparse_of_a_long_note_matches_a_full_parse() {
     let document = Document::parse(&source);
     assert_eq!(document.blocks().len(), 10_000);
     let offset = source.find("paragraph 5000").expect("the middle paragraph");
-    let edited = document.reparse(&TextEdit::new(Span::new(offset + 10, offset + 14), "x"));
+    let edited = document
+        .reparsed(&TextEdit::new(Span::new(offset + 10, offset + 14), "x"))
+        .0;
     let full = Document::parse(edited.text());
     assert_eq!(edited.blocks(), full.blocks());
     assert_eq!(edited.blocks().len(), 10_000);

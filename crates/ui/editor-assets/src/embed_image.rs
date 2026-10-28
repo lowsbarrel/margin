@@ -2,7 +2,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 use gpui_kit::{
-    App, ImageSource, ImgResourceLoader, IntoElement, Pixels, RenderOnce, Resource,
+    App, Entity, ImageSource, IntoElement, Pixels, RenderOnce, Resource, RetainAllImageCache,
     SMOOTH_SVG_SCALE_FACTOR, SharedUri, Styled, Window, img, px,
 };
 
@@ -12,6 +12,7 @@ use crate::vault_paths::extension_of;
 #[derive(Debug, IntoElement)]
 pub struct EmbedImage {
     resource: Resource,
+    cache: Entity<RetainAllImageCache>,
     svg: bool,
     size: Option<EmbedSize>,
     max_width: Pixels,
@@ -22,26 +23,43 @@ pub fn embed_image(
     location: &ImageLocation,
     size: Option<EmbedSize>,
     max_width: Pixels,
+    cache: &Entity<RetainAllImageCache>,
 ) -> EmbedImage {
-    let (resource, name) = match location {
-        ImageLocation::Local(path) => (
-            Resource::Path(Arc::<Path>::from(path.as_path())),
-            path.to_string_lossy().into_owned(),
-        ),
-        ImageLocation::Remote(url) => (Resource::Uri(SharedUri::from(url.clone())), url.clone()),
+    let name = match location {
+        ImageLocation::Local(path) => path.to_string_lossy().into_owned(),
+        ImageLocation::Remote(url) => url.clone(),
     };
     EmbedImage {
-        resource,
+        resource: image_resource(location),
+        cache: cache.clone(),
         svg: extension_of(&name) == "svg",
         size,
         max_width,
     }
 }
 
+#[must_use]
+pub fn image_resource(location: &ImageLocation) -> Resource {
+    match location {
+        ImageLocation::Local(path) => Resource::Path(Arc::<Path>::from(path.as_path())),
+        ImageLocation::Remote(url) => Resource::Uri(SharedUri::from(url.clone())),
+    }
+}
+
+#[must_use]
+pub fn cached_image(resource: Resource, cache: &Entity<RetainAllImageCache>) -> ImageSource {
+    let cache = cache.clone();
+    ImageSource::Custom(Arc::new(move |window, cx| {
+        cache.update(cx, |cache, cx| cache.load(&resource, window, cx))
+    }))
+}
+
 impl RenderOnce for EmbedImage {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let intrinsic = window
-            .use_asset::<ImgResourceLoader>(&self.resource, cx)
+        let resource = self.resource.clone();
+        let intrinsic = self
+            .cache
+            .update(cx, |cache, cx| cache.load(&resource, window, cx))
             .and_then(Result::ok)
             .map(|image| {
                 let pixels = image.size(0);
@@ -55,7 +73,7 @@ impl RenderOnce for EmbedImage {
                     device_to_f32(pixels.height.0) / scale,
                 )
             });
-        let element = img(ImageSource::Resource(self.resource)).rounded_lg();
+        let element = img(cached_image(self.resource, &self.cache)).rounded_lg();
         match fitted(intrinsic, self.size, f32::from(self.max_width)) {
             Some((width, height)) => element.w(px(width)).h(px(height)),
             None => element.max_w(self.max_width),

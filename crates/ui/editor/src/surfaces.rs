@@ -1,7 +1,7 @@
 use gpui_kit::{
-    Anchor, AnyElement, App, AppContext, Context, Div, Entity, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, MouseButton, ParentElement, Stateful, Styled, Subscription,
-    Window, anchored, deferred, div, point, px,
+    Anchor, AnyElement, App, AppContext, Bounds, Context, Div, Entity, FocusHandle, Focusable,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels, Stateful, Styled,
+    Subscription, Window, anchored, deferred, div, point, px,
 };
 use margin_editor_assets::{DiagramCache, VaultIndex};
 use margin_editor_commands::{active_marks, block_type, inside_code, set_block, set_link};
@@ -20,6 +20,8 @@ use crate::context_menu::OpenMenu;
 use crate::find::{self, FindState};
 use crate::note_editor::{Edited, NoteEditor};
 use crate::{block_drag, context_menu, editing, metrics, properties};
+
+pub(crate) type OverlayAnchors = Vec<(usize, Option<Bounds<Pixels>>)>;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum MenuKey {
@@ -203,11 +205,11 @@ fn bubble_visible(editor: &NoteEditor, window: &Window, cx: &App) -> bool {
     let session = editor.session();
     let primary = session.primary();
     let focused = editor.focus_handle_ref().contains_focused(window, cx);
-    let editing_link = surfaces.bubble.read(cx).is_editing_link();
+    let in_use = surfaces.bubble.read(cx).is_in_use();
     session.selections().len() == 1
         && !primary.is_empty()
         && !editor.pointer().is_dragging()
-        && (editing_link || (focused && !surfaces.bubble_suppressed))
+        && (in_use || (focused && !surfaces.bubble_suppressed))
         && !inside_code(session.document(), primary)
 }
 
@@ -334,44 +336,40 @@ pub(crate) fn render_overlays(
     body: Stateful<Div>,
     window: &Window,
     cx: &Context<'_, NoteEditor>,
-) -> (Stateful<Div>, Vec<usize>) {
+) -> (Stateful<Div>, OverlayAnchors) {
     let surfaces = editor.surfaces();
     let hits = editor.hits();
     let session = editor.session();
     let primary = session.primary();
-    let mut unplaced = Vec::new();
+    let mut anchors = Vec::new();
     let mut body = body.children(surfaces.find.bar().cloned());
     if let Some(menu) = surfaces.completing.visible_menu() {
-        match hits.caret_bounds(primary.head) {
-            Some(caret) => {
-                body = body.child(deferred(
-                    anchored()
-                        .position(caret.bottom_left())
-                        .snap_to_window_with_margin(px(8.0))
-                        .child(div().mt_1().child(menu)),
-                ));
-            }
-            None => unplaced.push(primary.head),
+        let caret = hits.caret_bounds(primary.head);
+        anchors.push((primary.head, caret));
+        if let Some(caret) = caret {
+            body = body.child(deferred(
+                anchored()
+                    .position(caret.bottom_left())
+                    .snap_to_window_with_margin(px(8.0))
+                    .child(div().mt_1().child(menu)),
+            ));
         }
     }
     if bubble_visible(editor, window, cx) {
-        match (
-            hits.caret_bounds(primary.start()),
-            hits.caret_bounds(primary.end()),
-        ) {
-            (Some(start), Some(end)) => {
-                let left = start.left().min(end.left());
-                let right = start.left().max(end.left());
-                let top = start.top().min(end.top());
-                body = body.child(deferred(
-                    anchored()
-                        .anchor(Anchor::BottomCenter)
-                        .position(point(left + (right - left) / 2.0, top))
-                        .snap_to_window_with_margin(px(8.0))
-                        .child(div().mb_2().child(surfaces.bubble.clone())),
-                ));
-            }
-            _ => unplaced.extend([primary.start(), primary.end()]),
+        let start = hits.caret_bounds(primary.start());
+        let end = hits.caret_bounds(primary.end());
+        anchors.extend([(primary.start(), start), (primary.end(), end)]);
+        if let (Some(start), Some(end)) = (start, end) {
+            let left = start.left().min(end.left());
+            let right = start.left().max(end.left());
+            let top = start.top().min(end.top());
+            body = body.child(deferred(
+                anchored()
+                    .anchor(Anchor::BottomCenter)
+                    .position(point(left + (right - left) / 2.0, top))
+                    .snap_to_window_with_margin(px(8.0))
+                    .child(div().mb_2().child(surfaces.bubble.clone())),
+            ));
         }
     }
     if let Some(menu) = &surfaces.context_menu {
@@ -393,5 +391,5 @@ pub(crate) fn render_overlays(
             .with_priority(2),
         );
     }
-    (body, unplaced)
+    (body, anchors)
 }

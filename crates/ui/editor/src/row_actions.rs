@@ -1,5 +1,7 @@
-use gpui_kit::{App, ClipboardItem, Context, ImageSource, SharedString, Window};
-use margin_editor_assets::{Embed, ImageLocation, VaultIndex, resolve_embed, resolve_image};
+use gpui_kit::{App, ClipboardItem, Context, SharedString, Window};
+use margin_editor_assets::{
+    Embed, VaultIndex, cached_image, image_resource, resolve_embed, resolve_image,
+};
 use margin_editor_overlays::LightboxImage;
 use margin_kernel::RelativePath;
 use margin_markdown::{Block, Inline, InlineKind, Span, TextEdit};
@@ -87,6 +89,7 @@ fn note_images(editor: &NoteEditor, clicked: Span, cx: &App) -> (Vec<LightboxIma
         return (Vec::new(), 0);
     };
     let document = editor.session().document();
+    let cache = editor.render_state().images();
     let mut found = Vec::new();
     for block in document.blocks() {
         collect_block(block, &mut found);
@@ -115,10 +118,7 @@ fn note_images(editor: &NoteEditor, clicked: Span, cx: &App) -> (Vec<LightboxIma
         if inline.span.overlaps(clicked.start, clicked.end) {
             selected = images.len();
         }
-        let source = match image.location {
-            ImageLocation::Local(path) => ImageSource::from(path),
-            ImageLocation::Remote(url) => ImageSource::from(SharedString::from(url)),
-        };
+        let source = cached_image(image_resource(&image.location), cache);
         images.push(LightboxImage {
             source,
             alt: SharedString::from(image.alt),

@@ -157,6 +157,20 @@ fn callout_without_title_uses_the_type_name() {
 }
 
 #[test]
+fn blank_line_separates_callouts() {
+    let document = only("> [!note]\n> one\n\n> [!info] Two\n> two\n");
+    let kinds: Vec<_> = document
+        .blocks()
+        .iter()
+        .filter_map(|block| match &block.kind {
+            BlockKind::Callout { kind, .. } => Some(*kind),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(kinds, vec![CalloutKind::Note, CalloutKind::Info]);
+}
+
+#[test]
 fn colon_callout_ranges() {
     let source = ":::tip\ninside\n:::\n";
     let document = only(source);

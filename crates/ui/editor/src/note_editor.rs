@@ -8,15 +8,17 @@ use gpui_kit::{
     IntoElement, Render, Subscription, Window,
 };
 use margin_breadcrumbs::Breadcrumbs;
-use margin_editor_assets::VaultIndex;
+use margin_editor_assets::{DiagramCache, VaultIndex};
 use margin_kernel::RelativePath;
 use margin_live_preview::Mode;
 use margin_text_buffer::{Change, EditOrigin, Selection};
 use margin_workbench::{CurrentVault, VaultServices, WorkbenchEvent};
 
 use crate::block_drag::BlockDrag;
+use crate::caret_blink::CaretBlink;
 use crate::hit_map::HitMap;
 use crate::pointer::PointerState;
+use crate::render_state::RenderState;
 use crate::save::SaveController;
 use crate::session::Session;
 use crate::surfaces::Surfaces;
@@ -63,6 +65,7 @@ pub struct NoteEditor {
     marked: Option<Range<usize>>,
     pointer: PointerState,
     block_drag: BlockDrag,
+    render: RenderState,
     words: Cell<(u64, usize)>,
     _subscriptions: Vec<Subscription>,
 }
@@ -86,6 +89,9 @@ impl Focusable for NoteEditor {
 
 impl Render for NoteEditor {
     fn render(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) -> impl IntoElement {
+        DiagramCache::release_unused(window, cx);
+        let focused = self.focus_handle.is_focused(window);
+        CaretBlink::update(self, focused, window, cx);
         view::render(self, window, cx)
     }
 }
@@ -122,6 +128,7 @@ impl NoteEditor {
             marked: None,
             pointer: PointerState::default(),
             block_drag: BlockDrag::default(),
+            render: RenderState::new(cx),
             words: Cell::new((u64::MAX, 0)),
             _subscriptions: vec![crumbs_events],
         };
@@ -249,6 +256,14 @@ impl NoteEditor {
         self.hits.clone()
     }
 
+    pub(crate) const fn render_state(&self) -> &RenderState {
+        &self.render
+    }
+
+    pub(crate) const fn render_state_mut(&mut self) -> &mut RenderState {
+        &mut self.render
+    }
+
     pub(crate) const fn title_row(&self) -> &TitleRow {
         &self.title
     }
@@ -315,6 +330,7 @@ impl NoteEditor {
             self.block_drag = BlockDrag::default();
         }
         self.reveal(self.session.primary().head);
+        self.render.caret_mut().restart();
         surfaces::after_edit(self, kind, window, cx);
         cx.notify();
     }

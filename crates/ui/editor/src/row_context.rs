@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use gpui_kit::{App, Window};
+use gpui_kit::{App, Entity, RetainAllImageCache, Window};
 use margin_kernel::RelativePath;
 use margin_live_preview::{CalloutFolds, Mode, Reveal};
 use margin_markdown::{Fold, Span};
@@ -30,6 +30,7 @@ pub(crate) struct Surface {
     mode: Mode,
     overlay: Rc<Overlay>,
     hits: HitMap,
+    images: Entity<RetainAllImageCache>,
 }
 
 impl Surface {
@@ -38,12 +39,14 @@ impl Surface {
         mode: Mode,
         overlay: Rc<Overlay>,
         hits: HitMap,
+        images: Entity<RetainAllImageCache>,
     ) -> Self {
         Self {
             palette,
             mode,
             overlay,
             hits,
+            images,
         }
     }
 }
@@ -89,6 +92,7 @@ impl RowContext {
                 mode: Mode::LivePreview,
                 overlay,
                 hits: HitMap::default(),
+                images: self.surface.images.clone(),
             },
             handler,
             note,
@@ -112,6 +116,10 @@ impl RowContext {
 
     pub(crate) fn hits(&self) -> HitMap {
         self.surface.hits.clone()
+    }
+
+    pub(crate) const fn images(&self) -> &Entity<RetainAllImageCache> {
+        &self.surface.images
     }
 
     pub(crate) fn handler(&self) -> RowHandler {

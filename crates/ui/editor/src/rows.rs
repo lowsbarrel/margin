@@ -20,7 +20,8 @@ use crate::note_editor::NoteEditor;
 use crate::row_context::{RowAction, RowContext, Surface};
 use crate::segment::{Overlay, OverlayColors};
 use crate::session::HEADER_ROWS;
-use crate::{row_actions, surfaces, table_row, title};
+use crate::table_virtual::{TableViewport, VIRTUAL_TABLE_ROWS};
+use crate::{row_actions, surfaces, table_row, table_virtual, title};
 
 const DRAG_SOURCE_OPACITY: f32 = 0.4;
 
@@ -39,6 +40,11 @@ pub(crate) fn render_row(
     let context = main_context(editor, window, cx);
     let element = match &row.kind {
         RowKind::Properties => surfaces::properties_row(editor, cx),
+        RowKind::Table => {
+            let viewport = table_viewport(editor, &row, item, window, cx);
+            let document = editor.session().document();
+            table_row::render(document, &row, item, &context, viewport.as_ref(), cx)
+        }
         _ => document_row(editor.session().document(), &row, item, &context, cx),
     };
     if editor.block_drag().dims(row.span) {
@@ -49,6 +55,28 @@ pub(crate) fn render_row(
     } else {
         element
     }
+}
+
+fn table_viewport(
+    editor: &NoteEditor,
+    row: &Row,
+    item: usize,
+    window: &Window,
+    cx: &App,
+) -> Option<TableViewport> {
+    let document = editor.session().document();
+    let table = document.block_at(row.span.start)?.table()?;
+    if table.rows.len() <= VIRTUAL_TABLE_ROWS {
+        return None;
+    }
+    let mut cache = editor.render_state().tables().borrow_mut();
+    let visible = cache.visible(item, window);
+    let widths = cache.columns(document, table, MarginTheme::palette(cx), window);
+    Some(TableViewport::new(
+        visible,
+        table_virtual::row_height(window),
+        widths,
+    ))
 }
 
 fn main_context(editor: &NoteEditor, window: &Window, cx: &Context<'_, NoteEditor>) -> RowContext {
@@ -70,7 +98,7 @@ fn main_context(editor: &NoteEditor, window: &Window, cx: &Context<'_, NoteEdito
     let overlay = Rc::new(Overlay::new(
         session.selections().to_vec(),
         session.buffer().primary_index(),
-        focused,
+        focused && editor.render_state().caret().is_visible(),
         matches,
         current,
         colors,
@@ -84,7 +112,13 @@ fn main_context(editor: &NoteEditor, window: &Window, cx: &Context<'_, NoteEdito
         },
     );
     RowContext::new(
-        Surface::new(palette, session.mode(), overlay, editor.hits()),
+        Surface::new(
+            palette,
+            session.mode(),
+            overlay,
+            editor.hits(),
+            editor.render_state().images().clone(),
+        ),
         handler,
         editor.note_path().clone(),
         Rc::new(session.folds().clone()),
@@ -104,7 +138,7 @@ pub(crate) fn document_row(
             let view = render_line(document, row.lines.start, context.mode(), context.reveal());
             line(document, view, item, context, cx)
         }
-        RowKind::Table => table_row::render(document, row, item, context, cx),
+        RowKind::Table => table_row::render(document, row, item, context, None, cx),
         RowKind::MathBlock { tex } => {
             let state = math(tex, MathMode::Display, cx);
             let element = diagram_element(&state, DiagramKind::Math, tex, cx);

@@ -21,11 +21,16 @@ pub fn diagram_element(
 ) -> AnyElement {
     let palette = MarginTheme::palette(cx);
     match state {
-        DiagramState::Ready(diagram) => img(Arc::clone(&diagram.image))
-            .w(px(diagram.width))
-            .h(px(diagram.height))
-            .flex_shrink_0()
-            .into_any_element(),
+        DiagramState::Ready(diagram) => {
+            let image = img(Arc::clone(&diagram.image)).w(px(diagram.width));
+            match kind {
+                DiagramKind::Math => image.h(px(diagram.height)).flex_shrink_0(),
+                DiagramKind::Mermaid => image
+                    .max_w_full()
+                    .aspect_ratio(diagram.width / diagram.height),
+            }
+            .into_any_element()
+        }
         DiagramState::Empty => {
             let key = match kind {
                 DiagramKind::Math => "editor_empty_math",

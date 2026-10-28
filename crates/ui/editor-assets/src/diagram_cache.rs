@@ -1,7 +1,8 @@
+use std::mem;
 use std::sync::Arc;
 
 use gpui_kit::component::ActiveTheme;
-use gpui_kit::{App, Global, Hsla, Image, ImageFormat, SharedString};
+use gpui_kit::{App, Global, Hsla, Image, ImageFormat, SharedString, Window};
 use margin_diagrams::{DiagramStyle, Error, MathMode, Svg};
 use margin_theme::MarginTheme;
 use margin_workbench::run_blocking;
@@ -59,17 +60,44 @@ struct Entry {
 #[derive(Debug)]
 pub struct DiagramCache {
     entries: Generations<DiagramSource, Entry>,
+    retired: Vec<Arc<Image>>,
 }
 
 impl Default for DiagramCache {
     fn default() -> Self {
         Self {
             entries: Generations::with_capacity(CACHED_DIAGRAMS),
+            retired: Vec::new(),
         }
     }
 }
 
 impl Global for DiagramCache {}
+
+impl DiagramCache {
+    pub fn release_unused(window: &mut Window, cx: &mut App) {
+        let Some(cache) = cx.try_global::<Self>() else {
+            return;
+        };
+        if cache.retired.is_empty() && !cache.entries.has_evicted() {
+            return;
+        }
+        let cache = cx.global_mut::<Self>();
+        let mut images = mem::take(&mut cache.retired);
+        images.extend(cache.entries.take_evicted().into_iter().filter_map(
+            |entry| match entry.state {
+                DiagramState::Ready(diagram) => Some(diagram.image),
+                _ => None,
+            },
+        ));
+        for image in images {
+            if let Some(render) = Arc::clone(&image).get_render_image(window, cx) {
+                cx.drop_image(render, Some(window));
+            }
+            image.remove_asset(cx);
+        }
+    }
+}
 
 #[must_use]
 pub fn math(tex: &str, mode: MathMode, cx: &mut App) -> DiagramState {
@@ -134,7 +162,9 @@ fn start_render(source: DiagramSource, style: DiagramStyle, cx: &App) {
             if let Some(entry) = cache.entries.get_mut(&key)
                 && entry.requested_with == used
             {
-                entry.state = state;
+                if let DiagramState::Ready(old) = mem::replace(&mut entry.state, state) {
+                    cache.retired.push(old.image);
+                }
                 entry.rendered_with = Some(used);
             }
         });

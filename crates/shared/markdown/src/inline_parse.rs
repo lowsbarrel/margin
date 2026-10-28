@@ -41,7 +41,11 @@ impl<'a> Ctx<'a> {
         let mut entries: Vec<Entry> = Vec::new();
         let mut at = 0;
         let mut plain = 0;
+        let mut line_stop = inline_atom::line_end(text, 0);
         while at < text.len() {
+            if at > line_stop {
+                line_stop = inline_atom::line_end(text, at);
+            }
             let Some(byte) = byte_at(text, at) else {
                 break;
             };
@@ -79,7 +83,7 @@ impl<'a> Ctx<'a> {
             };
             let hit = hit.or_else(|| {
                 if allow_links && byte.is_ascii_alphanumeric() {
-                    linkify(text, base, at)
+                    linkify(text, base, at, line_stop)
                 } else {
                     None
                 }
@@ -98,12 +102,11 @@ impl<'a> Ctx<'a> {
     }
 }
 
-fn linkify(text: &str, base: usize, at: usize) -> Option<(Entry, usize)> {
+fn linkify(text: &str, base: usize, at: usize, stop: usize) -> Option<(Entry, usize)> {
     let before = char_before(text, at);
     if before.is_some_and(|ch| ch.is_alphanumeric() || ch == '_') {
         return None;
     }
-    let stop = inline_atom::line_end(text, at);
     let rest = text.get(at..stop)?;
     let (destination, email, used) = autolink::bare_link(rest)?;
     if used == 0 {

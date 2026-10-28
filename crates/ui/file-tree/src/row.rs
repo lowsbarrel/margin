@@ -7,9 +7,9 @@ use gpui_kit::component::menu::ContextMenuExt;
 use gpui_kit::component::{ActiveTheme, Icon, Sizable, StyledExt};
 use gpui_kit::prelude::FluentBuilder;
 use gpui_kit::{
-    AnyElement, App, ClickEvent, Context, ElementId, Focusable, FontWeight, InteractiveElement,
-    IntoElement, MouseButton, ParentElement, Role, SharedString, StatefulInteractiveElement,
-    Styled, Window, div, radians,
+    AnyElement, App, ClickEvent, Context, Div, ElementId, Focusable, FontWeight, Hsla,
+    InteractiveElement, IntoElement, MouseButton, ParentElement, Pixels, Role, SharedString,
+    StatefulInteractiveElement, Styled, Window, div, radians,
 };
 use margin_files::TreeRow;
 use margin_kernel::RelativePath;
@@ -120,9 +120,11 @@ fn entry_row(
         file_title(&path)
     };
     let entity = cx.entity();
-    let fill = palette.brand(if tree_focused { 32.0 } else { 16.0 });
-    let hover_fill = palette.surface(3);
+    let active_fill = palette.brand(12.0);
+    let selected_fill = palette.surface(2);
+    let hover_fill = palette.surface(1);
     let ring_color = palette.bg_brand;
+    let bar_color = palette.bg_brand;
     let text = palette.text_primary;
     let icon =
         icon(icon_for(row, expanded)).when(active, |icon| icon.text_color(palette.text_brand));
@@ -147,8 +149,15 @@ fn entry_row(
         .text_ui_sm()
         .text_color(palette.text_secondary)
         .cursor_pointer()
-        .when(selected || active, |div| div.bg(fill).text_color(text))
-        .when(active, |div| div.font_weight(FontWeight::MEDIUM))
+        .when(active, |div| {
+            div.bg(active_fill)
+                .text_color(text)
+                .font_weight(FontWeight::MEDIUM)
+                .child(active_bar(bar_color))
+        })
+        .when(selected && !active, |div| {
+            div.bg(selected_fill).text_color(text)
+        })
         .when(!selected && !active, |div| {
             div.hover(move |style| style.bg(hover_fill).text_color(text))
         })
@@ -162,16 +171,7 @@ fn entry_row(
         })
         .child(icon)
         .child(div().flex_1().min_w_0().truncate().child(label.to_owned()))
-        .when(ring, |div| {
-            div.child(
-                gpui_kit::div()
-                    .absolute()
-                    .inset_0()
-                    .rounded(radius)
-                    .border_2()
-                    .border_color(ring_color),
-            )
-        })
+        .when(ring, |div| div.child(focus_ring(radius, ring_color)))
         .on_click(cx.listener({
             let path = path.clone();
             move |tree, event: &ClickEvent, window, cx| {
@@ -190,4 +190,24 @@ fn entry_row(
         .map(|element| row_drag::with_drag_and_drop(element, tree, row, &entry, cx))
         .context_menu(move |popup, _, cx| menu::entry(popup, &entity, &entry, cx))
         .into_any_element()
+}
+
+fn active_bar(color: Hsla) -> Div {
+    div()
+        .absolute()
+        .top_1p5()
+        .bottom_1p5()
+        .left_0()
+        .w_0p5()
+        .rounded_full()
+        .bg(color)
+}
+
+fn focus_ring(radius: Pixels, color: Hsla) -> Div {
+    div()
+        .absolute()
+        .inset_0()
+        .rounded(radius)
+        .border_2()
+        .border_color(color)
 }
