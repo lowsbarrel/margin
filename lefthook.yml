@@ -8,7 +8,7 @@ pre-commit:
       glob: "*.toml"
       run: taplo fmt --check {staged_files}
     - name: typos
-      run: typos {staged_files}
+      run: typos --force-exclude {staged_files}
     - name: xtask
       run: cargo xtask check
 

@@ -134,11 +134,13 @@ fn cell_content(
 ) -> Vec<AnyElement> {
     let view = render_cell(document, cell, context.reveal());
     let atoms = render_atoms(&view, document.text(), item, context, cx);
-    inline_pieces(
+    let (mut leading, flow) = inline_pieces(
         &view,
         &Style::prose(context.palette().text_primary),
         atoms,
         context,
         cx,
-    )
+    );
+    leading.extend(flow);
+    leading
 }

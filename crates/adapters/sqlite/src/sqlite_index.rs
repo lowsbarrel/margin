@@ -7,13 +7,14 @@ use margin_search::{
     extract_tags, parse_wiki_links,
 };
 use parking_lot::Mutex;
-use rusqlite::{Connection, OptionalExtension, params};
+use rusqlite::{Connection, OptionalExtension, Params, params};
 
 const SCHEMA_VERSION: i64 = 4;
 
 const PRAGMAS: &str = "PRAGMA busy_timeout = 5000;
      PRAGMA journal_mode = WAL;
-     PRAGMA synchronous = NORMAL;";
+     PRAGMA synchronous = NORMAL;
+     PRAGMA cache_size = -16384;";
 
 const DROP_TABLES: &str = "DROP TABLE IF EXISTS notes;
      DROP TABLE IF EXISTS notes_fts;
@@ -82,15 +83,19 @@ impl SqliteIndex {
 }
 
 impl SearchIndex for SqliteIndex {
-    fn upsert(&self, note: &IndexedNote) -> Result<(), StoreError> {
-        let guard = self.connection.lock();
-        upsert_note(
-            &guard,
-            &note.path,
-            &note.body,
-            stored_mtime(note.modified),
-            stored_size(note.size),
-        )
+    fn upsert(&self, notes: &[IndexedNote]) -> Result<(), StoreError> {
+        let mut guard = self.connection.lock();
+        let transaction = guard.transaction().map_err(db_error)?;
+        for note in notes {
+            upsert_note(
+                &transaction,
+                &note.path,
+                &note.body,
+                stored_mtime(note.modified),
+                stored_size(note.size),
+            )?;
+        }
+        transaction.commit().map_err(db_error)
     }
 
     fn remove(&self, path: &RelativePath) -> Result<(), StoreError> {
@@ -143,11 +148,11 @@ impl SearchIndex for SqliteIndex {
         }
         let guard = self.connection.lock();
         let mut statement = guard
-            .prepare(
+            .prepare_cached(
                 "SELECT path, name, snippet(notes_fts, -1, '', '', '…', 12)
                  FROM notes_fts
-                 WHERE notes_fts MATCH ?1
-                 ORDER BY bm25(notes_fts, 0.0, 10.0, 1.0)
+                 WHERE notes_fts MATCH ?1 AND rank MATCH 'bm25(0.0, 10.0, 1.0)'
+                 ORDER BY rank
                  LIMIT ?2",
             )
             .map_err(db_error)?;
@@ -284,57 +289,59 @@ fn upsert_note(
     size: i64,
 ) -> Result<(), StoreError> {
     let name = path.file_name();
-    connection
-        .execute(
-            "INSERT INTO notes (path, name, mtime, size) VALUES (?1, ?2, ?3, ?4)
-             ON CONFLICT(path) DO UPDATE SET name = ?2, mtime = ?3, size = ?4",
-            params![path.as_str(), name, mtime, size],
-        )
-        .map_err(db_error)?;
-    connection
-        .execute(
-            "DELETE FROM notes_fts WHERE rowid IN (SELECT rowid FROM notes WHERE path = ?1)",
-            params![path.as_str()],
-        )
-        .map_err(db_error)?;
     let rowid: i64 = connection
-        .query_row(
-            "SELECT rowid FROM notes WHERE path = ?1",
-            params![path.as_str()],
-            |row| row.get(0),
+        .prepare_cached(
+            "INSERT INTO notes (path, name, mtime, size) VALUES (?1, ?2, ?3, ?4)
+             ON CONFLICT(path) DO UPDATE SET name = ?2, mtime = ?3, size = ?4
+             RETURNING rowid",
         )
+        .and_then(|mut statement| {
+            statement.query_row(params![path.as_str(), name, mtime, size], |row| row.get(0))
+        })
         .map_err(db_error)?;
-    connection
-        .execute(
-            "INSERT INTO notes_fts (rowid, path, name, body) VALUES (?1, ?2, ?3, ?4)",
-            params![rowid, path.as_str(), name, body],
-        )
-        .map_err(db_error)?;
-
-    connection
-        .execute("DELETE FROM tags WHERE path = ?1", params![path.as_str()])
-        .map_err(db_error)?;
+    run(
+        connection,
+        "DELETE FROM notes_fts WHERE rowid = ?1",
+        params![rowid],
+    )?;
+    run(
+        connection,
+        "INSERT INTO notes_fts (rowid, path, name, body) VALUES (?1, ?2, ?3, ?4)",
+        params![rowid, path.as_str(), name, body],
+    )?;
+    run(
+        connection,
+        "DELETE FROM tags WHERE path = ?1",
+        params![path.as_str()],
+    )?;
     for tag in extract_tags(body) {
-        connection
-            .execute(
-                "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
-                params![path.as_str(), tag],
-            )
-            .map_err(db_error)?;
+        run(
+            connection,
+            "INSERT OR IGNORE INTO tags (path, tag) VALUES (?1, ?2)",
+            params![path.as_str(), tag],
+        )?;
     }
-
-    connection
-        .execute("DELETE FROM links WHERE src = ?1", params![path.as_str()])
-        .map_err(db_error)?;
+    run(
+        connection,
+        "DELETE FROM links WHERE src = ?1",
+        params![path.as_str()],
+    )?;
     for title in parse_wiki_links(body) {
-        connection
-            .execute(
-                "INSERT OR IGNORE INTO links (src, target_lc) VALUES (?1, ?2)",
-                params![path.as_str(), title.to_lowercase()],
-            )
-            .map_err(db_error)?;
+        run(
+            connection,
+            "INSERT OR IGNORE INTO links (src, target_lc) VALUES (?1, ?2)",
+            params![path.as_str(), title.to_lowercase()],
+        )?;
     }
     Ok(())
+}
+
+fn run(connection: &Connection, sql: &str, values: impl Params) -> Result<(), StoreError> {
+    connection
+        .prepare_cached(sql)
+        .and_then(|mut statement| statement.execute(values))
+        .map(drop)
+        .map_err(db_error)
 }
 
 fn delete_note_rows(connection: &Connection, path: &str) -> Result<(), StoreError> {

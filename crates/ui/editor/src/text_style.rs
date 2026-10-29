@@ -48,15 +48,15 @@ pub(crate) const fn syntax_tone(role: SyntaxRole) -> SyntaxTone {
     }
 }
 
-const fn highlight_tone(color: HighlightColor) -> HighlightTone {
-    match color {
+pub(crate) const fn highlight_color(palette: &Palette, color: HighlightColor) -> Hsla {
+    palette.highlight(match color {
         HighlightColor::Yellow => HighlightTone::Yellow,
         HighlightColor::Blue => HighlightTone::Blue,
         HighlightColor::Green => HighlightTone::Green,
         HighlightColor::Purple => HighlightTone::Purple,
         HighlightColor::Red => HighlightTone::Red,
         HighlightColor::Orange => HighlightTone::Orange,
-    }
+    })
 }
 
 pub(crate) struct RunContext<'a> {
@@ -166,16 +166,11 @@ fn styled_run(style: &InlineStyle, len: usize, missing: bool, context: &RunConte
     } else if style.strike && context.live {
         color = color.opacity(0.5);
     }
-    let background_color = style
-        .highlight
-        .map(|tone| palette.highlight(highlight_tone(tone)))
-        .or_else(|| (style.code || style.keyboard).then(|| palette.surface(2)))
-        .or_else(|| (style.tag && context.live).then(|| palette.brand(12.0)));
     TextRun {
         len,
         font,
         color,
-        background_color,
+        background_color: None,
         underline: style.underline.then_some(UnderlineStyle {
             thickness: px(1.0),
             color: None,

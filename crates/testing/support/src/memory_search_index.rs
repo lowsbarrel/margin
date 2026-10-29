@@ -74,18 +74,21 @@ impl MemorySearchIndex {
 }
 
 impl SearchIndex for MemorySearchIndex {
-    fn upsert(&self, note: &IndexedNote) -> Result<(), StoreError> {
-        let entry = Note {
-            body: note.body.clone(),
-            modified: note.modified,
-            size: note.size,
-            tags: extract_tags(&note.body).into_iter().collect(),
-            links: parse_wiki_links(&note.body)
-                .into_iter()
-                .map(|target| target.to_lowercase())
-                .collect(),
-        };
-        self.notes.lock().insert(note.path.clone(), entry);
+    fn upsert(&self, notes: &[IndexedNote]) -> Result<(), StoreError> {
+        let mut stored = self.notes.lock();
+        for note in notes {
+            let entry = Note {
+                body: note.body.clone(),
+                modified: note.modified,
+                size: note.size,
+                tags: extract_tags(&note.body).into_iter().collect(),
+                links: parse_wiki_links(&note.body)
+                    .into_iter()
+                    .map(|target| target.to_lowercase())
+                    .collect(),
+            };
+            stored.insert(note.path.clone(), entry);
+        }
         Ok(())
     }
 

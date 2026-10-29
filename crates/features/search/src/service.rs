@@ -1,8 +1,8 @@
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
 use std::fmt;
 use std::sync::Arc;
 
-use margin_kernel::{EntryKind, FileSystem, RelativePath, StoreError, UnixMillis};
+use margin_kernel::{EntryKind, FileSystem, Metadata, RelativePath, StoreError};
 
 use crate::domain::{
     Backlink, IndexedNote, IndexedNoteMeta, SearchHit, SearchMode, TagInfo, build_match_for,
@@ -12,6 +12,7 @@ use crate::ports::SearchIndex;
 
 const MAX_WALK_DEPTH: usize = 10;
 const MARKDOWN_EXTENSION: &str = "md";
+const UPSERT_BATCH: usize = 256;
 
 pub struct SearchService {
     index: Arc<dyn SearchIndex>,
@@ -25,50 +26,39 @@ impl SearchService {
     }
 
     pub fn rebuild(&self) -> Result<u32, Error> {
-        let mut paths = Vec::new();
-        self.collect_notes(&RelativePath::root(), 0, &mut paths)?;
-
-        let existing: BTreeMap<RelativePath, IndexedNoteMeta> = self
+        let mut notes = Vec::new();
+        self.collect_notes(&RelativePath::root(), 0, &mut notes)?;
+        let mut existing: BTreeMap<RelativePath, IndexedNoteMeta> = self
             .index
             .indexed()?
             .into_iter()
             .map(|meta| (meta.path.clone(), meta))
             .collect();
-
-        let mut present = BTreeSet::new();
-        for path in paths {
-            present.insert(path.clone());
-            let Ok(metadata) = self.files.metadata(&path) else {
-                continue;
-            };
-            if existing.get(&path).is_some_and(|meta| {
-                meta.modified == metadata.modified && meta.size == metadata.size
-            }) {
-                continue;
-            }
-            self.upsert_note(path, metadata.modified, metadata.size)?;
-        }
-
+        let count = u32::try_from(notes.len()).unwrap_or(u32::MAX);
+        let stale = notes.into_iter().filter(|(path, metadata)| {
+            existing
+                .remove(path)
+                .is_none_or(|meta| meta.modified != metadata.modified || meta.size != metadata.size)
+        });
+        self.upsert_in_batches(stale)?;
         for path in existing.keys() {
-            if !present.contains(path) {
-                self.index.remove(path)?;
-            }
+            self.index.remove(path)?;
         }
-
-        Ok(u32::try_from(present.len()).unwrap_or(u32::MAX))
+        Ok(count)
     }
 
     pub fn apply_changes(&self, changes: &[RelativePath]) -> Result<(), Error> {
+        let mut touched = Vec::new();
         for path in changes {
             if path.is_hidden() {
                 continue;
             }
             match self.files.metadata(path) {
                 Ok(metadata) if metadata.kind == EntryKind::Directory => {
-                    self.index_subtree(path)?;
+                    self.collect_notes(path, 0, &mut touched)?;
                 }
                 Ok(metadata) if path.extension() == Some(MARKDOWN_EXTENSION) => {
-                    self.upsert_note(path.clone(), metadata.modified, metadata.size)?;
+                    touched.push((path.clone(), metadata));
                 }
                 Ok(_) => {}
                 Err(StoreError::NotFound(_) | StoreError::OutsideRoot(_)) => {
@@ -77,7 +67,7 @@ impl SearchService {
                 Err(error) => return Err(error.into()),
             }
         }
-        Ok(())
+        self.upsert_in_batches(touched)
     }
 
     pub fn search(
@@ -103,44 +93,36 @@ impl SearchService {
         Ok(self.index.clear()?)
     }
 
-    fn index_subtree(&self, directory: &RelativePath) -> Result<(), Error> {
-        let mut paths = Vec::new();
-        self.collect_notes(directory, 0, &mut paths)?;
-        for path in paths {
-            let Ok(metadata) = self.files.metadata(&path) else {
-                continue;
-            };
-            self.upsert_note(path, metadata.modified, metadata.size)?;
+    fn upsert_in_batches(
+        &self,
+        notes: impl IntoIterator<Item = (RelativePath, Metadata)>,
+    ) -> Result<(), Error> {
+        let mut batch = Vec::with_capacity(UPSERT_BATCH);
+        for (path, metadata) in notes {
+            let body =
+                String::from_utf8(self.files.read(&path).unwrap_or_default()).unwrap_or_default();
+            batch.push(IndexedNote {
+                path,
+                body,
+                modified: metadata.modified,
+                size: metadata.size,
+            });
+            if batch.len() == UPSERT_BATCH {
+                self.index.upsert(&batch)?;
+                batch.clear();
+            }
+        }
+        if !batch.is_empty() {
+            self.index.upsert(&batch)?;
         }
         Ok(())
-    }
-
-    fn upsert_note(
-        &self,
-        path: RelativePath,
-        modified: UnixMillis,
-        size: u64,
-    ) -> Result<(), Error> {
-        let body = self.read_body(&path);
-        self.index.upsert(&IndexedNote {
-            path,
-            body,
-            modified,
-            size,
-        })?;
-        Ok(())
-    }
-
-    fn read_body(&self, path: &RelativePath) -> String {
-        let bytes = self.files.read(path).unwrap_or_default();
-        String::from_utf8(bytes).unwrap_or_default()
     }
 
     fn collect_notes(
         &self,
         directory: &RelativePath,
         depth: usize,
-        out: &mut Vec<RelativePath>,
+        out: &mut Vec<(RelativePath, Metadata)>,
     ) -> Result<(), Error> {
         if depth >= MAX_WALK_DEPTH {
             return Ok(());
@@ -154,7 +136,9 @@ impl SearchService {
             let path = directory.join(&entry.name)?;
             match entry.metadata.kind {
                 EntryKind::Directory => self.collect_notes(&path, depth + 1, out)?,
-                EntryKind::File if path.extension() == Some(MARKDOWN_EXTENSION) => out.push(path),
+                EntryKind::File if path.extension() == Some(MARKDOWN_EXTENSION) => {
+                    out.push((path, entry.metadata));
+                }
                 EntryKind::File | EntryKind::Symlink => {}
             }
         }

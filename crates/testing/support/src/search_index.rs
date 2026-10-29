@@ -43,7 +43,7 @@ pub fn search_index_conformance(index: &dyn SearchIndex) {
 fn finds_body_and_name_terms(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("notes/alpha.md", "the quick brown fox", 1))
+        .upsert(&[note("notes/alpha.md", "the quick brown fox", 1)])
         .expect("upsert");
 
     assert_eq!(
@@ -59,7 +59,7 @@ fn finds_body_and_name_terms(index: &dyn SearchIndex) {
 fn ignores_unknown_terms(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("alpha.md", "quick brown fox", 1))
+        .upsert(&[note("alpha.md", "quick brown fox", 1)])
         .expect("upsert");
 
     assert!(hits(index, &build_match_query("zebra"), 10).is_empty());
@@ -69,7 +69,7 @@ fn ignores_unknown_terms(index: &dyn SearchIndex) {
 fn matches_word_prefixes(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("alpha.md", "a marginal note", 1))
+        .upsert(&[note("alpha.md", "a marginal note", 1)])
         .expect("upsert");
 
     assert_eq!(hits(index, &build_match_query("marg"), 10), ["alpha.md"]);
@@ -83,7 +83,7 @@ fn matches_word_prefixes(index: &dyn SearchIndex) {
 fn joins_terms_with_and_or_or(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("alpha.md", "alpha beta gamma", 1))
+        .upsert(&[note("alpha.md", "alpha beta gamma", 1)])
         .expect("upsert");
 
     assert_eq!(
@@ -108,7 +108,7 @@ fn joins_terms_with_and_or_or(index: &dyn SearchIndex) {
 fn matches_phrases_in_order(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("alpha.md", "alpha beta gamma", 1))
+        .upsert(&[note("alpha.md", "alpha beta gamma", 1)])
         .expect("upsert");
 
     assert_eq!(
@@ -132,7 +132,9 @@ fn matches_phrases_in_order(index: &dyn SearchIndex) {
 fn honours_the_limit(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     for name in ["a.md", "b.md", "c.md"] {
-        index.upsert(&note(name, "shared body", 1)).expect("upsert");
+        index
+            .upsert(&[note(name, "shared body", 1)])
+            .expect("upsert");
     }
 
     assert_eq!(hits(index, &build_match_query("shared"), 10).len(), 3);
@@ -143,7 +145,7 @@ fn honours_the_limit(index: &dyn SearchIndex) {
 fn snapshots_the_body(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("alpha.md", "some words before margin and after", 1))
+        .upsert(&[note("alpha.md", "some words before margin and after", 1)])
         .expect("upsert");
 
     let search = index
@@ -159,7 +161,9 @@ fn snapshots_the_body(index: &dyn SearchIndex) {
 
 fn matches_nothing_without_a_query(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
-    index.upsert(&note("alpha.md", "alpha", 1)).expect("upsert");
+    index
+        .upsert(&[note("alpha.md", "alpha", 1)])
+        .expect("upsert");
 
     assert!(hits(index, "", 10).is_empty());
 }
@@ -167,9 +171,9 @@ fn matches_nothing_without_a_query(index: &dyn SearchIndex) {
 fn groups_tags_per_note(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("a.md", "# Heading\n#work #work again", 1))
+        .upsert(&[note("a.md", "# Heading\n#work #work again", 1)])
         .expect("upsert");
-    index.upsert(&note("b.md", "#work", 1)).expect("upsert");
+    index.upsert(&[note("b.md", "#work", 1)]).expect("upsert");
 
     let tags = index.tags().expect("tags");
     let work: Vec<_> = tags.iter().filter(|info| info.tag == "work").collect();
@@ -192,10 +196,10 @@ fn groups_tags_per_note(index: &dyn SearchIndex) {
 fn lists_backlinks_by_source_name(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("notes/alpha.md", "see [[BETA]]", 1))
+        .upsert(&[note("notes/alpha.md", "see [[BETA]]", 1)])
         .expect("upsert");
     index
-        .upsert(&note("notes/beta.md", "[[beta]] links to itself", 1))
+        .upsert(&[note("notes/beta.md", "[[beta]] links to itself", 1)])
         .expect("upsert");
 
     let backlinks = index.backlinks(&path("notes/beta.md")).expect("backlinks");
@@ -214,16 +218,16 @@ fn lists_backlinks_by_source_name(index: &dyn SearchIndex) {
 fn removes_a_note_and_its_subtree(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("notes/x.md", "#orphan\n[[alpha]]", 1))
+        .upsert(&[note("notes/x.md", "#orphan\n[[alpha]]", 1)])
         .expect("upsert");
     index
-        .upsert(&note("notes/deep/y.md", "nested body", 1))
+        .upsert(&[note("notes/deep/y.md", "nested body", 1)])
         .expect("upsert");
     index
-        .upsert(&note("alpha.md", "target", 1))
+        .upsert(&[note("alpha.md", "target", 1)])
         .expect("upsert");
     index
-        .upsert(&note("notes_older/z.md", "sibling folder", 1))
+        .upsert(&[note("notes_older/z.md", "sibling folder", 1)])
         .expect("upsert");
 
     index.remove(&path("notes/x.md")).expect("remove");
@@ -246,9 +250,11 @@ fn removes_a_note_and_its_subtree(index: &dyn SearchIndex) {
 fn moves_rows_on_rename(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("old.md", "#work\nsee [[Beta]]", 1))
+        .upsert(&[note("old.md", "#work\nsee [[Beta]]", 1)])
         .expect("upsert");
-    index.upsert(&note("beta.md", "target", 1)).expect("upsert");
+    index
+        .upsert(&[note("beta.md", "target", 1)])
+        .expect("upsert");
 
     index
         .rename(&path("old.md"), &path("new.md"))
@@ -262,7 +268,7 @@ fn moves_rows_on_rename(index: &dyn SearchIndex) {
 
 fn reports_stored_metadata(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
-    index.upsert(&note("a.md", "hello", 42)).expect("upsert");
+    index.upsert(&[note("a.md", "hello", 42)]).expect("upsert");
 
     let indexed = index.indexed().expect("indexed");
     assert_eq!(indexed.len(), 1);
@@ -274,10 +280,10 @@ fn reports_stored_metadata(index: &dyn SearchIndex) {
 fn replaces_a_note_on_reindex(index: &dyn SearchIndex) {
     index.clear().expect("the index clears");
     index
-        .upsert(&note("a.md", "first body", 1))
+        .upsert(&[note("a.md", "first body", 1)])
         .expect("upsert");
     index
-        .upsert(&note("a.md", "second body", 2))
+        .upsert(&[note("a.md", "second body", 2)])
         .expect("upsert");
 
     assert_eq!(index.indexed().expect("indexed").len(), 1);

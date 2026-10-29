@@ -1,7 +1,7 @@
 use gpui_kit::component::checkbox::Checkbox;
 use gpui_kit::{
     AnyElement, App, ElementId, InteractiveElement, IntoElement, MouseButton, ParentElement,
-    SharedString, StatefulInteractiveElement, Styled, div, px, rems,
+    SharedString, StatefulInteractiveElement, Styled, div, px,
 };
 use margin_editor_assets::{
     DiagramKind, DiagramState, Embed, EmbedSize, MathMode, VaultIndex, diagram_element,
@@ -86,13 +86,11 @@ fn render_atom(
             let handler = context.handler();
             let marker = atom.source;
             let step = metrics::list_step();
-            let hang = if atom.display == 0 { -step } else { rems(0.0) };
             div()
                 .flex()
                 .flex_none()
                 .items_center()
                 .w(step)
-                .ml(hang)
                 .h(TypeScale::Body.line_rems())
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                 .child(

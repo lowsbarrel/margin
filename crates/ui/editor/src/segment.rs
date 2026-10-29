@@ -9,6 +9,7 @@ use margin_live_preview::{LinkHit, OffsetMap};
 use margin_markdown::Span;
 use margin_text_buffer::Selection;
 
+use crate::chips::{Chip, paint_chips};
 use crate::hit_map::{HitMap, Segment};
 
 const CARET_WIDTH: Pixels = px(1.2);
@@ -62,15 +63,27 @@ impl Overlay {
     }
 }
 
+pub(crate) struct Styling {
+    runs: Vec<TextRun>,
+    chips: Vec<Chip>,
+}
+
+impl Styling {
+    pub(crate) const fn new(runs: Vec<TextRun>, chips: Vec<Chip>) -> Self {
+        Self { runs, chips }
+    }
+}
+
 pub(crate) fn text_segment(
     text: SharedString,
-    runs: Vec<TextRun>,
+    styling: Styling,
     map: Rc<OffsetMap>,
     display: Range<usize>,
     links: Rc<[LinkHit]>,
     overlay: Rc<Overlay>,
     hits: HitMap,
 ) -> AnyElement {
+    let Styling { runs, chips } = styling;
     let styled = StyledText::new(text).with_runs(runs);
     let layout = styled.layout().clone();
     div()
@@ -87,6 +100,7 @@ pub(crate) fn text_segment(
                         bounds,
                         Rc::clone(&links),
                     ));
+                    paint_chips(&layout, &chips, window);
                     paint_overlay(&layout, &map, &display, bounds, &overlay, window);
                 },
             )

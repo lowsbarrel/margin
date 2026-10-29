@@ -4,6 +4,7 @@ mod atoms;
 mod block_drag;
 mod block_grip;
 mod caret_blink;
+mod chips;
 mod clipboard;
 mod completion;
 mod context_menu;

@@ -12,15 +12,16 @@ use margin_editor_assets::{LinkRef, Resolved, VaultIndex, resolve_link};
 use margin_i18n::t;
 use margin_kernel::RelativePath;
 use margin_live_preview::{
-    AtomKind, CodeLinePosition, LineView, LinkHit, LinkKind, ListDecor, ListMarker, Mode,
+    Atom, AtomKind, CodeLinePosition, LineView, LinkHit, LinkKind, ListDecor, ListMarker, Mode,
     OffsetMap, SyntaxRole,
 };
 use margin_markdown::Fold;
 
+use crate::chips::chips_in;
 use crate::frames::{callout_icon, callout_tone, code_frame, container_frame};
 use crate::metrics::{self, TypeScale};
 use crate::row_context::{RowAction, RowContext};
-use crate::segment::text_segment;
+use crate::segment::{Styling, text_segment};
 use crate::text_style::{Face, RunContext, code_runs, inline_runs};
 use crate::word_chunks;
 
@@ -78,8 +79,6 @@ pub(crate) fn line_row(parts: LineParts, context: &RowContext, cx: &gpui_kit::Ap
     };
     let mut inner = h_flex()
         .w_full()
-        .flex_wrap()
-        .items_end()
         .text_size(scale.size())
         .line_height(scale.line_height());
     if let Some(level) = view.decor.heading {
@@ -89,7 +88,7 @@ pub(crate) fn line_row(parts: LineParts, context: &RowContext, cx: &gpui_kit::Ap
     let code_body = code
         .as_ref()
         .is_some_and(|code| code.position == CodeLinePosition::Body);
-    let pieces = inline_pieces(
+    let (leading, flow) = inline_pieces(
         &view,
         &Style {
             face,
@@ -100,14 +99,26 @@ pub(crate) fn line_row(parts: LineParts, context: &RowContext, cx: &gpui_kit::Ap
         context,
         cx,
     );
-    let single = pieces.len() == 1;
-    for piece in pieces {
-        inner = inner.child(if single {
+    let single = flow.len() == 1;
+    let flow = flow.into_iter().map(|piece| {
+        if single {
             div().w_full().child(piece).into_any_element()
         } else {
             piece
-        });
-    }
+        }
+    });
+    inner = if leading.is_empty() {
+        inner.flex_wrap().items_end().children(flow)
+    } else {
+        inner.items_start().children(leading).child(
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .flex_wrap()
+                .items_end()
+                .children(flow),
+        )
+    };
     let mut body = decorate(inner, &view, item, context, cx);
     if let Some(code) = &code {
         body = code_frame(body, code, item, context, cx);
@@ -144,7 +155,7 @@ pub(crate) fn inline_pieces(
     atoms: Vec<AnyElement>,
     context: &RowContext,
     cx: &gpui_kit::App,
-) -> Vec<AnyElement> {
+) -> (Vec<AnyElement>, Vec<AnyElement>) {
     let missing = |kind: &LinkKind| link_missing(kind, context.note(), cx);
     let run_context = RunContext {
         palette: context.palette(),
@@ -165,8 +176,16 @@ pub(crate) fn inline_pieces(
     let links: Rc<[LinkHit]> = Rc::from(view.links.clone());
     let mut cursor = 0;
     let mut atoms = atoms.into_iter();
+    let mut leading: Vec<AnyElement> = Vec::new();
     let mut pieces: Vec<AnyElement> = Vec::new();
-    let wraps_by_word = !view.atoms.is_empty();
+    let wraps_by_word = view.atoms.iter().any(|atom| !is_leading(atom));
+    let chips = |range: Range<usize>| {
+        if style.code_colors.is_some() {
+            Vec::new()
+        } else {
+            chips_in(view, range, context.palette(), run_context.live)
+        }
+    };
     let push_text = |pieces: &mut Vec<AnyElement>, range: Range<usize>| {
         let chunks = if wraps_by_word {
             word_chunks::word_chunks(&view.text, range)
@@ -177,7 +196,7 @@ pub(crate) fn inline_pieces(
             pieces.push(segment(
                 &view.text,
                 chunk.clone(),
-                text_runs(chunk),
+                Styling::new(text_runs(chunk.clone()), chips(chunk)),
                 (&map, &links),
                 context,
             ));
@@ -189,25 +208,37 @@ pub(crate) fn inline_pieces(
             push_text(&mut pieces, cursor..at);
         }
         if let Some(element) = atoms.next() {
-            pieces.push(element);
+            if is_leading(atom) {
+                leading.push(element);
+            } else {
+                pieces.push(element);
+            }
         }
         cursor = at;
     }
     push_text(&mut pieces, cursor..view.text.len());
-    pieces
+    (leading, pieces)
+}
+
+fn is_leading(atom: &Atom) -> bool {
+    atom.display == 0
+        && matches!(
+            atom.kind,
+            AtomKind::Checkbox { .. } | AtomKind::FootnoteDefinition { .. }
+        )
 }
 
 fn segment(
     text: &str,
     range: Range<usize>,
-    runs: Vec<gpui_kit::TextRun>,
+    styling: Styling,
     (map, links): (&Rc<OffsetMap>, &Rc<[LinkHit]>),
     context: &RowContext,
 ) -> AnyElement {
     let slice = text.get(range.clone()).unwrap_or_default();
     text_segment(
         SharedString::from(slice.to_owned()),
-        runs,
+        styling,
         Rc::clone(map),
         range,
         Rc::clone(links),
@@ -338,15 +369,6 @@ fn list_frame(inner: Div, list: &ListDecor, view: &LineView, context: &RowContex
             .w(px(1.0))
             .bg(palette.border_secondary)
     });
-    let checkbox_leads = view
-        .atoms
-        .first()
-        .is_some_and(|atom| atom.display == 0 && matches!(atom.kind, AtomKind::Checkbox { .. }));
-    let body = if checkbox_leads {
-        inner.pl(step)
-    } else {
-        inner
-    };
     h_flex()
         .relative()
         .w_full()
@@ -354,7 +376,7 @@ fn list_frame(inner: Div, list: &ListDecor, view: &LineView, context: &RowContex
         .pl(rems(step.0 * f32::from(depth)))
         .children(guides)
         .children(gutter)
-        .child(body.flex_1())
+        .child(inner.flex_1())
 }
 
 fn link_missing(kind: &LinkKind, note: &RelativePath, cx: &gpui_kit::App) -> bool {

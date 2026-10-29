@@ -3,7 +3,7 @@ use margin_kernel::{RelativePath, StoreError};
 use crate::domain::{Backlink, IndexedNote, IndexedNoteMeta, SearchHit, TagInfo};
 
 pub trait SearchIndex: Send + Sync {
-    fn upsert(&self, note: &IndexedNote) -> Result<(), StoreError>;
+    fn upsert(&self, notes: &[IndexedNote]) -> Result<(), StoreError>;
 
     fn remove(&self, path: &RelativePath) -> Result<(), StoreError>;
 
